@@ -31,7 +31,7 @@ const GRUPOS_ATALHOS: GrupoAtalhos[] = [
   },
   {
     titulo: 'Salvar',
-    contexto: 'Com foco na página, fora da área de texto do editor.',
+    contexto: 'Com foco na página ou no texto do editor.',
     atalhos: [{ teclas: [['Ctrl', 'S']], descricao: 'Salvar as alterações do laudo, quando a ação estiver disponível.' }],
   },
   {

@@ -1,9 +1,40 @@
 import { describe, expect, it } from 'vitest';
 import type { Editor as TinyMceEditorInstance } from 'tinymce';
-import { atualizarNumeroFigura, corrigirMolduraVaziaLocalNecropsia, legendaFiguraAusente, localizarFiguraPorIndice, reindexarFiguras, renumerarFigurasNosEditores, restaurarLegendaFigura } from '../../renderer/lib/figuras';
+import { atualizarNumeroFigura, centralizarFigurasSozinhas, centralizarFigurasSozinhasHtml, corrigirMolduraVaziaLocalNecropsia, legendaFiguraAusente, localizarFiguraPorIndice, reindexarFiguras, renumerarFigurasNosEditores, restaurarLegendaFigura } from '../../renderer/lib/figuras';
 import { criarHtmlFigura } from '../../renderer/lib/figura-html';
 
 describe('ocorrências de figuras', () => {
+  it.each(['esquerda', 'direita'] as const)('centraliza a figura restante após excluir a da %s', lado => {
+    const documento = new DOMParser().parseFromString(
+      '<table border="0" style="width:100%"><colgroup><col style="width:50%"><col style="width:50%"></colgroup>'
+      + '<tbody><tr><td style="border:0;text-align:center"><figure class="laudo-figure" data-dummy="true">'
+      + '<img src="dummy.png" style="width:280px;height:auto"><figcaption>Figura 01</figcaption></figure></td>'
+      + '<td style="border:0;text-align:center"><figure class="laudo-figure"><img src="real.png">'
+      + '<figcaption>Figura 02: <strong>Detalhe</strong></figcaption></figure></td></tr></tbody></table>',
+      'text/html',
+    );
+    const celulas = documento.querySelectorAll('td');
+    celulas[lado === 'esquerda' ? 0 : 1].querySelector('figure')?.remove();
+    expect(centralizarFigurasSozinhas(documento.body)).toBe(true);
+    const restante = documento.querySelector('td');
+    expect(documento.querySelectorAll('td')).toHaveLength(1);
+    expect(restante?.colSpan).toBe(2);
+    expect(restante?.style.textAlign).toBe('center');
+    expect(restante?.querySelector('figure')?.getAttribute('style')).toContain('margin-left: auto');
+    expect(documento.querySelector('colgroup')?.children).toHaveLength(2);
+    expect(restante?.getAttribute('style')).toContain('border:0');
+    expect(restante?.querySelector('img')?.getAttribute('style')).toBe(lado === 'direita' ? 'width:280px;height:auto' : null);
+    expect(restante?.querySelector('figcaption')?.innerHTML).toBe(lado === 'esquerda' ? 'Figura 02: <strong>Detalhe</strong>' : 'Figura 01');
+    expect(centralizarFigurasSozinhas(documento.body)).toBe(false);
+  });
+
+  it('preserva quadros com duas figuras e células com outro conteúdo', () => {
+    const duas = '<table><tr><td><figure class="laudo-figure"><img></figure></td><td><figure class="laudo-figure"><img></figure></td></tr></table>';
+    const texto = '<table><tr><td><figure class="laudo-figure"><img></figure></td><td><p>Descrição</p></td></tr></table>';
+    expect(centralizarFigurasSozinhasHtml(duas)).toBe(duas);
+    expect(centralizarFigurasSozinhasHtml(texto)).toBe(texto);
+  });
+
   it('corrige a moldura herdada sem perder a foto substituída ou duplicá-la no painel', () => {
     const html = '<table><tr><td><figure class="laudo-figure" data-image-id="dummy-b601-local-necropsia-material-apresentado-1" data-dummy="true">'
       + '<figure class="laudo-figure" data-image-id="foto-real"><img src="foto.png"><figcaption>Figura 02: Embalagem</figcaption></figure>'

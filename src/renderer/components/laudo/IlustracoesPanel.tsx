@@ -60,6 +60,7 @@ import { EditorFiguraDialog, type AjustesFigura } from '@/components/laudo/Edito
 import { PreencherDummiesDialog } from '@/components/laudo/PreencherDummiesDialog';
 import type { ImagemRepGdlAdicionadaAoLaudo } from '@shared/types/gdl-arquivos.types';
 import type { ImagemLaudoResumo, ResultadoAtualizacaoFiguras } from '@shared/types/imagem-laudo.types';
+import { ajustesFiguraValidos } from '@shared/types/imagem-laudo.types';
 
 const MINIATURAS_POR_LOTE = 30;
 const MINIATURA_PENDENTE = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
@@ -456,23 +457,38 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
   const [indiceEdicao, setIndiceEdicao] = useState<number | null>(null);
   const [origemEdicao, setOrigemEdicao] = useState('');
   const [imagemBaseEdicaoId, setImagemBaseEdicaoId] = useState('');
+  const [ajustesIniciaisEdicao, setAjustesIniciaisEdicao] = useState<AjustesFigura>();
 
   const abrirEdicao = async (indice: number, figura: ImagemLaudo) => {
-    const baseId = figura.imagemOrigemId || figura.id;
     try {
-      const resposta = await window.ipcAPI.ilustracoes.obterImagem(laudoId, baseId);
-      if (!resposta.success || !resposta.data?.dataUri) {
-        if (figura.imagemOrigemId) throw new Error('A imagem original desta figura não está mais disponível.');
+      const respostaAtual = await window.ipcAPI.ilustracoes.obterImagem(laudoId, figura.id);
+      let imagemAtual = respostaAtual.success ? respostaAtual.data?.dataUri : undefined;
+      if (!imagemAtual) {
+        if (figura.imagemOrigemId) throw new Error('A figura editada não está disponível para edição.');
         if (!/^data:image\/(?:jpeg|png|gif|bmp|webp);base64,/i.test(figura.url)) throw new Error('A imagem original não está disponível para edição.');
         const salva = await window.ipcAPI.ilustracoes.salvarImagem(laudoId, {
-          id: baseId, nomeArquivo: `figura-original-${indice + 1}`, dataUri: figura.url,
+          id: figura.id, nomeArquivo: `figura-original-${indice + 1}`, dataUri: figura.url,
           legenda: figura.legenda, origem: 'local', sequencia: indice + 1,
         });
         if (!salva.success) throw new Error(salva.error || 'Não foi possível preservar a imagem original.');
-        await window.ipcAPI.ilustracoes.arquivarImagem(laudoId, baseId);
+        await window.ipcAPI.ilustracoes.arquivarImagem(laudoId, figura.id);
+        imagemAtual = figura.url;
       }
-      setOrigemEdicao(resposta.success && resposta.data?.dataUri ? resposta.data.dataUri : figura.url);
+      const origemId = respostaAtual.data?.imagemOrigemId || figura.imagemOrigemId;
+      const ajustesRecebidos: unknown = respostaAtual.data?.ajustesFigura;
+      const ajustes = ajustesFiguraValidos(ajustesRecebidos) ? ajustesRecebidos : undefined;
+      let baseId = figura.id;
+      let origem = imagemAtual;
+      if (origemId && ajustes) {
+        const respostaOrigem = await window.ipcAPI.ilustracoes.obterImagem(laudoId, origemId);
+        if (respostaOrigem.success && respostaOrigem.data?.dataUri) {
+          baseId = origemId;
+          origem = respostaOrigem.data.dataUri;
+        }
+      }
+      setOrigemEdicao(origem);
       setImagemBaseEdicaoId(baseId);
+      setAjustesIniciaisEdicao(baseId === origemId ? ajustes : undefined);
       setIndiceEdicao(indice);
     } catch { toast.error('Não foi possível carregar a imagem para edição.'); }
   };
@@ -1048,6 +1064,7 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
       <EditorFiguraDialog
         aberto={indiceEdicao !== null}
         origem={origemEdicao}
+        ajustesIniciais={ajustesIniciaisEdicao}
         onAbertoChange={aberto => { if (!aberto) setIndiceEdicao(null); }}
         onAplicar={aplicarEdicao}
       />

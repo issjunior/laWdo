@@ -338,6 +338,7 @@ export interface IpcAPI {
 
   // Laudos
   laudo: ApiBkpLaudo & {
+    obterBlocoCondicionalOriginal: (laudoId: string, origem: string) => Promise<UserResponse<string>>;
     contextoWizard: (laudoId: string) => Promise<UserResponse<ContextoWizardLaudo | null>>;
     calcularPecasWizard: (laudoId: string, respostas: RespostasIncorporadas, wizardId?: string) => Promise<UserResponse<PecaIncorporadaCalculada[]>>;
     findAll: () => Promise<UserResponse<LaudoResumoLista[]>>;
@@ -665,6 +666,7 @@ const ALLOWED_CHANNELS = new Set([
 
   // Laudos
   'laudo:findById',
+  'laudo:obterBlocoCondicionalOriginal',
   'laudo:findByRepId',
   'laudo:findAllByRepId',
   'laudo:findAll',
@@ -1701,6 +1703,7 @@ contextBridge.exposeInMainWorld('ipcAPI', {
   },
 
   laudo: {
+    obterBlocoCondicionalOriginal: (laudoId: string, origem: string) => invocarComDiagnostico('laudo:obterBlocoCondicionalOriginal', laudoId, origem),
     exportarBkp: laudoId => invocarComDiagnostico('laudo:exportarBkp', laudoId),
     selecionarBkp: () => invocarComDiagnostico('laudo:selecionarBkp'),
     analisarBkp: selecaoId => invocarComDiagnostico('laudo:analisarBkp', selecaoId),

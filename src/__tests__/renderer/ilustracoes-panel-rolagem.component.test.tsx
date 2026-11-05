@@ -21,6 +21,11 @@ vi.mock('@/components/laudo/GdlImagensRepModal', () => ({
   </div> : null,
 }))
 
+vi.mock('@/components/laudo/EditorFiguraDialog', () => ({
+  EditorFiguraDialog: ({ aberto, origem, ajustesIniciais }: { aberto: boolean; origem: string; ajustesIniciais?: { angulo: number } }) =>
+    aberto ? <div data-testid="edicao-figura" data-origem={origem} data-angulo={ajustesIniciais?.angulo ?? 0} /> : null,
+}))
+
 const figura: ImagemLaudo = {
   id: 'figura-1',
   url: 'data:image/png;base64,AA==',
@@ -50,6 +55,39 @@ describe('rolagem do painel de ilustrações', () => {
 
   afterAll(() => {
     Object.defineProperty(window, 'ipcAPI', { value: ipcApiOriginal, writable: true })
+  })
+
+  it('reabre a figura editada com a origem e o giro salvos no painel compartilhado', async () => {
+    const ajustes = { angulo: 90, espelharHorizontal: false, espelharVertical: false,
+      corte: { x: 0, y: 0, largura: 100, altura: 100 } }
+    obterImagem.mockImplementation(async (_laudoId: string, imagemId: string) => ({ success: true, data: {
+      dataUri: imagemId === 'original' ? 'data:image/png;base64,BASE' : 'data:image/png;base64,EDITADA',
+      imagemOrigemId: imagemId === figura.id ? 'original' : null,
+      ajustesFigura: imagemId === figura.id ? ajustes : undefined,
+    } }))
+    render(<IlustracoesPanel laudoId="laudo-1" onInsertImage={vi.fn()} onRefreshHtml={vi.fn()}
+      onEditImage={vi.fn()} figurasNoEditor={[{ ...figura, imagemOrigemId: 'original' }]} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Editar figura 1' }))
+    const modal = await screen.findByTestId('edicao-figura')
+    expect(obterImagem.mock.calls.map(([, imagemId]) => imagemId)).toEqual([figura.id, 'original'])
+    expect(modal).toHaveAttribute('data-origem', 'data:image/png;base64,BASE')
+    expect(modal).toHaveAttribute('data-angulo', '90')
+  })
+
+  it('usa a imagem atual quando os ajustes anteriores estão incompletos', async () => {
+    obterImagem.mockClear()
+    obterImagem.mockResolvedValue({ success: true, data: {
+      dataUri: 'data:image/png;base64,EDITADA', imagemOrigemId: 'original', ajustesFigura: { angulo: 90 },
+    } })
+    render(<IlustracoesPanel laudoId="laudo-1" onInsertImage={vi.fn()} onRefreshHtml={vi.fn()}
+      onEditImage={vi.fn()} figurasNoEditor={[{ ...figura, imagemOrigemId: 'original' }]} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Editar figura 1' }))
+    const modal = await screen.findByTestId('edicao-figura')
+    expect(obterImagem).toHaveBeenCalledTimes(1)
+    expect(modal).toHaveAttribute('data-origem', 'data:image/png;base64,EDITADA')
+    expect(modal).toHaveAttribute('data-angulo', '0')
   })
 
   it('preserva a dummy durante a busca e substitui somente após confirmação', async () => {

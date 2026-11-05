@@ -1,4 +1,3 @@
-import fs from 'fs'
 import path from 'path'
 import { readFile, mkdir, access, writeFile, rename, rm } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
@@ -10,7 +9,7 @@ import { executeNonQuery, executeQuery, withTransaction } from '../database/sqli
 import { getLogger } from '../utils/logger.js'
 import { configuracaoService } from './configuracao.service.js'
 import type { CodigoFalhaImagemImpressao } from '../../shared/types/imagem-laudo.types.js'
-import { LIMITES_PREVIA_EDITOR, PERFIL_PREVIA_EDITOR_PADRAO, perfilPreviaEditorValido, LIMITES_FIGURA_LAUDO, PERFIL_FIGURA_LAUDO_PADRAO, perfilFiguraLaudoValido } from '../../shared/types/imagem-laudo.types.js'
+import { LIMITES_PREVIA_EDITOR, PERFIL_PREVIA_EDITOR_PADRAO, perfilPreviaEditorValido, LIMITES_FIGURA_LAUDO, PERFIL_FIGURA_LAUDO_PADRAO, perfilFiguraLaudoValido, ajustesFiguraValidos } from '../../shared/types/imagem-laudo.types.js'
 import type {
   AtualizarOrdemImagemLaudoEntrada,
   ImagemLaudoPersistida,
@@ -178,6 +177,7 @@ export async function reconciliarImagensLaudo(
   )
   const idsOriginais = new Set(registros.map(registro => registro.imagem_origem_id).filter((id): id is string => Boolean(id)))
   const idsConhecidos = new Set(registros.map(registro => registro.id))
+  const caminhos = registros.map(registro => caminhoAbsoluto(registro.caminho_relativo))
   let recuperadasParaPainel = 0
   let arquivadasComoInseridas = 0
   let arquivosAusentes = 0
@@ -190,9 +190,11 @@ export async function reconciliarImagensLaudo(
         if (deveFicarNoPainel) recuperadasParaPainel += 1
         else arquivadasComoInseridas += 1
       }
-      if (!fs.existsSync(caminhoAbsoluto(registro.caminho_relativo))) arquivosAusentes += 1
     }
   })
+  for (const caminho of caminhos) {
+    try { await access(caminho) } catch { arquivosAusentes += 1 }
+  }
   const referenciasSemImagem = [...idsInseridos].filter(id => !idsConhecidos.has(id)).length
   if (recuperadasParaPainel || arquivadasComoInseridas || referenciasSemImagem || arquivosAusentes) {
     log.warn('Reconciliação de imagens do laudo encontrou divergências', {
@@ -490,10 +492,15 @@ export async function obterImagemLaudoPorId(laudoIdEntrada: string, imagemIdEntr
   }
   try {
     const bytes = await readFile(caminhoAbsoluto(registro.caminho_relativo))
+    let ajustesFigura: unknown
+    if (registro.ajustes_json) {
+      try { ajustesFigura = JSON.parse(registro.ajustes_json) } catch { ajustesFigura = undefined }
+    }
     return {
       ...criarResumoImagem(registro),
       tamanho: bytes.length,
       dataUri: `data:${registro.mime_type};base64,${bytes.toString('base64')}`,
+      ...(ajustesFiguraValidos(ajustesFigura) ? { ajustesFigura } : {}),
     }
   } catch (error) {
     log.warn('Imagem selecionada para IA ausente ou ilegível', { laudoId, imagemId, error })
@@ -557,7 +564,7 @@ export async function salvarImagemLaudo(
   if (entrada.ajustesJson) {
     let ajustes: unknown
     try { ajustes = JSON.parse(entrada.ajustesJson) } catch { throw new Error('Ajustes da figura inválidos.') }
-    if (!ajustes || typeof ajustes !== 'object' || Array.isArray(ajustes)) throw new Error('Ajustes da figura inválidos.')
+    if (!ajustesFiguraValidos(ajustes)) throw new Error('Ajustes da figura inválidos.')
   }
   const sha256 = createHash('sha256').update(bytes).digest('hex')
   const extensao = EXTENSAO_POR_MIME[mimeType]

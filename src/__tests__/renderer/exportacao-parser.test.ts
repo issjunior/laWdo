@@ -2,6 +2,17 @@ import { describe, expect, it } from 'vitest';
 import { parseHtmlParaEstrutura } from '../../renderer/lib/exportacao-parser';
 
 describe('parseHtmlParaEstrutura', () => {
+  it('mescla a célula da figura solitária em um laudo antigo', () => {
+    const documento = parseHtmlParaEstrutura('<table><tr><td><p>&nbsp;</p></td><td><figure class="laudo-figure" style="text-align:center">'
+      + '<img width="280" src="data:image/png;base64,aGVsbG8="><figcaption>Figura 01</figcaption></figure></td></tr></table>');
+    const tabela = documento.secoes[0].blocos[0];
+    expect(tabela.tipo).toBe('tabela');
+    if (tabela.tipo !== 'tabela') return;
+    expect(tabela.linhas[0]).toHaveLength(1);
+    expect(tabela.linhas[0][0].colspan).toBe(2);
+    expect(tabela.linhas[0][0].blocos).toEqual([expect.objectContaining({ tipo: 'figura', larguraPx: 280, alinhamento: 'center' })]);
+  });
+
   it('preserva zero, converte pixels e expande abreviações das margens de parágrafo', () => {
     const blocos = parseHtmlParaEstrutura('<p style="margin-top:0pt;margin-bottom:0pt;line-height:1.7">Zero</p><p style="margin:8px 0 16px">Pixels</p><p style="margin:0">Abreviação</p><p>Sem ajuste</p>').secoes[0].blocos;
     expect(blocos[0]).toMatchObject({ espacamentoAntesPt: 0, espacamentoDepoisPt: 0, espacamentoLinha: 1.7 });

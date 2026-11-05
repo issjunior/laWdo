@@ -10,6 +10,7 @@ import type { LaudoResumoLista } from '../../shared/types/laudo.types.js';
 import { getLogger } from '../utils/logger.js';
 import { executeQuery, executeNonQuery, withTransaction } from '../database/sqlite.js';
 import { randomUUID } from 'crypto';
+import { DomUtils, parseDocument } from 'htmlparser2';
 import { app } from 'electron';
 import path from 'path';
 import fs from 'fs';
@@ -19,9 +20,41 @@ import {
   buildHtml,
   filtrarSecoesAtivas,
   processarBlocosCondicionais,
+  vincularBlocosCondicionais,
 } from './secao-builder.service.js';
 
 const log = getLogger('laudo')
+
+export function preservarBlocosCondicionaisLegados(htmlNovo: string, htmlAtual: string): string {
+  const documento = parseDocument(htmlAtual);
+  const semOrigem = new Set<string>();
+  let secaoId = '';
+  let conteudo: string[] = [];
+  const conferirSecao = () => {
+    if (!secaoId || conteudo.length === 0) return;
+    const anterior = parseDocument(conteudo.join(''));
+    const projetado = parseDocument(vincularBlocosCondicionais(conteudo.join(''), secaoId));
+    const blocosAnteriores = DomUtils.findAll(no => no.name === 'div' && Boolean(no.attribs['data-cond-bloco']), anterior.children);
+    const blocosProjetados = DomUtils.findAll(no => no.name === 'div' && Boolean(no.attribs['data-cond-bloco']), projetado.children);
+    blocosAnteriores.forEach((bloco, indice) => {
+      if (!bloco.attribs['data-cond-origem'] && blocosProjetados[indice]?.attribs['data-cond-origem']) {
+        semOrigem.add(blocosProjetados[indice].attribs['data-cond-origem']);
+      }
+    });
+  };
+  for (const no of documento.children) {
+    if ('attribs' in no && (no.name === 'h2' || no.name === 'h3') && no.attribs['data-secao-id']) {
+      conferirSecao();
+      secaoId = no.attribs['data-secao-id'];
+      conteudo = [];
+    } else {
+      conteudo.push(DomUtils.getOuterHTML(no));
+    }
+  }
+  conferirSecao();
+  for (const origem of semOrigem) htmlNovo = htmlNovo.replaceAll(` data-cond-origem="${origem}"`, '');
+  return htmlNovo;
+}
 
 export async function compactarFigurasParaEditor(laudoId: string, conteudo: string): Promise<string> {
   const padraoFigura = /<figure\b[^>]*>[\s\S]*?<\/figure>/gi
@@ -105,7 +138,7 @@ class LaudoService extends BaseService<LaudoRow> {
 
       const secoesAtivas = filtrarSecoesAtivas(secoes, especificos);
       const expansoes = expandirSecoesRepetiveis(secoesAtivas, especificos);
-      const conteudo = buildHtml(secoesAtivas, expansoes, especificos);
+      const conteudo = buildHtml(secoesAtivas, expansoes, especificos, true);
 
       const id = randomUUID();
       const now = new Date().toISOString();
@@ -415,6 +448,25 @@ class LaudoService extends BaseService<LaudoRow> {
 
   // ==================== SEÇÕES CONDICIONAIS ====================
 
+  async obterBlocoCondicionalOriginal(laudoId: string, origem: string): Promise<string> {
+    if (!origem || origem.length > 1024) throw new Error('Vínculo do bloco inválido.');
+    const laudo = await this.findById(laudoId);
+    if (!laudo) throw new Error('Laudo não encontrado.');
+    const [rep] = await executeQuery<{ campos_especificos?: string | null }>(
+      'SELECT campos_especificos FROM reps WHERE id = ?', [laudo.rep_id]
+    );
+    if (!rep) throw new Error('REP local não encontrada.');
+    const dados: unknown = rep.campos_especificos ? JSON.parse(rep.campos_especificos) : {};
+    if (!dados || typeof dados !== 'object' || Array.isArray(dados)) throw new Error('Dados da REP inválidos.');
+    const especificos = dados as Record<string, unknown>;
+    const secoes = filtrarSecoesAtivas(await obterSecoesDoLaudo(laudo), especificos);
+    const expansoes = expandirSecoesRepetiveis(secoes, especificos);
+    const base = parseDocument(buildHtml(secoes, expansoes, especificos, true));
+    const blocos = DomUtils.findAll(no => no.name === 'div' && no.attribs['data-cond-origem'] === origem, base.children);
+    if (blocos.length !== 1) throw new Error('Não foi possível identificar um único bloco no modelo atual.');
+    return DomUtils.getOuterHTML(blocos[0]);
+  }
+
   async sincronizarSecoesCondicionais(
     laudoId: string,
     _camposEspecificosAnteriores?: Record<string, unknown>,
@@ -435,9 +487,9 @@ class LaudoService extends BaseService<LaudoRow> {
       let secoesFiltradas = filtrarSecoesAtivas(secoes, especificos);
       const expansoes = expandirSecoesRepetiveis(secoesFiltradas, especificos);
       if (especificos.b601) secoesFiltradas = reterDescricoesPendentesB601(secoes, secoesFiltradas, expansoes, laudo.conteudo);
-      const conteudoBase = buildHtml(secoesFiltradas, expansoes, especificos);
+      const conteudoBase = buildHtml(secoesFiltradas, expansoes, especificos, true);
 
-      const novoConteudo = this._reconciliarComBase(laudo.conteudo, conteudoBase, especificos);
+      const novoConteudo = preservarBlocosCondicionaisLegados(this._reconciliarComBase(laudo.conteudo, conteudoBase, especificos), laudo.conteudo);
 
       if (novoConteudo !== laudo.conteudo) {
         await executeNonQuery(

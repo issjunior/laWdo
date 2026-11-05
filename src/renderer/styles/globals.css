@@ -1858,6 +1858,7 @@ body.dark {
 .conteudo-laudo[data-b601-grupo] > table + [data-b601-complemento] > table:first-child { margin-top: 12px; }
 .conteudo-laudo-rep { border-color: #93c5fd; background-color: #eff6ff; }
 .conteudo-laudo-condicional { border-color: #c4b5fd; background-color: #f5f3ff; }
+.cond-bloco.conteudo-laudo-condicional { align-items: stretch; padding-right: 14px; }
 .conteudo-laudo::before { display: none !important; }
 .conteudo-laudo-editando { outline: 2px solid #2563eb; outline-offset: 2px; }
 .conteudo-laudo-controles { position: absolute; top: 5px; right: 6px; display: flex; align-items: center; gap: 5px; font: 11px Arial, sans-serif; z-index: 5; }

@@ -1,6 +1,7 @@
 import { converterMedidaTextoParaPt } from './medidas-texto';
 import type { AlinhamentoDocumento, BlocoExportacao, DocumentoExportacao, EstiloTextoExportacao, ListaExportacao, ParagrafoExportacao, TrechoExportacao } from '@shared/types/exportacao.types';
 import { elementoEhQuebraPagina, normalizarQuebrasPaginaHtml } from '@shared/utils/quebra-pagina';
+import { centralizarFigurasSozinhas } from './figuras';
 const numero = (v: string | null): number | undefined => { const n = Number.parseFloat(v || ''); return Number.isFinite(n) ? n : undefined; };
 const cor = (v: string): string | undefined => { const m = v.match(/#([0-9a-f]{6}|[0-9a-f]{3})\b/i); return m ? (m[1].length === 3 ? m[1].split('').map(x => x + x).join('') : m[1]).toUpperCase() : undefined; };
 const corDeFundoExportavel = (v: string): string | undefined => { const valor = cor(v); return valor && !['000000', '18181B', '1A1A1A'].includes(valor) ? valor : undefined; };
@@ -119,6 +120,7 @@ function blocos(p: Element, emTabela = false): BlocoExportacao[] {
 }
 export function parseHtmlParaEstrutura(html: string): DocumentoExportacao {
   const documento = new DOMParser().parseFromString(normalizarQuebrasPaginaHtml(html), 'text/html');
+  centralizarFigurasSozinhas(documento.body);
   const css = documento.body.getAttribute('style') || '';
   const fechamento = documento.querySelector('[data-laudo-fechamento="true"]');
   const blocosFechamento = fechamento ? blocos(fechamento) : [];

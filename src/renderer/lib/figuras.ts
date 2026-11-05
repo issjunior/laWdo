@@ -6,6 +6,46 @@ import type { Editor as TinyMceEditorInstance } from 'tinymce';
 const PREFIXO_FIGURA = /^\s*Fig(?:ura|\.)\s*(?:\d+|XX)\s*:?\s*/i;
 const ID_MOLDURA_VAZIA_LOCAL_NECROPSIA = 'dummy-b601-local-necropsia-material-apresentado-1';
 
+function celulaSemConteudoAlemDaFigura(celula: HTMLTableCellElement, figura?: Element): boolean {
+  const copia = celula.cloneNode(true) as HTMLTableCellElement;
+  if (figura) {
+    const figuras = Array.from(celula.querySelectorAll('figure.laudo-figure'));
+    copia.querySelectorAll('figure.laudo-figure').item(figuras.indexOf(figura))?.remove();
+  }
+  if (Array.from(copia.querySelectorAll('*')).some(elemento => !elemento.matches('p, div, span, br')
+    || Array.from(elemento.attributes).some(atributo => atributo.name.startsWith('data-') && !atributo.name.startsWith('data-mce-')))) return false;
+  return !copia.textContent?.replace(/\u00a0/g, ' ').trim();
+}
+
+export function centralizarFigurasSozinhas(raiz: ParentNode): boolean {
+  let alterou = false;
+  raiz.querySelectorAll<HTMLTableRowElement>('table tr').forEach(linha => {
+    const celulas = Array.from(linha.children).filter((filho): filho is HTMLTableCellElement => filho instanceof HTMLTableCellElement);
+    if (celulas.length !== 2 || celulas.some(celula => celula.colSpan !== 1 || celula.rowSpan !== 1)) return;
+    const figuras = celulas.map(celula => Array.from(celula.querySelectorAll('figure.laudo-figure'))
+      .filter(figura => figura.closest('td, th') === celula));
+    const indice = figuras.findIndex((lista, posicao) => lista.length === 1 && figuras[1 - posicao].length === 0);
+    if (indice < 0) return;
+    const celulaFigura = celulas[indice];
+    const figura = figuras[indice][0];
+    const celulaVazia = celulas[1 - indice];
+    if (!celulaSemConteudoAlemDaFigura(celulaFigura, figura) || !celulaSemConteudoAlemDaFigura(celulaVazia)) return;
+    celulaVazia.remove();
+    celulaFigura.colSpan = 2;
+    celulaFigura.style.textAlign = 'center';
+    (figura as HTMLElement).style.marginLeft = 'auto';
+    (figura as HTMLElement).style.marginRight = 'auto';
+    alterou = true;
+  });
+  return alterou;
+}
+
+export function centralizarFigurasSozinhasHtml(html: string): string {
+  if (!html.includes('laudo-figure') || !/<table\b/i.test(html)) return html;
+  const documento = new DOMParser().parseFromString(html, 'text/html');
+  return centralizarFigurasSozinhas(documento.body) ? documento.body.innerHTML : html;
+}
+
 export function corrigirMolduraVaziaLocalNecropsia(html: string): string {
   if (!html.includes(ID_MOLDURA_VAZIA_LOCAL_NECROPSIA)) return html;
   const documento = new DOMParser().parseFromString(html, 'text/html');
@@ -133,6 +173,7 @@ export function reindexarFiguras(html: string): string {
 
   const parser = new DOMParser();
   const doc = parser.parseFromString(html, 'text/html');
+  centralizarFigurasSozinhas(doc.body);
   const figures = doc.querySelectorAll('.laudo-figure');
 
   figures.forEach((figure, index) => { atualizarNumeroFigura(figure, index + 1); });

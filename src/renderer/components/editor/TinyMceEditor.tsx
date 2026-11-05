@@ -24,7 +24,7 @@ import { registrarColetaB601 } from '@/lib/b601-coleta';
 import { registrarMenuPreenchimentoB601 } from '@/lib/menu-preenchimento-b601';
 import { MARCADOR_QUEBRA_PAGINA } from '@shared/utils/quebra-pagina';
 import { criarHtmlFigura, URL_FIGURA_DUMMY } from '@shared/figura/html';
-import { atualizarNumeroFigura } from '@/lib/figuras';
+import { atualizarNumeroFigura, centralizarFigurasSozinhas } from '@/lib/figuras';
 import {
   aplicarRecuoPrimeiraLinha,
   aplicarEspacamentoParagrafo,
@@ -197,6 +197,7 @@ interface TinyMceEditorProps {
   onDummyFigureClick?: (imageId: string) => void;
   onFiguraRealClick?: () => void;
   onSolicitarBusca?: () => void;
+  onSolicitarSalvar?: () => void;
   /** Auto-converter "XXX" digitado em span campo-reservado (apenas templates) */
   autoConverterReservados?: boolean;
   /** Toggles condicionais para o botão "Bloco Condicional" na toolbar (ex: B-602) */
@@ -531,6 +532,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
   onDummyFigureClick,
   onFiguraRealClick,
   onSolicitarBusca,
+  onSolicitarSalvar,
   autoConverterReservados = false,
   condToggles,
   onSolicitarExclusaoBlocoCondicional,
@@ -561,6 +563,8 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
   aoClicarFiguraRealRef.current = onFiguraRealClick;
   const aoSolicitarBuscaRef = useRef(onSolicitarBusca);
   aoSolicitarBuscaRef.current = onSolicitarBusca;
+  const aoSolicitarSalvarRef = useRef(onSolicitarSalvar);
+  aoSolicitarSalvarRef.current = onSolicitarSalvar;
   const editorProntoParaAlteracoesRef = useRef(false);
   const onChange = useCallback((html: string, origem?: 'usuario' | 'normalizacao-inicial') => {
     aoAlterarConteudo(html, origem ?? (editorProntoParaAlteracoesRef.current ? 'usuario' : 'normalizacao-inicial'));
@@ -880,6 +884,8 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
           toolbar: obterToolbarTinyMce(Boolean(condToggles?.length), Boolean(laudoId && onSolicitarInsercaoFigura)),
           content_style: `
             ${ESTILOS_TABELAS_BALISTICA}
+            body h2 { margin-top: 14px; margin-bottom: 6px; }
+            body h3 { margin-top: 10px; margin-bottom: 5px; }
             ::highlight(laudo-busca) { background-color: Highlight; color: HighlightText; }
             body {
               --cor-texto-editor: #000000;
@@ -1345,6 +1351,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
                 if (nextSibling && (nextSibling.tagName === 'BR' || (nextSibling.tagName === 'P' && (nextSibling as HTMLElement).innerHTML === '&nbsp;'))) {
                   nextSibling.remove();
                 }
+                centralizarFigurasSozinhas(body);
               }
             }) satisfies ComandoTinyMce<RemoverImagemPayload>);
 
@@ -1500,6 +1507,15 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
               };
               doc.addEventListener('keydown', solicitarBusca, true);
               editor.on('remove', () => doc.removeEventListener('keydown', solicitarBusca, true));
+              const solicitarSalvar = (evento: KeyboardEvent) => {
+                if (!aoSolicitarSalvarRef.current || document.querySelector('[role="dialog"], [role="alertdialog"]')) return;
+                if (!(evento.ctrlKey || evento.metaKey) || evento.altKey || evento.shiftKey || evento.key.toLowerCase() !== 's') return;
+                evento.preventDefault();
+                evento.stopImmediatePropagation();
+                aoSolicitarSalvarRef.current();
+              };
+              doc.addEventListener('keydown', solicitarSalvar, true);
+              editor.on('remove', () => doc.removeEventListener('keydown', solicitarSalvar, true));
               const body = editor.getBody();
               registrarSeletoresTabela(editor, definirSessaoSeletor);
               registrarSeletoresCamposB601(editor, html => onChange(html, 'usuario'));

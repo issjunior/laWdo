@@ -86,7 +86,7 @@ import { medirOperacaoEditorLaudo } from '@/lib/desempenho-editor-laudo';
 import { prepararInicializacaoEditorLaudo, lerConteudoAtualEditorLaudo, sincronizacaoEditorLaudoPendente } from '@/lib/sincronizacao-editor-laudo';
 import { normalizarConteudoComparavel } from '@/lib/conteudo-comparavel-laudo';
 import { capturaProblemaLaudoAtiva, registrarDiagnosticoEditorLaudo } from '@/lib/diagnostico-editor-laudo';
-import { atualizarNumeroFigura, corrigirMolduraVaziaLocalNecropsia, extrairDescricaoFigura, legendaFiguraAusente, localizarFiguraPorIndice, observarEstruturaFiguras, renumerarFigurasNosEditores, restaurarLegendaFigura } from '@/lib/figuras';
+import { atualizarNumeroFigura, centralizarFigurasSozinhas, centralizarFigurasSozinhasHtml, corrigirMolduraVaziaLocalNecropsia, extrairDescricaoFigura, legendaFiguraAusente, localizarFiguraPorIndice, observarEstruturaFiguras, renumerarFigurasNosEditores, restaurarLegendaFigura } from '@/lib/figuras';
 import type { ResultadoAtualizacaoFiguras } from '@shared/types/imagem-laudo.types';
 import type { LaudoConteudo, LaudoResumoLista } from '@shared/types/laudo.types';
 import {
@@ -620,7 +620,6 @@ export const LaudosPage: React.FC = () => {
       : { codigo: 'FALHA_PDF', etapa: 'impressao', tentarNovamente: true };
     setErroPdf({ mensagem: `${mensagemFalhaPdf(falha)} Código de suporte: ${falha.codigo}.`, repetir });
   }, []);
-  const [success, setSuccess] = useState<string | null>(null);
 
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewBlobUrl, setPreviewBlobUrl] = useState('');
@@ -1614,6 +1613,7 @@ export const LaudosPage: React.FC = () => {
         const figura = Array.from(doc.querySelectorAll<HTMLElement>('.laudo-figure[data-image-id]'))
           .find(elemento => elemento.getAttribute('data-image-id') === imageId);
         figura?.remove();
+        centralizarFigurasSozinhas(doc.body);
         conteudo = doc.body.innerHTML;
       }
       const removerSecao = secaoAnterior.titulo.trim().toUpperCase() === 'ILUSTRAÇÕES'
@@ -2470,7 +2470,7 @@ export const LaudosPage: React.FC = () => {
     if (aberturaLaudoRef.current !== abertura) return;
     const conteudoOriginal = laudoCompleto.conteudo || '';
     const conteudoCorrigido = corrigirMolduraVaziaLocalNecropsia(conteudoOriginal);
-    const conteudoInicial = conteudoCorrigido === conteudoOriginal ? conteudoOriginal : reindexarFiguras(conteudoCorrigido);
+    const conteudoInicial = centralizarFigurasSozinhasHtml(conteudoCorrigido === conteudoOriginal ? conteudoOriginal : reindexarFiguras(conteudoCorrigido));
     const parsedSecoes = removerIlustracoesVazias(parsearSecoesEstruturais(
       reindexarHtmlEstrutural(
         limparIndicadoresCondicionais(converterPlaceholdersTextuais(conteudoInicial, placeholderChaves))
@@ -2543,7 +2543,6 @@ export const LaudosPage: React.FC = () => {
     setSecoesColapsadas({});
     setSecoesMontadas(new Set());
     setError(null);
-    setSuccess(null);
     setEditando({ ...laudo, apresentacao_json: laudoCompleto.apresentacao_json });
   }, [navigate, placeholderChaves, buildSingleHtmlFromSecoes, iniciarSessao, montarHtmlEstruturalAtual, placeholders]);
 
@@ -2818,7 +2817,6 @@ export const LaudosPage: React.FC = () => {
     setSecoesColapsadas({});
     setSecoesMontadas(new Set());
     setError(null);
-    setSuccess(null);
     setExameMenuStructure(undefined);
     setExameCamposEspecificos(undefined);
     setMapaPlaceholdersResolvidos({});
@@ -2900,7 +2898,6 @@ export const LaudosPage: React.FC = () => {
     const sessao = obterSessao();
     try {
       setError(null);
-      setSuccess(null);
       await reconciliarImagensDoEditor(false);
       if (!sessaoAtual(sessao)) return false;
       const secoesAtuais = reindexarSecoesEditadas(removerIlustracoesVazias(obterSecoesAtuaisDoEditor()));
@@ -2919,7 +2916,6 @@ export const LaudosPage: React.FC = () => {
           ...secao,
           titulo: normalizarTituloSecao(secao.titulo),
         }));
-        setSuccess('Laudo salvo com sucesso!');
         const atualizadoEm = isRecord(r.data) && isString(r.data.updated_at) ? r.data.updated_at : undefined;
         if (atualizadoEm) setLaudos(prev => prev.map(laudo => laudo.id === editando.id
           ? { ...laudo, updated_at: atualizadoEm }
@@ -2962,7 +2958,6 @@ export const LaudosPage: React.FC = () => {
 
         const conteudoAtual = obterConteudoComparavelRef.current();
         concluirSalvamento(conteudoSalvoComparavel, conteudoAtual, sessao);
-        setTimeout(() => { if (sessaoAtual(sessao)) setSuccess(null); }, 3000);
         const salvoSemPendencia = !atualizarConteudo(conteudoAtual);
         if (!falhaVisualizacao) {
           if (salvoSemPendencia) toast.success('Laudo salvo com sucesso!');
@@ -2986,10 +2981,15 @@ export const LaudosPage: React.FC = () => {
     }
   };
 
+  const salvarPeloAtalho = () => {
+    if (!editando || inicializando || salvando || carregandoPreview || exportando || projeteisAberto) return;
+    void handleSalvar();
+  };
+
   useAtalhoSalvarLaudo({
     ativo: Boolean(editando),
     bloqueado: inicializando || salvando || carregandoPreview || exportando || projeteisAberto,
-    onSalvar: () => void handleSalvar(),
+    onSalvar: salvarPeloAtalho,
   });
 
   const handleReindexarSecoes = useCallback(() => {
@@ -4364,7 +4364,6 @@ export const LaudosPage: React.FC = () => {
             </div>
           </AlertDescription>
         </Alert>}
-        {success && <Alert><AlertDescription>{success}</AlertDescription></Alert>}
 
         <Card className="flex flex-col overflow-visible">
           <CardHeader className="flex-shrink-0 pb-4">
@@ -4499,6 +4498,7 @@ export const LaudosPage: React.FC = () => {
                         onCampoReservadoDuploClique={solicitarPreenchimentoCampoReservado}
                         onFiguraRealClick={abrirPainelIlustracoes}
                         onSolicitarBusca={buscaLaudo.abrir}
+                        onSolicitarSalvar={salvarPeloAtalho}
                         onDummyFigureClick={(imageId) => {
                           setFiguraSubstituicaoSolicitada(imageId);
                           setIaSheetOpen(false);
@@ -4622,6 +4622,7 @@ export const LaudosPage: React.FC = () => {
                                     onCampoReservadoDuploClique={solicitarPreenchimentoCampoReservado}
                                     onFiguraRealClick={abrirPainelIlustracoes}
                                     onSolicitarBusca={buscaLaudo.abrir}
+                                    onSolicitarSalvar={salvarPeloAtalho}
                                     onDummyFigureClick={(imageId) => {
                                       setFiguraSubstituicaoSolicitada(imageId);
                                       setIaSheetOpen(false);
@@ -4941,7 +4942,6 @@ export const LaudosPage: React.FC = () => {
               </div>
             </AlertDescription>
           </Alert>}
-          {success && <Alert className="mb-4 bg-green-50 border-green-200 dark:bg-green-950/30 dark:border-green-900/50"><AlertDescription className="text-green-800 dark:text-green-400">{success}</AlertDescription></Alert>}
 
           {loading ? (
             <div className="text-center py-8 text-muted-foreground">Carregando...</div>

@@ -28,6 +28,15 @@ type GerarWizardParams = {
  * Registra handlers IPC para operações de Laudo
  */
 export const registerLaudoHandlers = (): void => {
+  ipcMain.handle('laudo:obterBlocoCondicionalOriginal', async (evento, laudoId: unknown, origem: unknown) => {
+    try {
+      authSessaoService.exigir(evento.sender.id);
+      if (typeof laudoId !== 'string' || !laudoId || typeof origem !== 'string' || !origem) throw new Error('Vínculo do bloco inválido.');
+      return { success: true, data: await laudoService.obterBlocoCondicionalOriginal(laudoId, origem) };
+    } catch (erro: unknown) {
+      return { success: false, error: erro instanceof Error ? erro.message : 'Não foi possível restaurar o bloco.' };
+    }
+  });
   ipcMain.handle('laudo:contextoWizard', async (evento, laudoId: unknown) => {
     try {
       authSessaoService.exigir(evento.sender.id);
