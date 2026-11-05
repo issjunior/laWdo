@@ -95,6 +95,28 @@ describe('DiagnosticoCapturaService', () => {
     await servico.finalizar({ capturaId: String(inicio.capturaId) });
   });
 
+  it('conta falhas e conserva evidências relevantes no desempenho sem incluir IPC rápido ou espera do usuário', async () => {
+    const { servico, eventos } = await criarServico();
+    const inicio = await servico.iniciar({ finalidade: 'desempenho', duracaoSegundos: 30, cenarioDesempenho: 'geral' });
+    const capturaId = String(inicio.capturaId);
+    await eventos.registrar({ origem: 'renderer', categoria: 'erro', nivel: 'error', dados: { evento: 'falha_renderer' } });
+    await eventos.registrar({ origem: 'preload', categoria: 'ipc', nivel: 'error', dados: { canal: 'laudo:findById', duracaoMs: 10, resultadoFuncional: 'falha' } });
+    await eventos.registrar({ origem: 'renderer', categoria: 'console', nivel: 'warn', dados: { evento: 'aviso_renderer' } });
+    await eventos.registrar({ origem: 'preload', categoria: 'ipc', nivel: 'info', dados: { canal: 'template:previewPDF', duracaoMs: 300, resultadoFuncional: 'sucesso' } });
+    await eventos.registrar({ origem: 'preload', categoria: 'ipc', nivel: 'info', dados: { canal: 'laudo:findAll', duracaoMs: 5, resultadoFuncional: 'sucesso' } });
+    await eventos.registrar({ origem: 'preload', categoria: 'ipc', nivel: 'info', dados: { canal: 'backup:selecionar', duracaoMs: 30000, resultadoFuncional: 'cancelado', interacaoUsuario: true } });
+    await servico.finalizar({ capturaId });
+    expect(servico.status(capturaId)).toMatchObject({ resumo: { erros: 2, ipcsComErro: 1 } });
+    const retidos = await servico.consultar({ capturaId, componente: 'eventos', depoisDe: 0, limite: 50 });
+    expect(retidos).toMatchObject({ itens: expect.arrayContaining([
+      expect.objectContaining({ categoria: 'erro' }),
+      expect.objectContaining({ categoria: 'console', nivel: 'warn' }),
+      expect.objectContaining({ dados: expect.objectContaining({ canal: 'template:previewPDF' }) }),
+    ]) });
+    expect(JSON.stringify(retidos)).not.toContain('laudo:findAll');
+    expect(JSON.stringify(retidos)).not.toContain('backup:selecionar');
+  });
+
   it('fecha desempenho automaticamente como finalizada quando encerrado pelo prazo', async () => {
     const { servico } = await criarServico();
     const inicio = await servico.iniciar({ finalidade: 'desempenho', duracaoSegundos: 30, cenarioDesempenho: 'geral' });

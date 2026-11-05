@@ -251,14 +251,18 @@ export class DiagnosticoCapturaService {
     const categorias: EventoDiagnostico['categoria'][] | undefined = captura.entrada.finalidade === 'problema'
       ? captura.entrada.categorias
       : ['sessao', 'janela'];
-    const eventos = todosEventos.filter(evento => !categorias || categorias.includes(evento.categoria));
+    const eventos = todosEventos.filter(evento => !categorias || categorias.includes(evento.categoria)
+      || (captura.finalidade === 'desempenho' && (evento.categoria === 'erro' || evento.nivel === 'error' || evento.nivel === 'warn'
+        || (evento.categoria === 'ipc' && evento.dados.interacaoUsuario !== true
+          && !['cancelado', 'indisponivel'].includes(String(evento.dados.resultadoFuncional))
+          && typeof evento.dados.duracaoMs === 'number' && evento.dados.duracaoMs >= 250))));
     const erros = [...captura.base.erros];
     let final: Omit<EvidenciaInicial, 'janelaId' | 'rota'> = { erros: [] };
     try { final = await this.dependencias.capturarEstadoFinal(captura.janelaId, captura.finalidade); } catch (erro) { erros.push({ componente: 'estado_final', codigo: erro instanceof Error ? erro.message : 'ERRO_INTERNO', mensagem: 'Não foi possível coletar o estado final.' }); }
     erros.push(...final.erros);
     if (captura.finalidade === 'desempenho') this.coletarAmostraDesempenho(captura);
     const sinais = captura.finalidade === 'problema' ? classificarSinais(eventos) : [];
-    const resumo = sumarizar(eventos, sinais);
+    const resumo = sumarizar(captura.finalidade === 'desempenho' ? todosEventos : eventos, sinais);
     const ipcs = todosEventos.flatMap(evento => evento.categoria === 'ipc' && !['cancelado', 'indisponivel'].includes(String(evento.dados.resultadoFuncional)) && evento.dados.interacaoUsuario !== true && typeof evento.dados.canal === 'string' && typeof evento.dados.duracaoMs === 'number'
       ? [{ canal: evento.dados.canal, duracaoMs: evento.dados.duracaoMs, falha: normalizarFalhaDiagnosticoGdl(evento.dados.falha) }]
       : []);
