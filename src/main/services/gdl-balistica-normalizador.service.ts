@@ -332,7 +332,6 @@ export function montarImportacaoBalistica<T extends PecaBalistica, TCodigo exten
       dadosInvestigacao,
     } : undefined,
     avisos: [
-      ...(!rep.dataEntradaSolicitacao ? [{ codigo: 'DATA_ENTRADA_SOLICITACAO_NAO_RETORNADA', mensagem: 'A Data de Entrada/Solicitação não foi fornecida pela API do GDL; preencha a Data de recebimento manualmente.' }] : []),
       ...avisosPecas,
       ...(envolvidos.length > 10 ? [{ codigo: 'LIMITE_ENVOLVIDOS_EXCEDIDO', mensagem: 'O GDL retornou mais de 10 envolvidos; somente os 10 primeiros foram preenchidos.' }] : []),
       ...(envolvidos.length === 0 ? [{ codigo: 'ENVOLVIDOS_NAO_RETORNADOS', mensagem: 'A API do GDL não retornou nomes de envolvidos reconhecíveis nesta consulta.' }] : []),

@@ -34,6 +34,27 @@ afterEach(() => { vi.useRealTimers(); Object.defineProperty(window, 'ipcAPI', { 
 
 describe('REPs do GDL no dashboard', () => {
 
+  it('pagina em 20 e pesquisa no snapshot completo, incluindo REPs fora da primeira página', async () => {
+    const reps = Array.from({ length: 25 }, (_, indice) => ({
+      ...snapshot.reps[0], idGdl: indice + 1,
+      numero: indice === 0 ? '999' : String(100 + indice),
+      dataDesignacao: `2026-10-${String(indice + 1).padStart(2, '0')}T10:00`,
+    }));
+    obterMinhasRepsCache.mockResolvedValue({ success: true, data: { ...snapshot, reps } });
+    render(<MemoryRouter><GdlMinhasRepsDashboard /></MemoryRouter>);
+    expect(await screen.findByText('25 REPs')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /^\d+\/2026$/ })).toHaveLength(20);
+    expect(screen.queryByRole('button', { name: '999/2026' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Itens por página' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Próxima página' }));
+    expect(screen.getByRole('button', { name: '999/2026' })).toBeInTheDocument();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Pesquisar REP' }), { target: { value: '999/2026' } });
+    expect(screen.getByRole('button', { name: '999/2026' })).toBeInTheDocument();
+    expect(screen.getByText('Pág 1 de 1')).toBeInTheDocument();
+    expect(screen.getByText('1 registro(s)')).toBeInTheDocument();
+    expect(atualizarMinhasRepsCache).not.toHaveBeenCalled();
+  });
+
   it('apenas lê o cache ao abrir e recebe alterações sem iniciar consultas de rede', async () => {
     vi.useFakeTimers();
     let notificar: (reiniciar: boolean) => void = () => undefined;
@@ -61,6 +82,18 @@ describe('REPs do GDL no dashboard', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Atualizar' }));
     expect(atualizarMinhasRepsCache).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('button', { name: 'Atualizar' })).toBeDisabled();
+  });
+
+  it('permite duas atualizações manuais consecutivas sem aguardar a validade do cache', async () => {
+    render(<MemoryRouter><GdlMinhasRepsDashboard /></MemoryRouter>);
+    await screen.findByText('1 REP');
+    const botao = screen.getByRole('button', { name: 'Atualizar' });
+    fireEvent.click(botao);
+    await waitFor(() => expect(botao).toBeEnabled());
+    fireEvent.click(botao);
+    await waitFor(() => expect(atualizarMinhasRepsCache).toHaveBeenCalledTimes(2));
+    expect(atualizarMinhasRepsCache).toHaveBeenNthCalledWith(1, true);
+    expect(atualizarMinhasRepsCache).toHaveBeenNthCalledWith(2, true);
   });
 
   it('não agenda atualização automática com a listagem desativada', async () => {

@@ -13,10 +13,12 @@ import {
 
 interface DataTablePaginationProps<TData extends RowData> {
   table: TabelaDados<TData>
+  tamanhoPaginaFixo?: boolean
 }
 
 export function DataTablePagination<TData extends RowData>({
   table,
+  tamanhoPaginaFixo = false,
 }: DataTablePaginationProps<TData>) {
   return (
     <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 px-2 py-1">
@@ -24,7 +26,7 @@ export function DataTablePagination<TData extends RowData>({
         {table.getFilteredRowModel().rows.length} registro(s)
       </div>
       <div className="flex flex-wrap items-center gap-2 sm:gap-4">
-        <div className="flex items-center space-x-2">
+        {!tamanhoPaginaFixo && <div className="flex items-center space-x-2">
           <p className="text-sm font-medium">Itens/pág</p>
           <Select
             value={`${table.state.pagination.pageSize}`}
@@ -43,7 +45,7 @@ export function DataTablePagination<TData extends RowData>({
               ))}
             </SelectContent>
           </Select>
-        </div>
+        </div>}
         <div className="flex w-[100px] items-center justify-center text-sm font-medium">
           Pág {table.state.pagination.pageIndex + 1} de{" "}
           {table.getPageCount() || 1}

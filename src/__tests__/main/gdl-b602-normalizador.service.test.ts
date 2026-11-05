@@ -117,7 +117,7 @@ describe('contrato GDL B602', () => {
     ])
   })
 
-  it('deixa a data de recebimento vazia e avisa quando a página não a retorna', () => {
+  it('deixa a data de recebimento vazia sem aviso quando a página não a retorna', () => {
     const resultado = converterRepB602(validarGdlRep({
       ...fixtureProducao,
       dataEntradaSolicitacao: '',
@@ -125,9 +125,7 @@ describe('contrato GDL B602', () => {
     }))
 
     expect(resultado.camposGerais.data_requisicao).toBe('')
-    expect(resultado.avisos).toContainEqual(expect.objectContaining({
-      codigo: 'DATA_ENTRADA_SOLICITACAO_NAO_RETORNADA',
-    }))
+    expect(resultado.avisos.some(aviso => aviso.codigo === 'DATA_ENTRADA_SOLICITACAO_NAO_RETORNADA')).toBe(false)
   })
 
   it('ignora andamento de execução sem data válida', () => {

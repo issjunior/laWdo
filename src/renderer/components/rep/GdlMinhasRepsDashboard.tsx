@@ -4,9 +4,10 @@ import { apresentarNaturezaExame } from '@shared/gdl/natureza-exame';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { z } from 'zod';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { DataTable } from '@/components/data-table/data-table';
 import { DataTableColumnHeader } from '@/components/data-table/data-table-column-header';
 import type { DefinicaoColunaTabela } from '@/components/data-table/data-table-features';
@@ -48,8 +49,9 @@ export function GdlMinhasRepsDashboard() {
   const consultaEmAndamento = useRef(false);
   const [erro, setErro] = useState<FalhaListaGdlApresentavel | null>(null);
   const [destinoControleColunas, setDestinoControleColunas] = useState<HTMLDivElement | null>(null);
+  const [buscaRep, setBuscaRep] = useState('');
 
-  const atualizar = useCallback(async (forcar: boolean, habilitada: boolean) => {
+  const atualizar = useCallback(async (habilitada: boolean) => {
     if (!habilitada) {
       setTentativaBloqueada(true);
       return;
@@ -59,7 +61,7 @@ export function GdlMinhasRepsDashboard() {
     setCarregando(true);
     setErro(null);
     try {
-      const resposta = await window.ipcAPI.gdl.atualizarMinhasRepsCache(forcar);
+      const resposta = await window.ipcAPI.gdl.atualizarMinhasRepsCache(true);
       if (!resposta.success) {
         const falha = normalizarFalhaListaGdl(resposta);
         setErro(falha);
@@ -121,6 +123,15 @@ export function GdlMinhasRepsDashboard() {
     ...rep,
     oficioReiterando: rep.oficioReiterando ?? consultarReiterando(`${rep.numero}/${rep.ano}`),
   })) ?? [], [snapshotExibido, consultarReiterando]);
+  const repsFiltradas = useMemo(() => {
+    const busca = buscaRep.trim();
+    if (!busca) return repsExibidas;
+    const digitos = busca.replace(/\D/g, '');
+    return repsExibidas.filter(rep => {
+      const numeroExibido = `${rep.numero.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}/${rep.ano}`;
+      return numeroExibido.includes(busca) || (digitos.length > 0 && `${rep.numero}${rep.ano}`.includes(digitos));
+    });
+  }, [buscaRep, repsExibidas]);
 
   const selecionar = useCallback((rep: MinhaRepGdl) => {
     navegar('/reps', { state: { importarGdl: { numero: rep.numero, ano: rep.ano, naturezaExame: rep.naturezaExame } } });
@@ -176,15 +187,21 @@ export function GdlMinhasRepsDashboard() {
           {carregando && <GdlConsultaEmAndamento />}
         </div>
         <div ref={setDestinoControleColunas} className="ml-auto flex flex-wrap items-center gap-2">
-          <Button variant="outline" size="sm" disabled={carregando || listagemHabilitada === null} onClick={() => void atualizar(true, listagemHabilitada === true)}><RefreshCw className="mr-2 h-4 w-4" />Atualizar</Button>
+          <Button variant="outline" size="sm" disabled={carregando || listagemHabilitada === null} onClick={() => void atualizar(listagemHabilitada === true)}><RefreshCw className="mr-2 h-4 w-4" />Atualizar</Button>
         </div>
       </div>
       {listagemHabilitada === false && <GdlListagemPreferenciaAlert habilitada={false} cacheVisivel={Boolean(snapshotExibido)}
         tentativaBloqueada={tentativaBloqueada} onAbrirConfiguracao={() => navegar('/gdl-config', { state: { focarListagemGdl: true } })} />}
       {erro && <GdlFalhaListaAlert falha={erro} listaSalva={Boolean(snapshotExibido)}
-        onTentarNovamente={() => void atualizar(true, listagemHabilitada === true)} onConfigurarCredenciais={() => navegar('/gdl-config')} />}
-      {snapshotExibido ? <DataTable columns={colunas} data={repsExibidas} hideSearch destinoControleColunas={destinoControleColunas}
+        onTentarNovamente={() => void atualizar(listagemHabilitada === true)} onConfigurarCredenciais={() => navegar('/gdl-config')} />}
+      {snapshotExibido && <div className="relative w-full max-w-sm shrink-0">
+        <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+        <Input aria-label="Pesquisar REP" placeholder="Pesquisar número da REP..." value={buscaRep}
+          onChange={evento => setBuscaRep(evento.target.value)} className="pl-8" />
+      </div>}
+      {snapshotExibido ? <DataTable columns={colunas} data={repsFiltradas} hideSearch destinoControleColunas={destinoControleColunas}
         chavePreferencias="dashboard_gdl_disposicao"
+        tamanhoPaginaFixo={20} chaveReinicioPagina={buscaRep}
         densidade="compacta" preencherAltura fixarPrimeiraColuna
         defaultSorting={[{ id: 'dataDesignacao', desc: true }]} />
         : !carregando && listagemHabilitada && <p className="rounded-md border p-5 text-center text-sm text-muted-foreground">Nenhuma lista disponível. Use Atualizar para tentar novamente.</p>}
