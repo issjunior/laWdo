@@ -38,12 +38,29 @@ async function restaurarDescricao(editor: Editor, alvo: HTMLElement, laudoId?: s
   return novoGrupo;
 }
 
+async function restaurarBlocoCondicional(editor: Editor, alvo: HTMLElement, laudoId?: string): Promise<HTMLElement> {
+  const origem = alvo.getAttribute('data-cond-origem');
+  if (!laudoId || !origem) throw new Error('Este bloco não possui origem vinculada ao modelo.');
+  const resposta = await window.ipcAPI.laudo.obterBlocoCondicionalOriginal(laudoId, origem);
+  if (!resposta.success || typeof resposta.data !== 'string') throw new Error(resposta.error || 'Não foi possível consultar o bloco original.');
+  const recipiente = editor.getDoc().createElement('div');
+  recipiente.innerHTML = resposta.data;
+  const bloco = recipiente.firstElementChild as HTMLElement | null;
+  if (!bloco || recipiente.childElementCount !== 1 || !bloco.matches('.cond-bloco[data-cond-bloco]') || bloco.getAttribute('data-cond-origem') !== origem) {
+    throw new Error('O modelo retornou um bloco inválido.');
+  }
+  const instancia = alvo.getAttribute('data-cond-instancia');
+  if (instancia) bloco.setAttribute('data-cond-instancia', instancia);
+  return bloco;
+}
+
 const adaptadores: readonly AdaptadorConteudo[] = [
   { seletor: '[data-b601-grupo]', categoria: 'descricao', permiteExcluir: false, agrupaDescendentes: true,
     permiteRestaurar: (_alvo, laudoId) => Boolean(laudoId), prepararRestauracao: restaurarDescricao,
     liberar: () => true, aplicar: () => false },
   { seletor: '.cond-bloco[data-cond-bloco]', categoria: 'condicional', permiteExcluir: true,
-    permiteRestaurar: () => false, liberar: () => true,
+    permiteRestaurar: (alvo, laudoId) => Boolean(laudoId && alvo.getAttribute('data-cond-origem')),
+    prepararRestauracao: restaurarBlocoCondicional, liberar: () => true,
     aplicar: (_editor, alvo, acao) => { if (acao !== 'excluir') return false; alvo.setAttribute('data-cond-suprimido', 'true'); return true; } },
   { seletor: '[data-placeholder-preview-tabela="true"], [data-placeholder-tabela-personalizada="true"]', categoria: 'rep', permiteExcluir: true,
     permiteRestaurar: alvo => alvo.hasAttribute('data-placeholder-tabela-personalizada'),

@@ -87,7 +87,7 @@ export function registrarConteudoInterativo(editor: Editor, opcoes: {
           const botao = documento.createElement('button');
           botao.type = 'button';
           botao.textContent = acao === 'editar' ? editando ? 'Concluir' : 'Editar' : acao === 'restaurar' ? 'Restaurar dados da REP' : 'Excluir';
-          const motivo = alvo.parentElement?.closest('.conteudo-laudo:not(.conteudo-laudo-editando)') ? 'Conclua a liberação do bloco que contém este conteúdo.' : leitura ? 'Laudo em modo somente leitura.' : processando ? 'Aguarde a operação atual.' : acao === 'restaurar' && !adaptador.permiteRestaurar(alvo, opcoes.laudoId) && grupo ? 'A restauração requer um laudo vinculado à REP.' : acao === 'restaurar' && condicional ? 'Este bloco não possui restauração vinculada à REP.' : acao === 'excluir' && !adaptador.permiteExcluir ? 'A exclusão de grupos descritivos não está disponível.' : acao === 'restaurar' && !grupo && !alvo.hasAttribute('data-placeholder-tabela-personalizada') ? 'Esta tabela já utiliza os dados da REP.' : '';
+          const motivo = alvo.parentElement?.closest('.conteudo-laudo:not(.conteudo-laudo-editando)') ? 'Conclua a liberação do bloco que contém este conteúdo.' : leitura ? 'Laudo em modo somente leitura.' : processando ? 'Aguarde a operação atual.' : acao === 'restaurar' && !adaptador.permiteRestaurar(alvo, opcoes.laudoId) && grupo ? 'A restauração requer um laudo vinculado à REP.' : acao === 'restaurar' && !adaptador.permiteRestaurar(alvo, opcoes.laudoId) && condicional ? 'Este bloco não possui origem vinculada ao modelo.' : acao === 'excluir' && !adaptador.permiteExcluir ? 'A exclusão de grupos descritivos não está disponível.' : acao === 'restaurar' && !grupo && !condicional && !alvo.hasAttribute('data-placeholder-tabela-personalizada') ? 'Esta tabela já utiliza os dados da REP.' : '';
           botao.disabled = Boolean(motivo);
           botao.title = motivo || botao.textContent;
           botao.setAttribute('aria-label', botao.title);
@@ -124,7 +124,9 @@ export function registrarConteudoInterativo(editor: Editor, opcoes: {
       sincronizar(alvo);
       if (acao !== 'editar' && !await opcoes.confirmar(acao === 'excluir'
         ? 'Excluir este conteúdo do laudo? A ação pode ser desfeita durante a edição. Não há recuperação garantida após fechar e reabrir.'
-        : adaptador.categoria === 'descricao'
+          : adaptador.categoria === 'condicional'
+            ? 'Restaurar o texto do modelo e os dados atuais da REP somente neste bloco? As edições locais deste bloco serão descartadas.'
+          : adaptador.categoria === 'descricao'
           ? 'Restaurar os dados atuais da REP? Os preenchimentos e escolhas locais serão descartados. Fotos, legendas e complementos dos grupos descritivos serão preservados.'
           : 'Restaurar os dados da REP nesta tabela? As edições locais desta tabela serão descartadas.')) return 'cancelada';
       if (!valido() || conteudo() !== anterior) throw new Error('O conteúdo selecionado mudou ou não está mais disponível. Tente novamente.');

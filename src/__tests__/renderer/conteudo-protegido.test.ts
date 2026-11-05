@@ -34,13 +34,14 @@ function preparar(html = grupo, confirmar = vi.fn(async () => true), somenteLeit
   const aoAlterar = vi.fn(); const aoRestaurar = vi.fn();
   const laudo = vi.fn().mockResolvedValue({ success: true, data: { rep_id: 'rep' } });
   const rep = vi.fn().mockResolvedValue({ success: true, data: { campos_especificos: JSON.stringify({ b601: dados }) } });
-  Object.assign(window.ipcAPI, { laudo: { findById: laudo }, rep: { findById: rep } });
+  const obterBloco = vi.fn().mockResolvedValue({ success: true, data: '<div class="cond-bloco" data-cond-bloco="teste" data-cond-origem="origem-1"><p>Texto do modelo</p></div>' });
+  Object.assign(window.ipcAPI, { laudo: { findById: laudo, obterBlocoCondicionalOriginal: obterBloco }, rep: { findById: rep } });
   registrarConteudoInterativo(editor as unknown as Editor, { laudoId: 'laudo', confirmar, aoAlterar, aoRestaurar });
   const encerrar = () => eventos.get('remove')?.forEach(acao => acao());
   encerramentos.push(encerrar);
   const alvo = raiz.firstElementChild as HTMLElement;
   const botao = (acao: string, bloco = alvo) => bloco.querySelector<HTMLButtonElement>(`:scope > [data-controles-conteudo] [data-acao-conteudo="${acao}"]`)!;
-  return { raiz, alvo, editor, botao, laudo, rep, aoAlterar, aoRestaurar, confirmar, encerrar };
+  return { raiz, alvo, editor, botao, laudo, rep, obterBloco, aoAlterar, aoRestaurar, confirmar, encerrar };
 }
 
 afterEach(() => { encerramentos.splice(0).forEach(encerrar => encerrar()); document.body.innerHTML = ''; vi.clearAllMocks(); });
@@ -122,6 +123,23 @@ describe('ações de conteúdo protegido', () => {
     expect(sessao.alvo.getAttribute('data-cond-suprimido')).toBe('true');
     expect(sessao.aoAlterar).toHaveBeenCalledTimes(1);
     expect(sessao.editor.undoManager.transact).toHaveBeenCalledTimes(1);
+  });
+
+  it('restaura somente a ocorrência vinculada ao modelo', async () => {
+    const sessao = preparar('<div class="cond-bloco" data-cond-bloco="teste" data-cond-origem="origem-1" data-cond-instancia="instancia-1"><p>Texto alterado</p></div><div class="cond-bloco" data-cond-bloco="teste" data-cond-origem="origem-2"><p>Vizinho</p></div>');
+    sessao.botao('restaurar').click(); await aguardarSucesso();
+    expect(sessao.obterBloco).toHaveBeenCalledExactlyOnceWith('laudo', 'origem-1');
+    expect(sessao.raiz.firstElementChild?.textContent).toContain('Texto do modelo');
+    expect(sessao.raiz.firstElementChild?.getAttribute('data-cond-instancia')).toBe('instancia-1');
+    expect(sessao.raiz.lastElementChild?.textContent).toContain('Vizinho');
+    expect(sessao.editor.undoManager.transact).toHaveBeenCalledTimes(1);
+  });
+
+  it('mantém restauração indisponível em bloco manual ou antigo sem vínculo', () => {
+    const sessao = preparar('<div class="cond-bloco" data-cond-bloco="teste"><p>Texto local</p></div>');
+    expect(sessao.botao('restaurar')).toBeDisabled();
+    sessao.botao('restaurar').click();
+    expect(sessao.obterBloco).not.toHaveBeenCalled();
   });
 
   it('mantém ações indisponíveis em somente leitura e não permite excluir descrições', () => {

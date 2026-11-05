@@ -3,6 +3,37 @@ import { calcularNumeracaoSecoes } from '../../shared/utils/numeracao-secoes.js'
 import { SecaoTemplateRow } from '../types/database.js';
 import { projetarB602ParaLaudo } from '../../shared/utils/b602-pecas-projecao.js';
 import { validarDadosB601 } from '../../shared/types/b601.types.js';
+import { DomUtils, parseDocument } from 'htmlparser2';
+
+export function vincularBlocosCondicionais(html: string, secaoId: string): string {
+  const documento = parseDocument(html);
+  const ocorrencias = new Map<string, number>();
+  const blocos = DomUtils.findAll(no => no.name === 'div' && Boolean(no.attribs['data-cond-bloco']), documento.children);
+  const armasPorBloco = new Map<(typeof blocos)[number], string>();
+  const gruposArmas = DomUtils.findAll(no => no.attribs['data-repeat-group'] === 'armas', documento.children);
+  for (const grupo of gruposArmas) {
+    let arma = '';
+    for (const filho of grupo.children) {
+      if ('attribs' in filho && filho.attribs['data-repeat-item'] === 'arma') arma = filho.attribs['data-arma-chave'] || '';
+      if (!arma) continue;
+      for (const bloco of DomUtils.findAll(no => no.name === 'div' && Boolean(no.attribs['data-cond-bloco']), [filho])) {
+        armasPorBloco.set(bloco, arma);
+      }
+    }
+  }
+  for (const bloco of blocos) {
+    let item = bloco.attribs['data-arma-chave'] || armasPorBloco.get(bloco) || '';
+    for (let pai = bloco.parent; pai && !item; pai = pai.parent) {
+      if ('attribs' in pai) item = pai.attribs['data-b601-peca'] || '';
+    }
+    const condicao = bloco.attribs['data-cond-bloco'];
+    const chave = JSON.stringify([secaoId, item, condicao]);
+    const ocorrencia = (ocorrencias.get(chave) || 0) + 1;
+    ocorrencias.set(chave, ocorrencia);
+    bloco.attribs['data-cond-origem'] = Buffer.from(JSON.stringify([secaoId, item, condicao, ocorrencia])).toString('base64url');
+  }
+  return DomUtils.getOuterHTML(documento);
+}
 
 interface ContextoCondicionalArma {
   indiceArma?: number;
@@ -385,7 +416,8 @@ export function expandirSecoesRepetiveis(
 export function buildHtml(
   secoes: SecaoTemplateRow[],
   expansoes: Map<string, string>,
-  camposEspecificos: Record<string, unknown>
+  camposEspecificos: Record<string, unknown>,
+  vincularOrigem = false
 ): string {
   const secoesOrdenadas = ordenarSecoes(secoes);
   const filhosPorPai = new Map<string, SecaoTemplateRow[]>();
@@ -430,6 +462,6 @@ export function buildHtml(
       derivadaRep: isSecaoDerivadaRep(secao, camposEspecificos),
       atributosExtras: nivel === 3 && secao.repetir_para ? [['data-repeat-section', secao.repetir_para]] : undefined,
     });
-    return conteudo ? [heading, conteudo] : [heading];
+    return conteudo ? [heading, vincularOrigem ? vincularBlocosCondicionais(conteudo, secao.id) : conteudo] : [heading];
   }).join('\n');
 }
