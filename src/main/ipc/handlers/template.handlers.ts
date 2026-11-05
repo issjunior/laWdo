@@ -9,6 +9,7 @@ import { obterEstadoTemplatesIntegrados } from '../../templates/integrados/sincr
 import { ErroGeracaoPdf, gerarPdfPreparado } from '../../services/pdf-prontidao.service.js';
 import { criarOpcoesPdf } from '../../services/pdf-layout.js';
 import { ESTILOS_TABELAS_PLACEHOLDER_PDF } from '../../services/pdf-tabelas.js';
+import { ESTILOS_SECOES_PDF, removerEspacadoresEntreSecoes } from '../../services/pdf-secoes.js';
 import { sanitizarHtmlImportacao } from '../../services/importacao/sanitizacao.js';
 
 const mensagemErro = (error: unknown): string =>
@@ -330,6 +331,7 @@ export const registerTemplateHandlers = (): void => {
   h1 { font-size: 20px; margin-bottom: 12px; }
   h2 { font-size: 16px; margin-top: 28px; margin-bottom: 10px; border-bottom: 1px solid #ccc; padding-bottom: 4px; }
   h3 { font-size: 14px; margin-top: 20px; margin-bottom: 8px; }
+  ${ESTILOS_SECOES_PDF}
   p { margin-bottom: 8px; }
   p:not(table p):not(figure p) { text-align: justify; }
   table { border-collapse: collapse; width: 100%; margin: 12px 0; }
@@ -347,7 +349,7 @@ export const registerTemplateHandlers = (): void => {
   .campo-reservado { background-color: rgba(255,193,7,0.2); color: #b45309; border-bottom: 2px dotted #f59e0b; border-radius: 4px; padding: 2px 6px; font-weight: 500; }
 </style>
 </head>
-<body>${html}</body>
+<body>${removerEspacadoresEntreSecoes(html)}</body>
 </html>`;
 
       const printOptions = criarOpcoesPdf(margins, headerTemplate);

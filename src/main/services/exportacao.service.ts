@@ -12,6 +12,7 @@ import { getLogger } from '../utils/logger.js';
 import { ErroGeracaoPdf, gerarPdfPreparado } from './pdf-prontidao.service.js';
 import { criarOpcoesPdf } from './pdf-layout.js';
 import { ESTILOS_TABELAS_PLACEHOLDER_PDF } from './pdf-tabelas.js';
+import { ESTILOS_SECOES_PDF, removerEspacadoresEntreSecoes } from './pdf-secoes.js';
 import type { FalhaPdf } from '../../shared/types/pdf.types.js';
 import type { FiguraExportacao } from '../../shared/types/exportacao.types.js';
 
@@ -85,6 +86,7 @@ async function gerarPDF(html: string, margens?: ExportarParams['margens'], heade
   h1 { font-size: 20px; margin-bottom: 12px; }
   h2 { font-size: 16px; margin-top: 28px; margin-bottom: 10px; border-bottom: 1px solid #ccc; padding-bottom: 4px; }
   h3 { font-size: 14px; margin-top: 20px; margin-bottom: 8px; }
+  ${ESTILOS_SECOES_PDF}
   p { margin-bottom: 8px; }
   p:not(table p):not(figure p) { text-align: justify; }
   table { border-collapse: collapse; width: 100% !important; max-width: 100% !important; margin: 12px 0; }
@@ -101,7 +103,7 @@ async function gerarPDF(html: string, margens?: ExportarParams['margens'], heade
   [data-quebra-pagina="true"] { break-after: page; page-break-after: always; height: 0; }
 </style>
 </head>
-<body>${normalizarQuebrasPaginaHtml(html)}</body>
+<body>${removerEspacadoresEntreSecoes(normalizarQuebrasPaginaHtml(html))}</body>
 </html>`;
 
     const printOptions = criarOpcoesPdf(margens, headerTemplate);
