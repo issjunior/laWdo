@@ -1,3 +1,4 @@
+import { ConexaoGdlProvider } from '@/contexts/ConexaoGdlContext';
 import React, { useState, lazy, Suspense, useMemo } from 'react';
 import { createHashRouter, createRoutesFromElements, RouterProvider, Route, Link, Outlet } from 'react-router';
 import { Toaster } from 'sonner';
@@ -83,9 +84,9 @@ const EstruturaRoteada = ({ onLogout, currentUser }: {
 }) => {
   const solicitarSaida = useSolicitarSaida();
   return (
-    <Layout onLogout={() => solicitarSaida(onLogout)} currentUser={currentUser}>
+    <ConexaoGdlProvider key={currentUser?.id}><Layout onLogout={() => solicitarSaida(onLogout)} currentUser={currentUser}>
       <AvisosReiteracaoProvider key={currentUser?.id}><Outlet /></AvisosReiteracaoProvider>
-    </Layout>
+    </Layout></ConexaoGdlProvider>
   );
 };
 

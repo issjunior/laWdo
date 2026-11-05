@@ -1,4 +1,7 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import type { ReactNode } from 'react';
+import type { RenderOptions } from '@testing-library/react';
+import { ConexaoGdlProvider } from '@/contexts/ConexaoGdlContext';
+import { fireEvent, render as renderOriginal, screen, waitFor } from '@testing-library/react'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { GdlConfigPage } from '@/pages/GdlConfigPage'
 
@@ -22,6 +25,11 @@ describe('GdlConfigPage', () => {
         configuracao: { ...ipcApiOriginal.configuracao, obter: obterConfiguracao, salvar: salvarConfiguracao },
         gdl: {
           ...ipcApiOriginal.gdl,
+          onEstadoConexaoAlterado: () => () => undefined,
+          obterEstadoConexao: vi.fn().mockResolvedValue({ success: true, data: { ambiente: 'producao', revisao: 0, versaoEstado: 0,
+            rede: 'desconhecida', redeVerificadaEm: null, credenciais: 'pendentes', credenciaisValidadasEm: null, web: 'desconhecida', verificando: false } }),
+          verificarConexao: vi.fn().mockResolvedValue({ success: false }),
+          excluirCredenciais: vi.fn().mockResolvedValue({ success: true }),
           obterPreferenciaListagem: vi.fn().mockResolvedValue({ success: true, data: { habilitada: false } }),
           definirPreferenciaListagem: vi.fn(async (habilitada: boolean) => ({ success: true, data: { habilitada } })),
           obterValidacaoSessao: vi.fn().mockResolvedValue({ success: true, data: { ambiente: 'Produção', validado: false } }),
@@ -34,6 +42,88 @@ describe('GdlConfigPage', () => {
 
   afterAll(() => {
     Object.defineProperty(window, 'ipcAPI', { value: ipcApiOriginal, writable: true })
+  })
+
+  it('ativa a listagem depois de salvar credenciais e ambiente', async () => {
+    render(<GdlConfigPage />)
+    const salvar = screen.getByRole('button', { name: 'Salvar Configurações' })
+    await waitFor(() => expect(salvar).toBeEnabled())
+    fireEvent.change(screen.getByLabelText('Login'), { target: { value: 'usuario' } })
+    fireEvent.change(screen.getByLabelText('Senha'), { target: { value: 'senha' } })
+    fireEvent.change(screen.getByLabelText('CPF do usuário do GDL'), { target: { value: '529.982.247-25' } })
+    fireEvent.click(salvar)
+    await waitFor(() => expect(window.ipcAPI.gdl.definirPreferenciaListagem).toHaveBeenCalledWith(true))
+    expect(configuracoes.get('gdl_login_producao')).toBe('usuario')
+    expect(configuracoes.get('gdl_ambiente')).toBe('producao')
+    expect(configuracoes.get('gdl_cpf_usuario_producao')).toBe('52998224725')
+    expect(screen.getByRole('button', { name: 'Desativar listagem' })).toBeEnabled()
+  })
+
+  it('não ativa a listagem quando as credenciais não foram salvas', async () => {
+    render(<GdlConfigPage />)
+    const salvar = screen.getByRole('button', { name: 'Salvar Configurações' })
+    await waitFor(() => expect(salvar).toBeEnabled())
+    fireEvent.click(salvar)
+    expect(await screen.findByText(/Preencha login, senha e CPF/)).toBeInTheDocument()
+    expect(window.ipcAPI.gdl.definirPreferenciaListagem).not.toHaveBeenCalled()
+  })
+
+  it.each(['', '529982247', '11111111111', '52998224724', '52998224715'])('bloqueia salvamento com CPF ausente ou inválido: %s', async cpf => {
+    render(<GdlConfigPage />)
+    const salvar = screen.getByRole('button', { name: 'Salvar Configurações' })
+    await waitFor(() => expect(salvar).toBeEnabled())
+    fireEvent.change(screen.getByLabelText('Login'), { target: { value: 'usuario' } })
+    fireEvent.change(screen.getByLabelText('Senha'), { target: { value: 'senha' } })
+    fireEvent.change(screen.getByLabelText('CPF do usuário do GDL'), { target: { value: cpf } })
+    fireEvent.click(salvar)
+    expect(await screen.findByText(cpf ? /Informe um CPF válido/ : /Preencha CPF/)).toBeInTheDocument()
+    expect(salvarConfiguracao).not.toHaveBeenCalled()
+    expect(window.ipcAPI.gdl.definirPreferenciaListagem).not.toHaveBeenCalled()
+    expect(screen.getByLabelText('CPF do usuário do GDL')).toHaveAttribute('aria-invalid', 'true')
+  })
+
+  it('orienta cadastro antigo sem CPF sem desativar a listagem nem alterar credenciais', async () => {
+    configuracoes.set('gdl_login_producao', 'usuario')
+    configuracoes.set('gdl_senha_producao', 'senha')
+    vi.mocked(window.ipcAPI.gdl.obterPreferenciaListagem).mockResolvedValue({ success: true, data: { habilitada: true }, error: '' })
+    render(<GdlConfigPage />)
+    expect(await screen.findByText(/Complete seu cadastro com um CPF válido/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Desativar listagem' })).toBeEnabled()
+    expect(salvarConfiguracao).not.toHaveBeenCalled()
+    expect(window.ipcAPI.gdl.definirPreferenciaListagem).not.toHaveBeenCalled()
+    fireEvent.change(screen.getByLabelText('CPF do usuário do GDL'), { target: { value: '52998224725' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar Configurações' }))
+    await waitFor(() => expect(screen.queryByText(/Complete seu cadastro com um CPF válido/)).not.toBeInTheDocument())
+    expect(configuracoes.get('gdl_cpf_usuario_producao')).toBe('52998224725')
+  })
+
+  it('exclui as credenciais somente após confirmar e limpa os campos', async () => {
+    configuracoes.set('gdl_login_producao', 'usuario')
+    configuracoes.set('gdl_senha_producao', 'senha')
+    configuracoes.set('gdl_cpf_usuario_producao', '12345678901')
+    render(<GdlConfigPage />)
+    await waitFor(() => expect(screen.getByLabelText('Login')).toHaveValue('usuario'))
+    fireEvent.click(screen.getByRole('button', { name: 'Excluir credenciais' }))
+    expect(window.ipcAPI.gdl.excluirCredenciais).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: /^Excluir$/ }))
+    await waitFor(() => expect(screen.getByLabelText('Login')).toHaveValue(''))
+    expect(window.ipcAPI.gdl.excluirCredenciais).toHaveBeenCalledWith('producao')
+    expect(screen.getByLabelText('Senha')).toHaveValue('')
+    expect(screen.getByLabelText('CPF do usuário do GDL')).toHaveValue('')
+  })
+
+  it('preserva as credenciais e permite tentar novamente quando a exclusão falha', async () => {
+    configuracoes.set('gdl_login_producao', 'usuario')
+    configuracoes.set('gdl_senha_producao', 'senha')
+    vi.mocked(window.ipcAPI.gdl.excluirCredenciais).mockResolvedValueOnce({ success: false, error: 'Banco indisponível' })
+    render(<GdlConfigPage />)
+    await waitFor(() => expect(screen.getByLabelText('Login')).toHaveValue('usuario'))
+    fireEvent.click(screen.getByRole('button', { name: 'Excluir credenciais' }))
+    fireEvent.click(screen.getByRole('button', { name: /^Excluir$/ }))
+    expect(await screen.findByText('Banco indisponível')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Excluir$/ })).toBeEnabled()
+    expect(screen.getByLabelText('Login')).toHaveValue('usuario')
+    expect(screen.getByLabelText('Senha')).toHaveValue('senha')
   })
 
   it('inicia com Homologação desabilitada quando não há configuração salva', async () => {
@@ -195,3 +285,5 @@ describe('GdlConfigPage', () => {
     expect(screen.queryByText('Validada')).not.toBeInTheDocument()
   })
 })
+
+const render = (ui: ReactNode, opcoes?: RenderOptions) => renderOriginal(<ConexaoGdlProvider>{ui}</ConexaoGdlProvider>, opcoes);

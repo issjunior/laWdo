@@ -1,8 +1,6 @@
-import { MENSAGEM_ACESSO_REDE_GDL } from '@shared/gdl/acesso-institucional';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
-import { CircleHelp, CircleCheck, TriangleAlert, Unplug, RefreshCw } from 'lucide-react';
-import { aparenciaConexaoGdl } from '@shared/gdl/conexao';
+import { CircleHelp, CircleCheck, TriangleAlert, Unplug, RefreshCw, Settings2 } from 'lucide-react';
 import { useConexaoGdl } from '@/hooks/useConexaoGdl';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -10,26 +8,43 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 const apresentacao = {
-  desconhecida: { icone: CircleHelp, classe: 'text-muted-foreground', descricao: 'Estado desconhecido ou desatualizado' },
-  disponivel: { icone: CircleCheck, classe: 'text-emerald-700 dark:text-emerald-400', descricao: 'Acessível com credenciais validadas' },
-  atencao: { icone: TriangleAlert, classe: 'text-amber-700 dark:text-amber-400', descricao: 'Acessível com pendências' },
-  indisponivel: { icone: Unplug, classe: 'text-muted-foreground', descricao: 'Indisponível na última verificação' },
+  desconhecida: {
+    icone: CircleHelp, classe: 'text-sidebar-foreground/70',
+    painel: 'border-border bg-muted/40', destaque: 'bg-muted text-muted-foreground',
+    titulo: 'text-foreground', texto: 'text-muted-foreground',
+  },
+  disponivel: {
+    icone: CircleCheck, classe: 'text-emerald-400 dark:text-emerald-400',
+    painel: 'border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/40',
+    destaque: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-400',
+    titulo: 'text-emerald-950 dark:text-emerald-100', texto: 'text-emerald-800 dark:text-emerald-200',
+  },
+  acessivel: {
+    icone: CircleCheck, classe: 'text-sky-400 dark:text-sky-400',
+    painel: 'border-sky-200 bg-sky-50 dark:border-sky-900 dark:bg-sky-950/40',
+    destaque: 'bg-sky-100 text-sky-700 dark:bg-sky-900/60 dark:text-sky-400',
+    titulo: 'text-sky-950 dark:text-sky-100', texto: 'text-sky-800 dark:text-sky-200',
+  },
+  atencao: {
+    icone: TriangleAlert, classe: 'text-amber-400 dark:text-amber-400',
+    painel: 'border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/40',
+    destaque: 'bg-amber-100 text-amber-700 dark:bg-amber-900/60 dark:text-amber-400',
+    titulo: 'text-amber-950 dark:text-amber-100', texto: 'text-amber-800 dark:text-amber-200',
+  },
+  indisponivel: {
+    icone: Unplug, classe: 'text-red-400 dark:text-red-400',
+    painel: 'border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/40',
+    destaque: 'bg-red-100 text-red-700 dark:bg-red-900/60 dark:text-red-400',
+    titulo: 'text-red-950 dark:text-red-100', texto: 'text-red-800 dark:text-red-200',
+  },
 };
-
-const descricoesCredenciais = {
-  ausentes: 'Não configuradas', pendentes: 'Validação pendente', validadas: 'Validadas', rejeitadas: 'Autenticação rejeitada',
-};
-const formatador = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'medium' });
-const formatarData = (valor?: string | null) => valor ? formatador.format(new Date(valor)) : 'Ainda não realizada';
 
 export function IndicadorConexaoGdl() {
-  const { estado, erro, verificando, agora, verificarAgora } = useConexaoGdl();
+  const { estado, resumo, verificando, verificarAgora } = useConexaoGdl();
   const [aberto, setAberto] = useState(false);
   const navegar = useNavigate();
-  const aparencia = aparenciaConexaoGdl(estado, agora);
-  const { icone: Icone, classe, descricao } = apresentacao[aparencia];
-  const descricaoRede = aparencia === 'desconhecida' ? descricao
-    : estado?.rede === 'acessivel' ? 'Servidor acessível' : MENSAGEM_ACESSO_REDE_GDL;
+  const visual = apresentacao[resumo.aparencia];
+  const { icone: Icone, classe } = visual;
 
   return (
     <TooltipProvider>
@@ -37,42 +52,42 @@ export function IndicadorConexaoGdl() {
         <Tooltip>
           <TooltipTrigger asChild>
             <PopoverTrigger asChild>
-              <button type="button" aria-label={`GDL: ${descricao}`} className="flex h-8 w-16 shrink-0 items-center justify-center gap-1.5 rounded-md text-xs font-medium text-sidebar-foreground hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <button type="button" aria-label={`GDL: ${resumo.mensagem}`} className="flex h-8 w-16 shrink-0 items-center justify-center gap-1.5 rounded-md text-xs font-medium text-sidebar-foreground hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                 <span>GDL</span><Icone className={`h-4 w-4 ${classe}`} aria-hidden="true" />
               </button>
             </PopoverTrigger>
           </TooltipTrigger>
-          <TooltipContent>GDL: {descricao}</TooltipContent>
+          <TooltipContent>GDL: {resumo.mensagem}</TooltipContent>
         </Tooltip>
-        <PopoverContent align="end" className="w-80 max-w-[calc(100vw-2rem)] space-y-3" aria-label="Conexão com o GDL">
-          <div>
-            <h2 className="text-sm font-semibold">Conexão com o GDL</h2>
-            {estado ? (
-              <Badge variant={estado.ambiente === 'producao' ? 'destructive' : 'secondary'}>
-                {estado.ambiente === 'producao' ? 'Produção' : 'Homologação'}
-              </Badge>
-            ) : <p className="text-xs text-muted-foreground">Carregando ambiente</p>}
+        <PopoverContent align="end" className="w-[360px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl p-0 shadow-lg" aria-label="Conexão com o GDL">
+          <div className="flex flex-wrap items-center justify-between gap-2 px-4 pt-4">
+            <h2 className="text-xs font-semibold text-muted-foreground">Conexão com o GDL</h2>
+            {estado?.ambiente === 'homologacao' && <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300">Ambiente de testes</Badge>}
           </div>
-          <dl className="space-y-2 text-xs">
-            <div><dt className="text-muted-foreground">Disponibilidade</dt><dd>{estado?.rede === 'acessivel' && aparencia !== 'desconhecida'
-              ? <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">Servidor acessível</Badge>
-              : descricaoRede}</dd></div>
-            <div><dt className="text-muted-foreground">Credenciais da API</dt><dd>{estado ? descricoesCredenciais[estado.credenciais] : 'Ainda não verificadas'}</dd></div>
-            <div><dt className="text-muted-foreground">Última validação das credenciais</dt><dd>{formatarData(estado?.credenciaisValidadasEm)}</dd></div>
-            <div><dt className="text-muted-foreground">Última checagem de rede</dt><dd>{formatarData(estado?.redeVerificadaEm)}</dd></div>
-            <div><dt className="text-muted-foreground">Acesso web</dt><dd>{estado?.web === 'atencao' ? 'Falha parcial; a disponibilidade da API é independente'
-              : estado?.web === 'disponivel' ? 'Último acesso bem-sucedido' : 'Ainda não observado'}</dd></div>
-          </dl>
-          <div aria-live="polite" className="text-xs text-muted-foreground">
-            {verificando && <p>Verificando a rede…</p>}
-            {erro && <p className="text-destructive">{erro}</p>}
+          <div aria-live="polite" className={`m-3 flex items-start gap-3 rounded-lg border p-3.5 ${visual.painel}`}>
+            <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${visual.destaque}`}>
+              <Icone className="h-5 w-5" aria-hidden="true" />
+            </span>
+            <div className="min-w-0 space-y-1.5 pt-0.5">
+              <p className={`text-sm font-semibold leading-5 ${visual.titulo}`}>{resumo.mensagem}</p>
+              {resumo.orientacao && <p className={`text-xs leading-relaxed ${visual.texto}`}>{resumo.orientacao}</p>}
+              {verificando && <p className={`text-xs ${visual.texto}`}>Testando conexão…</p>}
+            </div>
           </div>
-          <p className="text-xs text-muted-foreground">A validação pode ser de um acesso anterior. Cada operação depende das permissões no GDL.</p>
-          <div className="flex gap-2">
-            <Button size="sm" variant="outline" disabled={verificando} onClick={() => void verificarAgora()}>
-              <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${verificando ? 'animate-spin' : ''}`} aria-hidden="true" />Verificar agora
+          <div role="status" aria-live="polite" aria-atomic="true" className="space-y-1.5 px-4 pb-3 text-xs text-muted-foreground">
+            {!verificando && estado?.ultimoTesteRede && <>
+              <p className="font-medium text-foreground">{estado.ultimoTesteRede.sucesso ? 'Rede acessível' : 'Não foi possível confirmar o acesso pela rede'}</p>
+              <p>Último teste às {new Date(estado.ultimoTesteRede.verificadoEm).toLocaleTimeString('pt-BR')} · {estado.ultimoTesteRede.duracaoMs} ms</p>
+            </>}
+            <p>Este teste verifica o alcance da rede. Não valida credenciais nem a recuperação dos dados.</p>
+          </div>
+          <div className="grid grid-cols-2 gap-2 border-t bg-muted/30 p-3">
+            <Button size="sm" variant="outline" className="w-full gap-1.5" disabled={verificando} onClick={() => void verificarAgora()}>
+              <RefreshCw className={verificando ? 'animate-spin' : ''} aria-hidden="true" />Testar Conexão
             </Button>
-            <Button size="sm" variant="outline" onClick={() => { setAberto(false); navegar('/gdl-config'); }}>Abrir API GDL</Button>
+            <Button size="sm" variant={resumo.aparencia === 'atencao' ? 'default' : 'ghost'} className="w-full gap-1.5" onClick={() => { setAberto(false); navegar('/gdl-config'); }}>
+              <Settings2 aria-hidden="true" />Configurar GDL
+            </Button>
           </div>
         </PopoverContent>
       </Popover>

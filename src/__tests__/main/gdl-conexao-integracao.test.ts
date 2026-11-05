@@ -57,16 +57,17 @@ describe('observação das operações GDL existentes', () => {
     expect(await conexaoGdlService.verificar()).toMatchObject({ rede: 'acessivel', credenciais: 'rejeitadas' });
   });
 
-  it('consulta autenticada atualiza credenciais; REP inexistente e JSON inválido não indicam queda', async () => {
+  it('consulta autenticada atualiza credenciais; REP inexistente e JSON inválido alteram o acesso global', async () => {
     simulacao.requisitar.mockImplementation(async () => new Response(fixture, { status: 200 }));
     expect((await validarCredenciais('producao', credenciais, '190', '2026')).sucesso).toBe(true);
+    expect(await conexaoGdlService.obterEstado()).toMatchObject({ acessoAutenticado: { resultado: 'sucesso', rejeicaoPendente: false } });
     expect(aparenciaConexaoGdl(await conexaoGdlService.obterEstado())).toBe('disponivel');
     simulacao.requisitar.mockImplementation(async () => new Response('', { status: 404 }));
     expect((await consultarRep('999', '2026')).erro).toContain('não encontrada');
-    expect(aparenciaConexaoGdl(await conexaoGdlService.obterEstado())).toBe('disponivel');
+    expect(aparenciaConexaoGdl(await conexaoGdlService.obterEstado())).toBe('atencao');
     simulacao.requisitar.mockImplementation(async () => new Response('conteúdo inválido', { status: 200 }));
     expect((await consultarRep('190', '2026')).sucesso).toBe(false);
-    expect(aparenciaConexaoGdl(await conexaoGdlService.obterEstado())).toBe('disponivel');
+    expect(aparenciaConexaoGdl(await conexaoGdlService.obterEstado())).toBe('atencao');
   });
 
   it('falha no acesso web não derruba a API e não é apagada pelo monitor de rede', async () => {
@@ -77,12 +78,12 @@ describe('observação das operações GDL existentes', () => {
     expect(await conexaoGdlService.verificar()).toMatchObject({ rede: 'acessivel', credenciais: 'validadas', web: 'atencao' });
   });
 
-  it('permissão específica HTTP 403 não invalida evidência de autenticação da API', async () => {
+  it('recuperação negada HTTP 403 sinaliza atenção no acesso global', async () => {
     simulacao.requisitar.mockImplementationOnce(async () => new Response(fixture, { status: 200 }));
     await validarCredenciais('producao', credenciais, '190', '2026');
     simulacao.requisitar.mockImplementationOnce(async () => new Response('', { status: 403 }));
     await consultarRep('190', '2026');
-    expect(await conexaoGdlService.obterEstado()).toMatchObject({ rede: 'acessivel', credenciais: 'validadas' });
+    expect(aparenciaConexaoGdl(await conexaoGdlService.obterEstado())).toBe('atencao');
   });
 
   it('alteração de credenciais descarta validação e resposta de autenticação em andamento', async () => {

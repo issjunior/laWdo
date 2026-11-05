@@ -4,6 +4,7 @@ import { executeQuery, executeNonQuery } from '../database/sqlite.js';
 import { getLogger } from '../utils/logger.js';
 import { safeStorageService } from './safe-storage.service.js';
 import { notificarAvisosGdlAlterados } from './gdl-avisos-eventos.service.js';
+import type { AmbienteGdl } from '../../shared/gdl/ambiente.js';
 
 const log = getLogger('configuracao');
 
@@ -19,6 +20,14 @@ interface ConfiguracaoRow {
 }
 
 class ConfiguracaoService {
+  async excluirCredenciaisGdl(ambiente: AmbienteGdl): Promise<void> {
+    await executeNonQuery('DELETE FROM configuracoes WHERE chave IN (?, ?, ?)', [
+      `gdl_login_${ambiente}`, `gdl_senha_${ambiente}`, `gdl_cpf_usuario_${ambiente}`,
+    ]);
+    notificarContextoGdlAlterado(`gdl_login_${ambiente}`);
+    notificarAvisosGdlAlterados(true);
+  }
+
   /**
    * Obter valor de uma configuração pela chave.
    * Descriptografa automaticamente se o tipo for 'senha' ou 'api_key'.

@@ -1,3 +1,4 @@
+import type { EstadoConexaoGdl } from '@shared/gdl/conexao';
 import { readFile } from 'node:fs/promises';
 import { webcrypto } from 'node:crypto';
 import { runInNewContext } from 'node:vm';
@@ -7,7 +8,7 @@ import { beforeAll, beforeEach, expect, it, vi } from 'vitest';
 interface ApiConexaoGdlTeste {
   obterEstadoConexao(): Promise<unknown>;
   verificarConexao(): Promise<unknown>;
-  onEstadoConexaoAlterado(callback: () => void): () => void;
+  onEstadoConexaoAlterado(callback: (estado: EstadoConexaoGdl) => void): () => void;
 }
 
 const invocar = vi.fn();
@@ -38,14 +39,26 @@ it('expõe apenas os wrappers específicos de leitura e verificação', async ()
   expect(invocar.mock.calls).toEqual([['gdl:obter-estado-conexao'], ['gdl:verificar-conexao']]);
 });
 
-it('remove exatamente o ouvinte registrado e não encaminha argumentos do evento', () => {
+it('valida o snapshot, omite o evento Electron e remove exatamente o ouvinte registrado', () => {
   const callback = vi.fn();
   const cancelar = api.onEstadoConexaoAlterado(callback);
   expect(registrar).toHaveBeenCalledWith('gdl:estado-conexao-alterado', expect.any(Function));
   const ouvinte: unknown = registrar.mock.calls[0]?.[1];
   if (typeof ouvinte !== 'function') throw new Error('Ouvinte não registrado');
   ouvinte({ sender: 'não exposto' }, { dado: 'ignorado' });
-  expect(callback.mock.calls).toEqual([[]]);
+  expect(callback).not.toHaveBeenCalled();
+  const estado: EstadoConexaoGdl = { ambiente: 'producao', revisao: 0, versaoEstado: 1,
+    rede: 'acessivel', redeVerificadaEm: null, credenciais: 'pendentes', credenciaisValidadasEm: null,
+    web: 'disponivel', verificando: false };
+  ouvinte({ sender: 'não exposto' }, estado);
+  expect(callback.mock.calls).toEqual([[estado]]);
+  ouvinte({}, { ...estado, versaoEstado: -1 });
+  ouvinte({}, { ...estado, acessoAutenticado: { resultado: 'inventado' } });
+  ouvinte({}, { ...estado, ultimoTesteRede: { sucesso: true, verificadoEm: new Date().toISOString(), duracaoMs: -1 } });
+  expect(callback).toHaveBeenCalledTimes(1);
+  const comTeste = { ...estado, ultimoTesteRede: { sucesso: true, verificadoEm: new Date().toISOString(), duracaoMs: 218 } };
+  ouvinte({}, comTeste);
+  expect(callback).toHaveBeenLastCalledWith(comTeste);
   cancelar();
   expect(remover).toHaveBeenCalledWith('gdl:estado-conexao-alterado', ouvinte);
 });

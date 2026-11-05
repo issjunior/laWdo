@@ -52,7 +52,7 @@ const DEFAULT_LEVELS: Partial<Record<LogModule, LogLevel>> = {
   wizard: 'warn',
   peca: 'warn',
   'regra-wizard': 'warn',
-  gdl: 'warn',
+  gdl: 'info',
   exportacao: 'warn',
   atualizacao: 'info',
 };

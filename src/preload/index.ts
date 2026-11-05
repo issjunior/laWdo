@@ -26,6 +26,7 @@ import type {
   ProgressoConsultaIa,
 } from '../shared/types/ia.types.js';
 import type {
+  ApiCredenciaisGdl,
   DashboardResponse,
   ImportarArquivoResponse,
   SalvarTemplateCompletoResponse,
@@ -261,10 +262,10 @@ export interface IpcAPI {
   };
 
   // GDL
-  gdl: {
+  gdl: ApiCredenciaisGdl & {
     obterEstadoConexao: () => Promise<RespostaGdl<EstadoConexaoGdl>>;
     verificarConexao: () => Promise<RespostaGdl<EstadoConexaoGdl>>;
-    onEstadoConexaoAlterado: (callback: () => void) => () => void;
+    onEstadoConexaoAlterado: (callback: (estado: EstadoConexaoGdl) => void) => () => void;
     consultarRepsMesmoCaso: (laudoId: string) => Promise<RespostaGdl<RepsMesmoCasoGdl>>;
     copiarEmailSuporte: () => Promise<RespostaGdl<{ email: string }>>;
     obterPreferenciaListagem: () => Promise<RespostaGdl<{ habilitada: boolean }>>;
@@ -519,6 +520,28 @@ export interface IpcAPI {
 }
 
 // Validar canais IPC permitidos
+function ehEstadoConexaoGdl(valor: unknown): valor is EstadoConexaoGdl {
+  const registro = (dado: unknown): dado is Record<string, unknown> => Boolean(dado && typeof dado === 'object');
+  const data = (dado: unknown) => dado === null || (typeof dado === 'string' && Number.isFinite(Date.parse(dado)));
+  if (!registro(valor) || !['producao', 'homologacao'].includes(String(valor.ambiente))
+    || !Number.isSafeInteger(valor.revisao) || typeof valor.revisao !== 'number' || valor.revisao < 0
+    || !Number.isSafeInteger(valor.versaoEstado) || typeof valor.versaoEstado !== 'number' || valor.versaoEstado < 0
+    || !['desconhecida', 'acessivel', 'indisponivel'].includes(String(valor.rede))
+    || !data(valor.redeVerificadaEm) || !data(valor.credenciaisValidadasEm)
+    || !['ausentes', 'pendentes', 'validadas', 'rejeitadas'].includes(String(valor.credenciais))
+    || !['desconhecida', 'disponivel', 'atencao'].includes(String(valor.web)) || typeof valor.verificando !== 'boolean') return false;
+  const teste = valor.ultimoTesteRede;
+  if (teste !== undefined && teste !== null && (!registro(teste) || typeof teste.sucesso !== 'boolean'
+    || typeof teste.verificadoEm !== 'string' || !data(teste.verificadoEm)
+    || typeof teste.duracaoMs !== 'number' || !Number.isFinite(teste.duracaoMs) || teste.duracaoMs < 0)) return false;
+  const acesso = valor.acessoAutenticado;
+  return acesso === undefined || acesso === null || (registro(acesso)
+    && ['api', 'web'].includes(String(acesso.origem)) && ['sucesso', 'rejeitada', 'falha'].includes(String(acesso.resultado))
+    && typeof acesso.realizadaEm === 'string' && data(acesso.realizadaEm) && data(acesso.confirmadoEm)
+    && typeof acesso.rejeicaoPendente === 'boolean' && (acesso.motivo === undefined || typeof acesso.motivo === 'string')
+    && (acesso.condicaoEsperada === undefined || acesso.condicaoEsperada === 'acesso_rede_institucional'));
+}
+
 const ALLOWED_CHANNELS = new Set([
   'projetil:listarPersonalizados',
   'projetil:salvarPersonalizado',
@@ -588,6 +611,7 @@ const ALLOWED_CHANNELS = new Set([
   'configuracao:salvar',
 
   // GDL
+  'gdl:excluir-credenciais',
   'gdl:obter-preferencia-listagem',
   'gdl:obter-estado-conexao',
   'gdl:verificar-conexao',
@@ -1551,10 +1575,13 @@ contextBridge.exposeInMainWorld('ipcAPI', {
   },
 
   gdl: {
+    excluirCredenciais: (ambiente: 'producao' | 'homologacao'): Promise<UserResponse> => invocarComDiagnostico('gdl:excluir-credenciais', ambiente),
     obterEstadoConexao: (): Promise<UserResponse<EstadoConexaoGdl>> => invocarComDiagnostico('gdl:obter-estado-conexao'),
     verificarConexao: (): Promise<UserResponse<EstadoConexaoGdl>> => invocarComDiagnostico('gdl:verificar-conexao'),
-    onEstadoConexaoAlterado: (callback: () => void) => {
-      const ouvinte = () => callback();
+    onEstadoConexaoAlterado: (callback: (estado: EstadoConexaoGdl) => void) => {
+      const ouvinte = (_evento: Electron.IpcRendererEvent, estado: unknown) => {
+        if (ehEstadoConexaoGdl(estado)) callback(estado);
+      };
       ipcRenderer.on('gdl:estado-conexao-alterado', ouvinte);
       return () => ipcRenderer.removeListener('gdl:estado-conexao-alterado', ouvinte);
     },

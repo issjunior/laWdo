@@ -1,3 +1,4 @@
+import { conexaoGdlService } from './gdl-conexao.service.js';
 import { notificarListaGdlAtualizada } from './gdl-agendamento-eventos.service.js';
 import { obterListaRepositorioGdl, registrarGradeGdl } from './gdl-repositorio.service.js';
 import { identificarNaturezaExame } from '../../shared/gdl/natureza-exame.js';
@@ -100,7 +101,7 @@ export async function atualizarMinhasRepsEmCache(usuarioId: string, forcar: bool
     }
     const proxima = fila.then(async () => {
       await exigirListagemRepsGdlHabilitada(versao);
-      const snapshot = await consultarTodas(versao, validar);
+      const snapshot = await conexaoGdlService.executarOperacao('web', () => consultarTodas(versao, validar));
       await validar();
       if ((await contexto(usuarioId)).chave !== chave) throw new Error('A configuração do GDL mudou durante a consulta.');
       await exigirListagemRepsGdlHabilitada(versao);

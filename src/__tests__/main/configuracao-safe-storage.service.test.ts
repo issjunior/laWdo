@@ -8,6 +8,8 @@ const mocks = vi.hoisted(() => ({
   descriptografar: vi.fn(),
   aviso: vi.fn(),
   erro: vi.fn(),
+  notificarContexto: vi.fn(),
+  notificarAvisos: vi.fn(),
 }))
 
 vi.mock('../../main/database/sqlite.js', () => ({
@@ -17,6 +19,13 @@ vi.mock('../../main/database/sqlite.js', () => ({
 
 vi.mock('../../main/utils/logger.js', () => ({
   getLogger: () => ({ warn: mocks.aviso, error: mocks.erro, info: vi.fn() }),
+}))
+
+vi.mock('../../main/services/gdl-agendamento-eventos.service.js', () => ({
+  notificarContextoGdlAlterado: mocks.notificarContexto,
+}))
+vi.mock('../../main/services/gdl-avisos-eventos.service.js', () => ({
+  notificarAvisosGdlAlterados: mocks.notificarAvisos,
 }))
 
 vi.mock('electron', () => ({
@@ -34,6 +43,22 @@ describe('configuração e armazenamento seguro', () => {
   beforeEach(() => {
     vi.resetAllMocks()
     mocks.criptografiaDisponivel.mockReturnValue(true)
+  })
+
+  it.each(['producao', 'homologacao'] as const)('exclui credenciais somente de %s e invalida o contexto após persistir', async ambiente => {
+    await configuracaoService.excluirCredenciaisGdl(ambiente)
+    expect(mocks.executar).toHaveBeenCalledWith('DELETE FROM configuracoes WHERE chave IN (?, ?, ?)', [
+      `gdl_login_${ambiente}`, `gdl_senha_${ambiente}`, `gdl_cpf_usuario_${ambiente}`,
+    ])
+    expect(mocks.notificarContexto).toHaveBeenCalledWith(`gdl_login_${ambiente}`)
+    expect(mocks.notificarAvisos).toHaveBeenCalledWith(true)
+  })
+
+  it('não comunica exclusão quando o banco falha', async () => {
+    mocks.executar.mockRejectedValue(new Error('Falha de gravação'))
+    await expect(configuracaoService.excluirCredenciaisGdl('producao')).rejects.toThrow('Falha de gravação')
+    expect(mocks.notificarContexto).not.toHaveBeenCalled()
+    expect(mocks.notificarAvisos).not.toHaveBeenCalled()
   })
 
   it('criptografa segredos e atualiza uma configuração já existente', async () => {

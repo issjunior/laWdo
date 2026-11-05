@@ -1,3 +1,5 @@
+import { useConexaoGdl } from '@/hooks/useConexaoGdl';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ReiterandoBadge } from '@/components/ui/reiterando-badge';
 import { useConsultarRepReiterando } from '@/contexts/AvisosReiteracaoContext';
 import { apresentarNaturezaExame } from '@shared/gdl/natureza-exame';
@@ -12,12 +14,10 @@ import { DataTable } from '@/components/data-table/data-table';
 import { DataTableColumnHeader } from '@/components/data-table/data-table-column-header';
 import type { DefinicaoColunaTabela } from '@/components/data-table/data-table-features';
 import { GdlConsultaEmAndamento } from '@/components/rep/GdlConsultaEmAndamento';
-import { GdlListagemPreferenciaAlert } from '@/components/rep/GdlListagemPreferenciaAlert';
 import { GdlFalhaListaAlert, normalizarFalhaListaGdl } from '@/components/rep/GdlFalhaListaAlert';
 import type { FalhaListaGdlApresentavel } from '@/components/rep/GdlFalhaListaAlert';
 import { GdlStatusBadge } from '@/components/rep/GdlStatusBadge';
 import type { MinhaRepGdl, SnapshotMinhasRepsGdl, StatusMinhaRepGdl } from '@shared/types/gdl-minhas-reps.types';
-import { cacheListagemDesativadaDisponivel, VALIDADE_CACHE_LISTAGEM_DESATIVADA_MS } from '@shared/gdl/listagem';
 
 const statusDisponiveis: StatusMinhaRepGdl[] = ['Aberta e Distribuída', 'Laudo em Execução', 'Concluída e Não Remetida'];
 const esquemaSnapshot = z.object({
@@ -41,27 +41,28 @@ function formatarData(valor: string | null): string {
 export function GdlMinhasRepsDashboard() {
   const navegar = useNavigate();
   const consultarReiterando = useConsultarRepReiterando();
+  const { resumo } = useConexaoGdl();
   const [snapshot, setSnapshot] = useState<SnapshotMinhasRepsGdl | null>(null);
   const [listagemHabilitada, setListagemHabilitada] = useState<boolean | null>(null);
-  const [agora, setAgora] = useState(Date.now());
-  const [tentativaBloqueada, setTentativaBloqueada] = useState(false);
   const [carregando, setCarregando] = useState(false);
   const consultaEmAndamento = useRef(false);
+  const geracaoConsulta = useRef(0);
   const [erro, setErro] = useState<FalhaListaGdlApresentavel | null>(null);
   const [destinoControleColunas, setDestinoControleColunas] = useState<HTMLDivElement | null>(null);
   const [buscaRep, setBuscaRep] = useState('');
 
   const atualizar = useCallback(async (habilitada: boolean) => {
     if (!habilitada) {
-      setTentativaBloqueada(true);
       return;
     }
     if (consultaEmAndamento.current) return;
+    const geracao = geracaoConsulta.current;
     consultaEmAndamento.current = true;
     setCarregando(true);
     setErro(null);
     try {
       const resposta = await window.ipcAPI.gdl.atualizarMinhasRepsCache(true);
+      if (geracao !== geracaoConsulta.current) return;
       if (!resposta.success) {
         const falha = normalizarFalhaListaGdl(resposta);
         setErro(falha);
@@ -78,6 +79,7 @@ export function GdlMinhasRepsDashboard() {
       }
       setSnapshot(validacao.data);
     } catch (falha: unknown) {
+      if (geracao !== geracaoConsulta.current) return;
       window.ipcAPI.logError('gdl', 'Falha inesperada ao atualizar a lista no Dashboard', {
         tipoErro: falha instanceof Error ? falha.name : 'Erro desconhecido',
       });
@@ -101,24 +103,27 @@ export function GdlMinhasRepsDashboard() {
         setListagemHabilitada(preferencia.success && preferencia.data?.habilitada === true);
         const validacao = esquemaSnapshot.safeParse(resposta.data);
         setSnapshot(resposta.success && validacao.success ? validacao.data : null);
-        setAgora(Date.now());
       }).catch(() => { if (ativo && atual === revisao) setListagemHabilitada(false); });
     };
-    const remover = window.ipcAPI.gdl.onAvisosAlterados(atualizarLocal);
+    const aoAlterarAvisos = (reiniciar: boolean) => {
+      if (reiniciar) {
+        geracaoConsulta.current += 1;
+        setSnapshot(null);
+        setErro(null);
+      }
+      atualizarLocal();
+    };
+    const remover = window.ipcAPI.gdl.onAvisosAlterados(aoAlterarAvisos);
     window.addEventListener('focus', atualizarLocal);
     atualizarLocal();
-    return () => { ativo = false; remover(); window.removeEventListener('focus', atualizarLocal); };
+    return () => { ativo = false; geracaoConsulta.current += 1; remover(); window.removeEventListener('focus', atualizarLocal); };
   }, []);
 
-  useEffect(() => {
-    if (listagemHabilitada !== false || !snapshot) return;
-    const restante = Date.parse(snapshot.atualizadoEm) + VALIDADE_CACHE_LISTAGEM_DESATIVADA_MS - Date.now();
-    if (restante <= 0) return;
-    const temporizador = setTimeout(() => setAgora(Date.now()), restante);
-    return () => clearTimeout(temporizador);
-  }, [listagemHabilitada, snapshot]);
-
-  const snapshotExibido = snapshot && (listagemHabilitada || cacheListagemDesativadaDisponivel(snapshot.atualizadoEm, Math.max(agora, Date.now()))) ? snapshot : null;
+  const credenciaisAusentes = resumo.problemaCredenciais === 'ausentes';
+  const credenciaisInvalidas = resumo.problemaCredenciais === 'rejeitadas';
+  const orientarCredenciais = credenciaisAusentes || credenciaisInvalidas;
+  const orientarAcessoGdl = !erro && listagemHabilitada === true && (resumo.aparencia === 'atencao' || resumo.aparencia === 'indisponivel');
+  const snapshotExibido = listagemHabilitada === true && !orientarCredenciais ? snapshot : null;
   const repsExibidas = useMemo(() => snapshotExibido?.reps.map(rep => ({
     ...rep,
     oficioReiterando: rep.oficioReiterando ?? consultarReiterando(`${rep.numero}/${rep.ano}`),
@@ -187,12 +192,28 @@ export function GdlMinhasRepsDashboard() {
           {carregando && <GdlConsultaEmAndamento />}
         </div>
         <div ref={setDestinoControleColunas} className="ml-auto flex flex-wrap items-center gap-2">
-          <Button variant="outline" size="sm" disabled={carregando || listagemHabilitada === null} onClick={() => void atualizar(listagemHabilitada === true)}><RefreshCw className="mr-2 h-4 w-4" />Atualizar</Button>
+          <Button variant="outline" size="sm" disabled={carregando || listagemHabilitada !== true || credenciaisAusentes} onClick={() => void atualizar(listagemHabilitada === true)}><RefreshCw className="mr-2 h-4 w-4" />Atualizar</Button>
         </div>
       </div>
-      {listagemHabilitada === false && <GdlListagemPreferenciaAlert habilitada={false} cacheVisivel={Boolean(snapshotExibido)}
-        tentativaBloqueada={tentativaBloqueada} onAbrirConfiguracao={() => navegar('/gdl-config', { state: { focarListagemGdl: true } })} />}
-      {erro && <GdlFalhaListaAlert falha={erro} listaSalva={Boolean(snapshotExibido)}
+      {listagemHabilitada !== false && (orientarCredenciais || orientarAcessoGdl) && <Alert className="shrink-0">
+        <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
+          <p className="min-w-0 flex-[1_1_20rem]">
+            {credenciaisAusentes
+              ? 'Para acessar suas REPs do GDL, abra a página API GDL, cadastre seu login, sua senha e seu CPF e salve as configurações. A listagem será ativada automaticamente.'
+              : credenciaisInvalidas
+              ? 'O GDL não aceitou as credenciais cadastradas. Abra a página API GDL, confira seu login e sua senha e salve as configurações. Depois, atualize a lista de REPs.'
+              : 'Não foi possível acessar a lista de REPs do GDL. Na página API GDL, confira suas credenciais e execute o Teste de Rede. Depois, tente atualizar a lista novamente.'}
+          </p>
+          <Button variant="outline" size="sm" onClick={() => navegar('/gdl-config')}>Abrir API GDL</Button>
+        </AlertDescription>
+      </Alert>}
+      {listagemHabilitada === false && <Alert className="shrink-0">
+        <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
+          <p role="alert" className="min-w-0 flex-[1_1_20rem]">A listagem de REPs do GDL está desativada. Para visualizar suas REPs, abra a página API GDL e ative a opção Listagem de REPs. Se ainda não cadastrou suas credenciais, informe login, senha e CPF e salve as configurações.</p>
+          <Button variant="outline" size="sm" onClick={() => navegar('/gdl-config', { state: { focarListagemGdl: true } })}>Abrir API GDL</Button>
+        </AlertDescription>
+      </Alert>}
+      {listagemHabilitada === true && !orientarCredenciais && erro && <GdlFalhaListaAlert falha={erro} listaSalva={Boolean(snapshotExibido)}
         onTentarNovamente={() => void atualizar(listagemHabilitada === true)} onConfigurarCredenciais={() => navegar('/gdl-config')} />}
       {snapshotExibido && <div className="relative w-full max-w-sm shrink-0">
         <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -204,7 +225,7 @@ export function GdlMinhasRepsDashboard() {
         tamanhoPaginaFixo={20} chaveReinicioPagina={buscaRep}
         densidade="compacta" preencherAltura fixarPrimeiraColuna
         defaultSorting={[{ id: 'dataDesignacao', desc: true }]} />
-        : !carregando && listagemHabilitada && <p className="rounded-md border p-5 text-center text-sm text-muted-foreground">Nenhuma lista disponível. Use Atualizar para tentar novamente.</p>}
+        : !orientarCredenciais && !orientarAcessoGdl && !carregando && listagemHabilitada && <p className="rounded-md border p-5 text-center text-sm text-muted-foreground">Nenhuma lista disponível. Use Atualizar para tentar novamente.</p>}
     </div>
   );
 }

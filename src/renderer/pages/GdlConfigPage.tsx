@@ -1,3 +1,4 @@
+import { useConexaoGdl } from '@/hooks/useConexaoGdl';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -33,6 +34,8 @@ import {
   EyeOff,
   Search,
   Loader2,
+  List,
+  Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { obterPreferenciasAmbienteGdlEstritas } from '@/lib/gdl-ambiente';
@@ -116,7 +119,23 @@ const formatarRep = (numero: string, ano: string): string => `${formatarNumeroRe
 const getMensagemErro = (erro: unknown, fallback: string): string =>
   obterMensagemOrientadaErroGdl(erro instanceof Error ? erro.message : fallback);
 
+function validarCpf(valor: string): boolean {
+  const digitos = valor.replace(/\D/g, '');
+  if (!/^\d{11}$/.test(digitos) || /^(\d)\1{10}$/.test(digitos)) return false;
+  for (let posicao = 9; posicao <= 10; posicao += 1) {
+    let soma = 0;
+    for (let indice = 0; indice < posicao; indice += 1) {
+      soma += Number(digitos[indice]) * (posicao + 1 - indice);
+    }
+    const resto = soma % 11;
+    const verificador = resto < 2 ? 0 : 11 - resto;
+    if (Number(digitos[posicao]) !== verificador) return false;
+  }
+  return true;
+}
+
 export const GdlConfigPage: React.FC = () => {
+  const { resumo: conexaoCompartilhada } = useConexaoGdl();
   const [ambiente, setAmbiente] = useState('producao');
   const [homologacaoHabilitada, setHomologacaoHabilitada] = useState(false);
   const [estadoPreferencias, setEstadoPreferencias] = useState<EstadoLeitura>('carregando');
@@ -132,11 +151,16 @@ export const GdlConfigPage: React.FC = () => {
   const [preferenciaCarregada, setPreferenciaCarregada] = useState(false);
   const [salvandoListagem, setSalvandoListagem] = useState(false);
   const [erroListagem, setErroListagem] = useState<string | null>(null);
+  const [credenciaisSalvas, setCredenciaisSalvas] = useState(false);
+  const [cpfSalvoValido, setCpfSalvoValido] = useState(false);
   const [login, setLogin] = useState('');
   const [senha, setSenha] = useState('');
   const [cpfUsuario, setCpfUsuario] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [salvando, setSalvando] = useState(false);
+  const [excluindo, setExcluindo] = useState(false);
+  const [confirmarExclusao, setConfirmarExclusao] = useState(false);
+  const [erroExclusao, setErroExclusao] = useState<string | null>(null);
   const [testando, setTestando] = useState(false);
   const [diagnostico, setDiagnostico] = useState<TesteDiagnostico | null>(null);
   const [validacaoSessao, setValidacaoSessao] = useState<ValidacaoSessaoGdl | null>(null);
@@ -174,6 +198,8 @@ export const GdlConfigPage: React.FC = () => {
       const loginLido = lerConfiguracaoGdl(rLogin) ?? '';
       const senhaLida = lerConfiguracaoGdl(rSenha) ?? '';
       const cpfLido = lerConfiguracaoGdl(rCpf) ?? '';
+      setCredenciaisSalvas(Boolean(loginLido || senhaLida || cpfLido));
+      setCpfSalvoValido(validarCpf(cpfLido));
       if (!credenciaisEditadasRef.current.login) setLogin(loginLido);
       if (!credenciaisEditadasRef.current.senha) setSenha(senhaLida);
       if (!credenciaisEditadasRef.current.cpf) setCpfUsuario(cpfLido);
@@ -268,6 +294,8 @@ export const GdlConfigPage: React.FC = () => {
     if (estadoPreferencias !== 'pronto') return;
     if (ambienteCarregadoRef.current !== ambiente) {
       credenciaisEditadasRef.current = { login: false, senha: false, cpf: false };
+      setCredenciaisSalvas(false);
+      setCpfSalvoValido(false);
       setLogin('');
       setSenha('');
       setCpfUsuario('');
@@ -307,11 +335,17 @@ export const GdlConfigPage: React.FC = () => {
     const senhaNormalizada = senha.trim();
     const cpfUsuarioNormalizado = cpfUsuario.replace(/\D/g, '');
 
-    if (!loginNormalizado || !senhaNormalizada) {
+    if (!loginNormalizado || !senhaNormalizada || !cpfUsuarioNormalizado) {
       const faltantes: string[] = [];
       if (!loginNormalizado) faltantes.push('login');
       if (!senhaNormalizada) faltantes.push('senha');
-      setSalvarErro(`Preencha ${faltantes.join(' e ')} de ${ambLabel} para consultas.`);
+      if (!cpfUsuarioNormalizado) faltantes.push('CPF');
+      const campos = faltantes.length > 1 ? `${faltantes.slice(0, -1).join(', ')} e ${faltantes.at(-1)}` : faltantes[0];
+      setSalvarErro(`Preencha ${campos} de ${ambLabel} para consultas.`);
+      return;
+    }
+    if (!validarCpf(cpfUsuarioNormalizado)) {
+      setSalvarErro('Informe um CPF válido do usuário do GDL. Confira os 11 dígitos e os dígitos verificadores.');
       return;
     }
 
@@ -327,6 +361,8 @@ export const GdlConfigPage: React.FC = () => {
       ]);
       const falhaCredencial = respostasCredenciais.find(resposta => !resposta.success);
       if (falhaCredencial) throw new Error(falhaCredencial.error || 'Não foi possível salvar as credenciais.');
+      setCredenciaisSalvas(true);
+      setCpfSalvoValido(true);
       const respostaAmbiente = await window.ipcAPI.configuracao.salvar('gdl_ambiente', ambiente, 'texto', 'Ambiente da API GDL');
       if (!respostaAmbiente.success) throw new Error(respostaAmbiente.error || 'Não foi possível selecionar o ambiente.');
       carregamentoValidacaoAtual.current += 1;
@@ -344,11 +380,50 @@ export const GdlConfigPage: React.FC = () => {
           setEstadoValidacao('erro');
         }
       }
-      toast.success(`Credenciais de ${ambLabel} salvas com sucesso!`);
+      const respostaListagem = await window.ipcAPI.gdl.definirPreferenciaListagem(true);
+      if (!respostaListagem.success || respostaListagem.data?.habilitada !== true) {
+        throw new Error('As credenciais foram salvas, mas não foi possível ativar a listagem. Ative-a no card Listagem de REPs.');
+      }
+      carregamentoListagemAtual.current += 1;
+      setListagemHabilitada(true);
+      setPreferenciaCarregada(true);
+      setErroListagem(null);
+      toast.success(`Credenciais de ${ambLabel} salvas e listagem de REPs ativada.`);
     } catch (e: unknown) {
       setErro(getMensagemErro(e, 'Erro ao salvar configurações'));
     } finally {
       setSalvando(false);
+    }
+  };
+
+  const excluirCredenciais = async () => {
+    if (!credenciaisProntas || (ambiente !== 'producao' && ambiente !== 'homologacao')) return;
+    setExcluindo(true);
+    setErroExclusao(null);
+    try {
+      const resposta = await window.ipcAPI.gdl.excluirCredenciais(ambiente);
+      if (!resposta.success) throw new Error(resposta.error || 'Não foi possível excluir as credenciais.');
+      carregamentoCredenciaisAtual.current += 1;
+      carregamentoValidacaoAtual.current += 1;
+      credenciaisEditadasRef.current = { login: false, senha: false, cpf: false };
+      setLogin('');
+      setSenha('');
+      setCpfUsuario('');
+      setShowPassword(false);
+      setValidacaoSessao(null);
+      setDiagnostico(null);
+      setSalvarErro(null);
+      setErroValidacao(null);
+      setSucessoValidacao(null);
+      setConfirmarExclusao(false);
+      setCredenciaisSalvas(false);
+      setCpfSalvoValido(false);
+      await carregarValidacaoAmbiente(ambiente);
+      toast.success('Credenciais do ambiente selecionado excluídas.');
+    } catch (falha: unknown) {
+      setErroExclusao(getMensagemErro(falha, 'Não foi possível excluir as credenciais.'));
+    } finally {
+      setExcluindo(false);
     }
   };
 
@@ -536,36 +611,6 @@ export const GdlConfigPage: React.FC = () => {
         </Alert>
       )}
 
-      <Card id="gdl-listagem-reps">
-        <CardHeader>
-          <CardTitle>Listagem de REPs</CardTitle>
-          <CardDescription>
-            Controla a lista do Dashboard e de REPs → Listar REPs nesta instalação. A consulta e a importação de uma REP individual continuam disponíveis.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <p className="text-sm text-muted-foreground">
-            {!preferenciaCarregada
-              ? 'Preferência de listagem não confirmada.'
-              : listagemHabilitada
-              ? 'Ativada: as listas são atualizadas pelo GDL e os exames são identificados pelo catálogo local.'
-              : 'Desativada: as listas mostram apenas cache com menos de 30 minutos e não consultam o GDL.'}
-          </p>
-          {erroListagem && <Alert variant="destructive"><AlertDescription className="flex items-center gap-3">{erroListagem}<Button type="button" variant="outline" size="sm" onClick={() => void carregarPreferenciaListagem()}>Tentar novamente</Button></AlertDescription></Alert>}
-          <Button
-            type="button"
-            variant={listagemHabilitada ? 'outline' : 'default'}
-            aria-pressed={listagemHabilitada}
-            disabled={!preferenciaCarregada || salvandoListagem}
-            onClick={() => void alterarListagem(!listagemHabilitada)}
-          >
-            {salvandoListagem ? 'Salvando...' : listagemHabilitada ? 'Desativar listagem' : 'Ativar listagem'}
-          </Button>
-        </CardContent>
-      </Card>
-
-
-
       <Card>
         <CardHeader className="flex flex-col gap-3 space-y-0 sm:flex-row sm:items-start sm:justify-between">
           <div className="space-y-1.5">
@@ -580,7 +625,7 @@ export const GdlConfigPage: React.FC = () => {
             size="sm"
             className="gap-2 self-start sm:shrink-0"
             aria-pressed={homologacaoHabilitada}
-            disabled={estadoPreferencias !== 'pronto' || salvandoHabilitacao || salvando}
+            disabled={estadoPreferencias !== 'pronto' || salvandoHabilitacao || salvando || excluindo}
             onClick={() => void handleHabilitarHomologacao(!homologacaoHabilitada)}
           >
             <FlaskConical className="h-4 w-4" />
@@ -611,7 +656,7 @@ export const GdlConfigPage: React.FC = () => {
               {homologacaoHabilitada && (
               <button
                 type="button"
-                disabled={estadoPreferencias !== 'pronto' || salvando || testando || validandoCredenciais || salvandoHabilitacao}
+                disabled={estadoPreferencias !== 'pronto' || salvando || excluindo || testando || validandoCredenciais || salvandoHabilitacao}
                 onClick={() => setAmbiente('homologacao')}
                 className={`text-left p-4 rounded-lg border-2 transition-all ${
                   ambienteConfirmado && isHomologacao
@@ -641,7 +686,7 @@ export const GdlConfigPage: React.FC = () => {
               {/* Card Produção */}
               <button
                 type="button"
-                disabled={estadoPreferencias !== 'pronto' || salvando || testando || validandoCredenciais || salvandoHabilitacao}
+                disabled={estadoPreferencias !== 'pronto' || salvando || excluindo || testando || validandoCredenciais || salvandoHabilitacao}
                 onClick={() => setAmbiente('producao')}
                 className={`text-left p-4 rounded-lg border-2 transition-all ${
                   ambienteConfirmado && !isHomologacao
@@ -674,6 +719,7 @@ export const GdlConfigPage: React.FC = () => {
               <Label htmlFor="gdl-login">Login</Label>
               <Input
                 id="gdl-login"
+                required
                 value={login}
                 onChange={e => { credenciaisEditadasRef.current.login = true; setLogin(e.target.value); }}
                 placeholder={estadoCredenciais === 'erro' ? 'Leitura indisponível' : 'Seu usuário do GDL'}
@@ -684,6 +730,7 @@ export const GdlConfigPage: React.FC = () => {
               <div className="relative">
                 <Input
                   id="gdl-senha"
+                  required
                   type={showPassword ? 'text' : 'password'}
                   value={senha}
                   onChange={e => { credenciaisEditadasRef.current.senha = true; setSenha(e.target.value); }}
@@ -703,25 +750,36 @@ export const GdlConfigPage: React.FC = () => {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="gdl-cpf">CPF do Usuário</Label>
+            <Label htmlFor="gdl-cpf">CPF do usuário do GDL</Label>
             <Input
               id="gdl-cpf"
+              required
+              inputMode="numeric"
+              aria-describedby="gdl-cpf-ajuda"
+              aria-invalid={Boolean(salvarErro) && !validarCpf(cpfUsuario)}
               value={cpfUsuario}
               onChange={e => { credenciaisEditadasRef.current.cpf = true; setCpfUsuario(formatarCPF(e.target.value)); }}
               placeholder="000.000.000-00"
               maxLength={14}
             />
-            <p className="text-xs text-muted-foreground flex items-center gap-1">
-              <AlertTriangle className="h-3 w-3" />
-              Algumas consultas à API GDL podem exigir o CPF do usuário.
-              Se não preenchido, o header <code className="bg-muted px-1 rounded">cpfUsuario</code> não será enviado.
+            <p id="gdl-cpf-ajuda" className="text-xs text-muted-foreground">
+              Obrigatório para salvar. Informe o CPF do usuário que acessa o GDL; ele é usado nas consultas de envolvidos e de REPs do mesmo caso.
             </p>
+            {credenciaisProntas && credenciaisSalvas && !cpfSalvoValido && (
+              <Alert>
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>Complete seu cadastro com um CPF válido e salve as configurações para usar as consultas complementares. A listagem de REPs continua disponível conforme sua configuração atual.</AlertDescription>
+              </Alert>
+            )}
           </div>
 
-          <div className="flex gap-3">
-            <Button onClick={handleSalvar} disabled={!credenciaisProntas || salvando || salvandoHabilitacao} className="gap-2">
+          <div className="flex flex-wrap gap-3">
+            <Button onClick={handleSalvar} disabled={!credenciaisProntas || salvando || excluindo || salvandoListagem || salvandoHabilitacao} className="gap-2">
               <Shield className="h-4 w-4" />
               {salvando ? 'Salvando...' : 'Salvar Configurações'}
+            </Button>
+            <Button variant="outline" onClick={() => { setErroExclusao(null); setConfirmarExclusao(true); }} disabled={!credenciaisProntas || salvando || excluindo || testando || validandoCredenciais || salvandoHabilitacao || !credenciaisSalvas} className="gap-2">
+              <Trash2 className="h-4 w-4" />Excluir credenciais
             </Button>
           </div>
 
@@ -732,8 +790,36 @@ export const GdlConfigPage: React.FC = () => {
             </Alert>
           )}
 
-          <div className="grid gap-4 lg:grid-cols-2">
-            <Card>
+          <div className="grid gap-4 lg:grid-cols-3">
+            <Card id="gdl-listagem-reps" className="flex flex-col">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-base"><List className="h-4 w-4 text-muted-foreground" />Listagem de REPs</CardTitle>
+                <CardDescription>
+                  Ativada automaticamente ao salvar credenciais. Controla o Dashboard e REPs → Listar REPs.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-1 flex-col gap-4">
+                <p className="text-sm text-muted-foreground">
+                  {!preferenciaCarregada
+                    ? 'Preferência de listagem não confirmada.'
+                    : listagemHabilitada
+                    ? 'Ativada: as listas são atualizadas pelo GDL e os exames são identificados pelo catálogo local.'
+                    : 'Desativada: as listas mostram apenas cache com menos de 30 minutos e não consultam o GDL.'}
+                </p>
+                {erroListagem && <Alert variant="destructive"><AlertDescription className="flex items-center gap-3">{erroListagem}<Button type="button" variant="outline" size="sm" onClick={() => void carregarPreferenciaListagem()}>Tentar novamente</Button></AlertDescription></Alert>}
+                <Button
+                  type="button"
+                  variant={listagemHabilitada ? 'outline' : 'default'}
+                  aria-pressed={listagemHabilitada}
+                  className="mt-auto w-full"
+                  disabled={!preferenciaCarregada || salvandoListagem || salvando || excluindo}
+                  onClick={() => void alterarListagem(!listagemHabilitada)}
+                >
+                  {salvandoListagem ? 'Salvando...' : listagemHabilitada ? 'Desativar listagem' : 'Ativar listagem'}
+                </Button>
+              </CardContent>
+            </Card>
+            <Card className="flex flex-col">
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-base">
                   <Wifi className="h-4 w-4 text-muted-foreground" />
@@ -741,9 +827,10 @@ export const GdlConfigPage: React.FC = () => {
                 </CardTitle>
                 <CardDescription>
                   Verifica se o ambiente {ambienteLabel} está acessível pela rede.
+                  <span role="status" className="mt-2 block">{conexaoCompartilhada.mensagem}</span>
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="flex flex-1 flex-col gap-4">
                 {diagnostico ? (
                   <div className={`rounded-lg border p-3 space-y-3 ${diagnostico.sucesso ? 'border-green-300 dark:border-green-800' : 'border-red-300 dark:border-red-800'}`}>
                     <div className="flex items-center gap-2">
@@ -789,14 +876,14 @@ export const GdlConfigPage: React.FC = () => {
                   </p>
                 )}
 
-                <Button variant="outline" onClick={handleTestar} disabled={!credenciaisProntas || testando} className="gap-2 w-full">
+                <Button variant="outline" onClick={handleTestar} disabled={!credenciaisProntas || testando || salvando || excluindo} className="mt-auto w-full gap-2">
                   <Wifi className="h-4 w-4" />
                   {testando ? 'Testando...' : 'Testar Rede'}
                 </Button>
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="flex flex-col">
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-base">
                   <Shield className="h-4 w-4 text-muted-foreground" />
@@ -806,7 +893,7 @@ export const GdlConfigPage: React.FC = () => {
                   Confirma as credenciais com uma consulta real de REP no ambiente atual.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="flex flex-1 flex-col gap-4">
                 {(!validacaoPronta || !credenciaisProntas) && estadoPreferencias === 'pronto' && (
                   <Alert variant={estadoValidacao === 'erro' ? 'destructive' : 'default'}>
                     <AlertDescription className="flex items-center gap-3">
@@ -836,7 +923,7 @@ export const GdlConfigPage: React.FC = () => {
                   )}
                 </div>
 
-                <Button variant="outline" onClick={abrirModalValidacao} disabled={!credenciaisProntas || !validacaoPronta} className="gap-2 w-full">
+                <Button variant="outline" onClick={abrirModalValidacao} disabled={!credenciaisProntas || !validacaoPronta || salvando || excluindo} className="mt-auto w-full gap-2">
                   <Search className="h-4 w-4" />
                   Validar Credenciais
                 </Button>
@@ -845,6 +932,20 @@ export const GdlConfigPage: React.FC = () => {
           </div>
         </CardContent>
       </Card>
+
+      <Dialog open={confirmarExclusao} onOpenChange={aberto => { if (!excluindo) setConfirmarExclusao(aberto); }}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle>Excluir credenciais do GDL</DialogTitle>
+            <DialogDescription>Excluir login, senha e CPF salvos de {ambienteLabel}? Para voltar a consultar o GDL neste ambiente, cadastre suas credenciais novamente.</DialogDescription>
+          </DialogHeader>
+          {erroExclusao && <Alert variant="destructive"><AlertDescription>{erroExclusao}</AlertDescription></Alert>}
+          <div className="flex justify-end gap-3">
+            <Button variant="outline" onClick={() => setConfirmarExclusao(false)} disabled={excluindo}>Cancelar</Button>
+            <Button variant="destructive" onClick={() => void excluirCredenciais()} disabled={excluindo}>{excluindo ? 'Excluindo...' : 'Excluir'}</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={modalValidacaoOpen} onOpenChange={setModalValidacaoOpen}>
         <DialogContent className="sm:max-w-[480px]">

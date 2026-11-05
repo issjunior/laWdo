@@ -1,4 +1,5 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { ConexaoGdlProvider } from '@/contexts/ConexaoGdlContext';
+import { fireEvent, render as renderOriginal, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -16,7 +17,7 @@ describe('Header - atualizações', () => {
       getAppInfo: vi.fn().mockResolvedValue({ version: '0.1.12', name: 'laWdo', platform: 'win32', osVersion: 'Windows', arch: 'x64', memory: '8 GB', dbVersion: 1 }),
       gdl: {
         obterEstadoConexao: vi.fn().mockResolvedValue({ success: true, data: {
-          ambiente: 'producao', revisao: 0, rede: 'desconhecida', redeVerificadaEm: null,
+          ambiente: 'producao', revisao: 0, versaoEstado: 0, rede: 'desconhecida', redeVerificadaEm: null,
           credenciais: 'pendentes', credenciaisValidadasEm: null, web: 'desconhecida', verificando: false,
         } }),
         verificarConexao: vi.fn(),
@@ -90,3 +91,5 @@ describe('Header - atualizações', () => {
     expect(await screen.findByText('Reiniciar e instalar a atualização?')).toBeInTheDocument();
   });
 });
+
+const render = (ui: React.ReactNode) => renderOriginal(<ConexaoGdlProvider>{ui}</ConexaoGdlProvider>);

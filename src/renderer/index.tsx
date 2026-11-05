@@ -1,3 +1,4 @@
+import type { ApiCredenciaisGdl } from '../preload/types';
 import type { ApiBkpLaudo } from '../shared/types/laudo-bkp.types';
 import React from 'react';
 import type { EstadoConexaoGdl } from '@shared/gdl/conexao';
@@ -135,14 +136,14 @@ interface IpcAPIRendererLegada {
   rep: IpcGrupoLegado;
   dashboard: IpcGrupoLegado;
   configuracao: IpcGrupoLegado;
-  gdl: IpcGrupoLegado & {
+  gdl: IpcGrupoLegado & ApiCredenciaisGdl & {
     consultarRepsMesmoCaso: (laudoId: string) => Promise<{ success: boolean; data?: import('@shared/gdl/reps-mesmo-caso').RepsMesmoCasoGdl; error?: string }>;
     obterMiniaturasImagensLaudo: (laudoId: string, sessaoId: string, idsSelecao: string[]) => Promise<{ success: boolean; data?: MiniaturaArquivoRepGdl[]; error?: string }>;
     obterAvisosReiteracao: () => Promise<{ success: boolean; data?: import('../shared/gdl/reiteracao').AvisoReiteracaoGdl[]; error?: string }>;
     onAvisosAlterados: (callback: (reiniciar: boolean) => void) => () => void;
     obterEstadoConexao: () => Promise<{ success: boolean; data?: EstadoConexaoGdl; error?: string }>;
     verificarConexao: () => Promise<{ success: boolean; data?: EstadoConexaoGdl; error?: string }>;
-    onEstadoConexaoAlterado: (callback: () => void) => () => void;
+    onEstadoConexaoAlterado: (callback: (estado: EstadoConexaoGdl) => void) => () => void;
     onProgressoImagensLaudo: (callback: (progresso: ProgressoListaFotosGdl) => void) => () => void;
   };
   categoria: IpcGrupoLegado;

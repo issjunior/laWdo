@@ -1,3 +1,4 @@
+import type { AmbienteGdl } from '../shared/gdl/ambiente.js';
 import type { FalhaListaRepsGdl } from '../shared/types/gdl-minhas-reps.types.js';
 import type { FalhaPdf } from '../shared/types/pdf.types.js'
 export type { RepsMesmoCasoGdl } from '../shared/gdl/reps-mesmo-caso.js';
@@ -151,3 +152,7 @@ export interface TipoExameUpdateData {
 }
 
 export type { ApiBkpLaudo } from '../shared/types/laudo-bkp.types.js';
+
+export interface ApiCredenciaisGdl {
+  excluirCredenciais: (ambiente: AmbienteGdl) => Promise<UserResponse>;
+}
