@@ -69,7 +69,8 @@ describe('DashboardPage', () => {
     });
     cronologiaLaudo.mockReset();
     window.localStorage.clear();
-    vi.mocked(window.localStorage.getItem).mockReturnValue(null);
+    vi.mocked(window.localStorage.getItem).mockReset().mockReturnValue(null);
+    vi.mocked(window.localStorage.setItem).mockReset();
     Object.assign(window.ipcAPI, {
       dashboard: { resumo, producaoLaudos: producao, consultarLaudos, cronologiaLaudo },
     });
@@ -90,11 +91,43 @@ describe('DashboardPage', () => {
     expect(screen.getByText('Laudos concluídos aguardando entrega')).toBeInTheDocument();
     expect(screen.getByText('Laudos sem alteração há 7 dias')).toBeInTheDocument();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole('button', { name: /Expandir|Recolher|Reordenar/ })
-    ).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Recolher REPs disponíveis no GDL' })).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.queryByRole('button', { name: /Reordenar/ })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /1 REPs vencidas/ }));
     expect(screen.getByTestId('rota')).toHaveTextContent('/reps?prioridade=vencida');
+  });
+
+  it('recolhe sem desmontar o conteúdo e restaura a preferência ao reabrir', async () => {
+    const preferencias = new Map<string, string>();
+    vi.mocked(window.localStorage.getItem).mockImplementation(chave => preferencias.get(chave) ?? null);
+    vi.mocked(window.localStorage.setItem).mockImplementation((chave, valor) => { preferencias.set(chave, valor); });
+    const { unmount } = render(<MemoryRouter><DashboardPage /></MemoryRouter>);
+    const lista = screen.getByText('Lista GDL disponível');
+    fireEvent.click(screen.getByRole('button', { name: 'Recolher REPs disponíveis no GDL' }));
+    expect(lista).toBeInTheDocument();
+    expect(lista).not.toBeVisible();
+    expect(preferencias.get('dashboard_gdl_expandido')).toBe('false');
+    expect(screen.getByRole('button', { name: 'Expandir REPs disponíveis no GDL' })).toHaveAttribute('aria-expanded', 'false');
+    unmount();
+    const segunda = render(<MemoryRouter><DashboardPage /></MemoryRouter>);
+    expect(screen.getByText('Lista GDL disponível')).not.toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Expandir REPs disponíveis no GDL' }));
+    expect(screen.getByText('Lista GDL disponível')).toBeVisible();
+    expect(preferencias.get('dashboard_gdl_expandido')).toBe('true');
+    segunda.unmount();
+    montar();
+    expect(screen.getByText('Lista GDL disponível')).toBeVisible();
+    await screen.findByText('REPs vencidas');
+  });
+
+  it('usa o estado expandido para preferência inválida e permite alternar se a gravação falhar', async () => {
+    vi.mocked(window.localStorage.getItem).mockImplementation(chave => chave === 'dashboard_gdl_expandido' ? '{inválido}' : null);
+    vi.mocked(window.localStorage.setItem).mockImplementation(() => { throw new Error('Armazenamento indisponível'); });
+    montar();
+    expect(screen.getByText('Lista GDL disponível')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Recolher REPs disponíveis no GDL' }));
+    expect(screen.getByText('Lista GDL disponível')).not.toBeVisible();
+    await screen.findByText('REPs vencidas');
   });
 
   it('abre gráficos e produção em modais separados e preserva o tipo do gráfico', async () => {
