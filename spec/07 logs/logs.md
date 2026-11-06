@@ -16,7 +16,7 @@ O aplicativo mantem cinco trilhas locais, que compartilham a pagina **Logs e dia
 
 ## Logs continuos, auditoria e snapshots
 
-`logger.ts` cria `userData/logs`, grava JSON em `combined.log` e `error.log`, e usa rotacao de 5 MB com cinco arquivos. Em desenvolvimento tambem emite texto colorido no console. `getLogger(module)` entrega um singleton por modulo; o threshold usual e `warn`, com excecoes como IA em `debug` e backup, configuracao e atualizacao em `info`.
+`logger.ts` cria `userData/logs`, grava JSON em `combined.log` e `error.log`, e usa rotacao de 5 MB com cinco arquivos. Em desenvolvimento tambem emite texto colorido no console. `getLogger(module)` entrega um singleton por modulo; o threshold usual e `warn`, com excecoes como IA em `debug` e backup, configuracao, atualizacao e GDL em `info`.
 
 `getAllLogs()` aceita linhas JSON atuais e linhas legadas em texto, ordenando por horario decrescente. `clearAllLogs()` limpa os arquivos tecnicos rotacionados.
 
@@ -93,3 +93,9 @@ Alteracoes na captura devem manter alinhados o contrato em `shared`, o servico, 
 `desempenho.service.ts` e `captura-logs.service.ts` aceitam o metadado booleano `modoUnico` para distinguir editor único e seções. Manter ambas as allowlists alinhadas ao alterar esse metadado. As operações do renderer medem leitura/serialização de HTML, reconstrução, comparação, atualização de estado e níveis de undo, preservando somente identificadores técnicos, duração e metadados numéricos/booleanos; não registram HTML nem texto pericial.
 
 A suíte manual de carga lê performance.log e suas duas rotações e separa agregados por origem, categoria e operação. Não somar tempo do main com ida e volta de IPC no renderer como se fossem a mesma medição. Seus relatórios ficam no diretório fictício isolado, conforme `spec/13 diagnostico/testes_carga_editor.md`.
+
+## Evidência de conexão e descarga no encerramento
+
+O módulo GDL registra mudanças de rede, autenticação e recuperação de dados em nível info, deduplicadas por operação/resultado. O registro inclui ambiente, motivo e datas técnicas, sem credenciais nem conteúdo pericial; checar somente rede não equivale a recuperar dados autenticados. O contrato está em [API GDL](../08%20gdl/api_gdl.md#estado-compartilhado-da-conexão).
+
+`DesempenhoService.encerrar()` recusa novos registros, cancela temporizadores, aguarda a escrita em curso e drena a fila restante. Falha nessa descarga é propagada ao coordenador de encerramento para registro; não é escondida por um timeout de 1,5 segundo. O banco fecha depois do diagnóstico, desempenho e captura central, conforme [Janelas desktop](../04%20layout/janelas_desktop.md#encerramento-ordenado-dos-serviços).

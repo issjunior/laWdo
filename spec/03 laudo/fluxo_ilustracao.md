@@ -102,3 +102,23 @@ O cache usa hash dos bytes de origem, finalidade, dimensões, qualidade e versã
 Antes de concluir, `prepararConclusaoImagensLaudo` valida hashes e transforma as figuras fora da transação. `concluirImagensLaudo` revalida conteúdo, conjunto e metadados; mudança durante a preparação interrompe a conclusão. Arquivos são escritos atomicamente, registros/status mudam na transação e falha tenta limpar apenas derivados sem referência. A limpeza de originais continua posterior ao commit. Impressão reutiliza derivados por perfil/largura, sem alterar os originais durante a elaboração.
 
 Regressões: `sqlite-concorrencia.integration`, `sqlite-recuperacao`, `processador-imagens-{fila,cache,real,servico}`, conclusão de figuras e painel de ilustrações. O smoke manual reproduzível `npm run smoke:imagens` valida o auxiliar real, BMP, transparência, cancelamento, recuperação e gera PNG/PDF em perfil isolado. Não substitui diagnóstico assistido ponta a ponta.
+
+## Reabertura dos ajustes e textos sobre a figura
+
+`obterImagemLaudoPorId()` devolve `ajustesFigura` somente após parse defensivo e validação compartilhada em `imagem-laudo.types.ts`. Ao reeditar, `IlustracoesPanel` parte da ocorrência atual; só recarrega a imagem-base e os ajustes anteriores quando ambos estão disponíveis e válidos. Sem base recuperável, edita os bytes atuais já tratados, evitando restaurar uma imagem errada ou perder o resultado anterior. A conclusão continua rompendo a cadeia e descartando ajustes, conforme o contrato de retenção.
+
+`EditorFiguraDialog` oferece Ajustar e Texto. `renderizacao-figura.ts` aplica giro/espelhamento à base, recorta e só depois desenha os textos: as anotações ficam legíveis, sem serem espelhadas ou giradas com a fotografia. Posição x/y é percentual da figura resultante; tamanho é pequeno/médio/grande e as cores são branco, preto, vermelho, amarelo ou azul, com contorno contrastante. Pode haver até 20 textos, cada um com ID único, até 500 caracteres e posição finita entre 0 e 100. A validação também exige corte positivo dentro da área e ângulo finito.
+
+Texto pode ser selecionado, movido por arraste/setas e excluído. A prévia usa limite de 1280 px; aplicar renderiza na resolução disponível e produz PNG com os textos incorporados aos pixels. A operação persiste os ajustes junto à derivação para reedição durante a elaboração. Restaurar imagem limpa corte, transformações e textos. Não cria caixas de texto independentes no HTML do laudo. `editor-figura.test.ts`, `editor-figura.component.test.tsx` e `imagem-editada.integration.test.ts` cobrem geometria, textos e reabertura simulada.
+
+## Figuras isoladas e moldura legada
+
+`centralizarFigurasSozinhas()` atua somente em linha de tabela com duas células sem mesclagem, uma única figura em uma célula e a outra vazia. Ambas podem ter apenas wrappers de apresentação sem conteúdo semântico adicional; texto, marcadores técnicos, outras mídias ou figuras impedem a transformação. Remove a célula vazia, usa colspan 2 e centraliza a figura. É aplicada na abertura, renumeração, remoção e cópia destinada à impressão. Não reorganiza arbitrariamente quadros com várias figuras.
+
+`corrigirMolduraVaziaLocalNecropsia()` reconhece exclusivamente o dummy externo `dummy-b601-local-necropsia-material-apresentado-1` contendo uma única figura real interna com imagem e legenda. Troca o wrapper externo pela figura interna e renumera quando necessário; qualquer estrutura diferente é preservada. A preparação de abertura não grava automaticamente o banco. O catálogo Local com Necropsia v5 já distribui a estrutura corrigida; versões-fonte e clones não são migrados por sincronização. `figuras-ocorrencia.test.ts` cobre os limites dos reparos.
+
+## Falhas tipadas de recursos de impressão
+
+`ilustracoes:obter-imagem-impressao` devolve `falhaImagem.codigo` sem caminho, ID ou mensagem interna. Os códigos distinguem entrada, consulta, registro ausente, arquivo ausente, leitura, integridade e processamento; o renderer acrescenta comunicação e resposta inválida. `resolverImagensImpressaoLaudo()` converte essas falhas em `IMAGEM_INDISPONIVEL`, etapa recursos, com posição da figura real e motivo, interrompendo a saída. A página oferece nova tentativa e orientação específica; não usa silenciosamente a prévia reduzida como original. O preload e o diagnóstico aceitam somente códigos conhecidos.
+
+Na reconciliação de disponibilidade do painel, a transação atualiza metadados; as verificações de existência dos arquivos usam `access()` assíncrono depois dela. O custo acompanha o número de registros, mas não mantém a transação aberta para I/O de arquivos. `imagem-laudo-reconciliacao.test.ts` cobre esse limite; essa sondagem não é a validação de hash usada para impressão.

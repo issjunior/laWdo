@@ -26,11 +26,13 @@ A extração usa `DOMParser`, ignora scripts, estilos e prévias transitórias e
 
 ## Tabelas editáveis no laudo
 
-Uma prévia HTML que contém tabela recebe data-placeholder-preview-tabela="true" e fica protegida pela superfície comum. O editor mostra **Dados da REP**, fundo/borda azul suave e os controles **Editar**, **Restaurar dados da REP** e **Excluir**. Tabelas comuns inseridas pelo usuário não recebem esse tratamento. A aparência é transitória e tem variantes claras/escuras em globals.css.
+Uma prévia HTML com tabela recebe `data-placeholder-preview-tabela="true"`, identificação **Dados da REP** e apresentação transitória azul suave. Na página Laudos, as células elegíveis são editáveis diretamente; não há Editar/Concluir. Cabeçalhos e células fixas continuam protegidos, e somente leitura bloqueia edição. Tabelas comuns do usuário não recebem esse tratamento.
 
-**Editar** transforma a prévia em cópia local com data-placeholder-tabela-personalizada="true" e identidade compartilhada com a âncora canônica. Células de valor ficam editáveis enquanto a instância está em edição; cabeçalhos e células fixas continuam protegidos. **Concluir** volta a proteger sem salvar automaticamente. **Restaurar dados da REP** só fica disponível para cópia personalizada: após confirmação, remove a cópia e volta a resolver a tabela pela REP. A política e a revalidação de alvos estão em spec/03 laudo/editor_texto.md.
+`edicao-direta-laudo.ts` captura a assinatura da prévia depois de `LaudoPreparado`. Quando há mudança efetiva, `personalizarTabelaPlaceholder()` transforma a prévia em cópia local com `data-placeholder-tabela-personalizada="true"` e identidade persistente compartilhada com a âncora em `data-placeholder-tabela-personalizada-id`. Texto, exclusão e vínculo integram o mesmo undo. Preparação de controles ou troca de visualização sem edição não materializam a cópia. Fora da edição direta, o fluxo Editar/Concluir continua disponível.
 
-A cópia personalizada pertence somente ao laudo e nunca altera REP ou GDL. No modo de chaves ela é ocultada e a âncora reaparece; no modo de dados ocorre o inverso. Undo envolve personalização e restauração. Salvamento preserva a cópia e o vínculo, removendo `contenteditable` e controles; exportação e contexto da IA removem a âncora duplicada e usam o conteúdo local da tabela.
+**Restaurar dados da REP** só fica disponível na cópia personalizada: pede confirmação, remove a cópia e reaplica a resolução da REP local. A cópia pertence ao laudo, sem alterar REP/GDL. No modo de chaves fica oculta e a âncora reaparece; no modo de dados ocorre o inverso. Excluir a prévia inteira pela edição direta remove também sua âncora, impedindo reaparecimento ao reabrir.
+
+Salvar conserva conteúdo e vínculo local, removendo `contenteditable`, controles e `data-placeholder-preview-id`, inclusive resíduos legados em tabelas já personalizadas. Exportação e contexto de IA usam a cópia local sem a âncora duplicada. As guardas de concorrência e a diferença entre preparação e edição ficam em [Editor](../03%20laudo/editor_texto.md) e [Padrão de elaboração](../03%20laudo/padrao/padrao_elaboracao.md).
 
 ## Exclusão e numeração de tabelas
 

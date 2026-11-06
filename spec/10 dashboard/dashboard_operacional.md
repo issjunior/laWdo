@@ -2,7 +2,7 @@
 
 ## Papel e composição
 
-`src/renderer/pages/DashboardPage.tsx` é a home operacional. Quatro prioridades ficam no topo e a tabela **REPs disponíveis no GDL** ocupa o espaço restante. **Situação atual**, **Consulta cronológica** e **Produção de laudos** abrem conteúdos alternativos no mesmo diálogo. Não há seções recolhíveis nem reordenação por arraste; as antigas chaves `dashboard_secoes_expandidas` e `dashboard_ordem_secoes` não são consumidas.
+`src/renderer/pages/DashboardPage.tsx` é a home operacional. Quatro prioridades ficam no topo e a tabela **REPs disponíveis no GDL** ocupa o espaço restante. **Situação atual**, **Consulta cronológica** e **Produção de laudos** abrem conteúdos alternativos no mesmo diálogo. Somente o card de REPs GDL pode ser recolhido pelo título; não há reordenação por arraste; as antigas chaves `dashboard_secoes_expandidas` e `dashboard_ordem_secoes` não são consumidas.
 
 O resumo é buscado na montagem; sua falha mostra nova tentativa na área de prioridades sem impedir o GDL. Produção é carregada na primeira abertura do modal. Consultas cronológicas e produção têm estados próprios de carregamento, erro e vazio. Cronologia e distribuição por status substituem a consulta dentro do mesmo diálogo, com **Voltar à consulta**; fechar limpa essas subvisões e preserva aba/filtros em memória enquanto a página permanece montada.
 
@@ -100,8 +100,16 @@ Não há migration do banco para o dashboard: ele consulta campos existentes. Qu
 
 `src/__tests__/main/dashboard.service.test.ts` cobre preenchimento dos status, quatro prioridades, paginação com agregação integral, fim inclusivo do período, vínculo da auditoria ao laudo e média/mediana de produção. `src/__tests__/pages/dashboard-page.test.tsx` cobre prioridades, modais, retorno da cronologia, isolamento de falhas e produção: primeira abertura, reutilização, atualização manual/automática com filtros aplicados, preservação após falha e ausência de duplicação ao reabrir.
 
-O resumo não faz polling nem recarrega no retorno de foco. Produção segue o temporizador condicionado ao modal descrito acima. A lista GDL atualiza pelo vencimento do cache enquanto montada e habilitada; no foco relê somente o cache local. Densidade compacta, cabeçalho/primeira coluna fixos e disposição persistida seguem `spec/04 layout/componentes_ui_base.md`; guardas e avisos de reiteração estão em `spec/08 gdl/api_gdl.md`. A consulta cronológica executa três consultas independentes em paralelo (itens, total e agregação); uma mudança concorrente entre elas pode gerar uma página e total de instantes próximos, mas não há transação de leitura que congele a amostra.
+O resumo não faz polling nem recarrega no retorno de foco. Produção segue o temporizador condicionado ao modal descrito acima. A lista GDL lê cache/preferência na montagem, nos avisos e no retorno de foco; Atualizar força consulta remota quando habilitada. A atualização automática pertence ao agendador do main. Densidade compacta, cabeçalho/primeira coluna fixos e disposição persistida seguem `spec/04 layout/componentes_ui_base.md`; guardas e avisos de reiteração estão em `spec/08 gdl/api_gdl.md`. A consulta cronológica executa três consultas independentes em paralelo (itens, total e agregação); uma mudança concorrente entre elas pode gerar uma página e total de instantes próximos, mas não há transação de leitura que congele a amostra.
 
 ## Custo da agregação de produção
 
 O serviço acumula amostras em arrays por natureza sem copiar todo o grupo a cada linha. O agrupamento é linear na quantidade retornada; ordenação para mediana mantém seu custo próprio. Ordem das naturezas, filtros, natureza sem amostra válida, médias e arredondamentos permanecem definidos pelas consultas e helpers existentes. A regressão inclui 10.000 amostras na mesma natureza sem impor prazo de execução frágil.
+
+## Lista GDL recolhível e busca local
+
+O título de REPs disponíveis no GDL controla a expansão, com `aria-expanded` e `aria-controls`. `dashboard_gdl_expandido` persiste por instalação no localStorage; somente `false` recolhe inicialmente, e falha de armazenamento mantém o controle utilizável. O conteúdo fica oculto sem desmontar `GdlMinhasRepsDashboard`, preservando filtros, paginação, disposição e assinatura de avisos. Recolher não desativa a integração ou o agendador do main.
+
+A tabela usa 20 registros por página, sem seletor de tamanho. A busca Pesquisar REP filtra somente os números do snapshot local, aceita a apresentação com pontuação ou a sequência de dígitos e reinicia na primeira página ao mudar; não consulta GDL por tecla nem pesquisa natureza/status. `tamanhoPaginaFixo` e `chaveReinicioPagina` pertencem à tabela compartilhada; preferências de colunas permanecem em `dashboard_gdl_disposicao`.
+
+O snapshot só fica visível quando a preferência está ativa e o resumo compartilhado não indica credenciais ausentes/rejeitadas. Falhas de acesso/recuperação têm orientação e atalho à configuração; erro de coleta pode conservar o snapshot anterior quando elegível. Mudança de contexto invalida a geração de consulta para não reapresentar resultados antigos. `dashboard-page.test.tsx` e `gdl-minhas-reps-dashboard.test.tsx` cobrem persistência do recolhimento, montagem estável, busca, paginação e estados de conexão.

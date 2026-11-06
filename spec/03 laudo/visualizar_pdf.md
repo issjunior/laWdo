@@ -61,3 +61,9 @@ Altura zero desativa cabeçalho/rodapé nessa impressão sem adicionar reserva. 
 Antes de gerar a prévia pelo editor ou pela lista, resolverImagensImpressaoLaudo() troca as figuras marcadas data-imagem-previa="true" por recursos de impressão obtidos do arquivo local validado. IDs repetidos compartilham o recurso na mesma composição. Falta de ID, arquivo indisponível ou falha de integridade interrompe a saída; a prévia reduzida do editor não é usada silenciosamente no PDF. Limites, proporção e contratos estão em exportar_laudo.md e fluxo_ilustracao.md.
 
 Na página Cabeçalho, os controles **Inserir na primeira página** e **Inserir em todas as páginas** preservam seus HTMLs quando desligados. O salvamento usa o contrato atual com flags separadas; a cópia preservada de cada laudo continua sendo sua fonte de apresentação.
+
+## Seções e orientação das falhas de figura
+
+Prévia e exportação compartilham `pdf-secoes.ts`: espaçamento compacto de H2/H3, título junto ao conteúdo seguinte, figura indivisível e retirada restrita dos parágrafos vazios sem estilo antes de títulos. Quebras explícitas e espaçamento escolhido por estilo são preservados; ver [Exportação](exportar_laudo.md#espaçamento-de-seções-no-pdf-e-persistência-de-figuras). Não compensar paginação adicionando vazios aos templates embarcados.
+
+Quando a preparação local de figura falha antes da impressão, `ErroPreparacaoImagemPdf` conserva `IMAGEM_INDISPONIVEL`, etapa recursos, `origem: corpo`, posição da figura real e `motivoImagem`. `falha-pdf.ts` distingue arquivo/registro ausente, integridade, leitura e processamento e orienta revisar/reinserir a figura. Editor, prévia pela lista e exportação PDF encaminham esse mesmo envelope para o diálogo persistente com nova tentativa. Motivo desconhecido continua com orientação genérica; não expõe caminhos locais nem aceita a prévia reduzida como fallback silencioso.

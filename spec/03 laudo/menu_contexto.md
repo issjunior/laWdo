@@ -20,11 +20,11 @@ Na página de laudos, `LaudosPage.tsx` carrega e normaliza `campos_especificos` 
 
 Cada bloco recebe `data-cond-badge`, `data-cond-resumo` e `data-cond-instancia`. O resumo `Mostra quando: ...` permanece como metadado interno usado para identificar a condição em ações e diagnósticos; ele não é renderizado no cartão e não é copiado para o atributo `title`. Durante a normalização, o editor recalcula badge e resumo, remove qualquer `title` legado e garante uma identidade persistente única.
 
-Os controles transitórios de editar/concluir e excluir pertencem ao editor, não ao menu de placeholders. O comportamento de proteção, edição, exclusão persistida e limpeza para saída está documentado em `spec/03 laudo/bloco_condicional.md` e `spec/03 laudo/editor_texto.md`.
+Os controles transitórios dos blocos pertencem ao editor, não ao menu de placeholders; na página Laudos a edição é direta, sem Editar/Concluir. O comportamento de proteção, edição, exclusão persistida e limpeza para saída está documentado em `spec/03 laudo/bloco_condicional.md` e `spec/03 laudo/editor_texto.md`.
 
 ## Tabelas resolvidas
 
-Placeholders cujo valor é uma tabela HTML continuam sendo inseridos como âncoras de placeholder. No modo de dados, o editor cria a prévia fora do `span` canônico. Somente prévias de tabela recebem o cartão âmbar e as ações de personalização/restauração; tabelas comuns inseridas pelo usuário não são afetadas. O ciclo persistente está documentado em `spec/05 placeholder/ciclo_placeholder.md`.
+Placeholders cujo valor é uma tabela HTML continuam sendo inseridos como âncoras de placeholder. No modo de dados, o editor cria a prévia fora do `span` canônico. Somente prévias de tabela recebem a apresentação comum de Dados da REP e as ações de restauração/exclusão conforme elegibilidade; tabelas comuns inseridas pelo usuário não são afetadas. O ciclo persistente está documentado em `spec/05 placeholder/ciclo_placeholder.md`.
 
 ## Preenchimento das tabelas B-601
 
@@ -52,3 +52,9 @@ A inserção só altera o HTML local do editor. Ela não cria nem modifica dados
 ## Inserção de figuras em laudos
 
 A toolbar do laudo oferece **Inserir figura** na seleção capturada, usando o seletor do Painel de Ilustrações. Esse comando não é a inserção do painel ao final da seção ILUSTRAÇÕES. Instância e bookmark são revalidados antes de escrever; se o alvo deixou de existir, a operação falha sem escolher outro destino. O fluxo está em `spec/03 laudo/fluxo_ilustracao.md`.
+
+## Precedência do corretor ortográfico
+
+`PlaceholderContextMenu` consulta `obterContextoCorrecao(editorId)` na abertura. Um contexto válido substitui o conteúdo do menu por sugestões e **Adicionar ao dicionário**; sem correção válida, usa o preenchimento B-601 quando reconhecido e, nos demais locais, os placeholders. `ItensMenuCorretor` invalida ações se o estado do corretor mudar e mantém feedback quando o texto não pode mais ser substituído. O foco de correção tem precedência sobre o de preenchimento ao fechar.
+
+O editor compacto de personalização usa `MenuCorretorEditor`, com ID próprio e coordenadas convertidas do iframe para a página. Sem contexto de correção não abre esse menu. Configuração, guardas e limites estão em [Editor](editor_texto.md#corretor-ortográfico-local). O corretor não expande a elegibilidade do preenchimento Prejudicado/Ausente nem autoriza substituir âncoras de placeholder.
