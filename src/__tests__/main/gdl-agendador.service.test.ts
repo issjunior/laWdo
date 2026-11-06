@@ -44,6 +44,32 @@ afterEach(async () => {
 });
 
 describe('atualização automática da lista GDL no main', () => {
+  it('aguarda a consulta em curso ao encerrar e impede novo agendamento', async () => {
+    let concluir = () => undefined as void;
+    const resposta = new Promise<void>(resolver => { concluir = resolver; });
+    atualizar.mockImplementationOnce(async (_usuario, validar) => {
+      await resposta;
+      await validar();
+      return { reps: [], atualizadoEm: new Date().toISOString() };
+    });
+    agendador.iniciar();
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(atualizar).toHaveBeenCalledOnce();
+    const encerramento = agendador.encerrar();
+    expect(agendador.encerrar()).toBe(encerramento);
+    const terminou = vi.fn();
+    void encerramento.then(terminou);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(terminou).not.toHaveBeenCalled();
+    concluir();
+    await encerramento;
+    expect(terminou).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(600_000);
+    expect(atualizar).toHaveBeenCalledOnce();
+    expect(registrarFalha).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it('atualiza sem dashboard a cada cinco minutos após a conclusão', async () => {
     agendador.iniciar();
     await vi.advanceTimersByTimeAsync(14_999);

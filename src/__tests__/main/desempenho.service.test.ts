@@ -13,6 +13,46 @@ vi.mock('@main/services/configuracao.service.js', () => ({
 const { DesempenhoService } = await import('@main/services/desempenho.service.js');
 
 describe('DesempenhoService', () => {
+  it('propaga falha de gravação no encerramento sem tentar indefinidamente', async () => {
+    const servico = await criarServico();
+    await servico.registrar({ origem: 'ipc', categoria: 'canal', evento: 'falhou', canal: 'laudo:salvar' });
+    const erro = new Error('Disco indisponível');
+    const gravar = vi.spyOn(fs, 'appendFile').mockRejectedValueOnce(erro);
+    try {
+      await expect(servico.encerrar()).rejects.toBe(erro);
+      expect(gravar).toHaveBeenCalledOnce();
+      await servico.registrar({ origem: 'ipc', categoria: 'canal', evento: 'falhou', canal: 'laudo:salvar' });
+      expect(gravar).toHaveBeenCalledOnce();
+    } finally {
+      gravar.mockRestore();
+    }
+  });
+
+  it('aguarda gravação pendente além do antigo limite de encerramento', async () => {
+    const servico = await criarServico();
+    await servico.registrar({ origem: 'ipc', categoria: 'canal', evento: 'falhou', canal: 'laudo:salvar' });
+    let liberar = () => undefined as void;
+    const gravacao = new Promise<void>(resolver => { liberar = resolver; });
+    const gravar = vi.spyOn(fs, 'appendFile').mockImplementationOnce(() => gravacao);
+    vi.useFakeTimers();
+    try {
+      const encerramento = servico.encerrar();
+      const terminou = vi.fn();
+      void encerramento.then(terminou);
+      await vi.waitFor(() => expect(gravar).toHaveBeenCalled());
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(terminou).not.toHaveBeenCalled();
+      liberar();
+      await encerramento;
+      expect(terminou).toHaveBeenCalledOnce();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      liberar();
+      gravar.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
   const servicos: InstanceType<typeof DesempenhoService>[] = [];
 
   afterEach(async () => {
