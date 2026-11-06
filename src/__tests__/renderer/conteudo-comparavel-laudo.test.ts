@@ -3,6 +3,15 @@ import { normalizarConteudoComparavel } from '@/lib/conteudo-comparavel-laudo';
 import { removerFormatacaoPlaceholders } from '@/lib/utils';
 
 describe('conteúdo comparável do laudo', () => {
+  it('remove identificadores de prévia legados sem perder o vínculo e o texto personalizado', () => {
+    const antigo = '<p><span data-placeholder="{{tabela}}" data-placeholder-preview-id="t1" data-placeholder-tabela-personalizada-id="t1" style="display:none">{{tabela}}</span></p><div data-placeholder-tabela-personalizada="true" data-placeholder-preview-id="t1" data-placeholder-tabela-personalizada-id="t1"><table><tr><td>Editado</td></tr></table></div>';
+    const canonico = removerFormatacaoPlaceholders(antigo);
+    expect(canonico).not.toContain('data-placeholder-preview-id');
+    expect(canonico).toContain('data-placeholder-tabela-personalizada-id="t1"');
+    expect(canonico).toContain('Editado');
+    expect(normalizarConteudoComparavel(antigo)).toBe(normalizarConteudoComparavel(canonico));
+  });
+
   it('ignora o ocultamento temporário da âncora e remove a prévia sem apagar outros estilos', () => {
     const original = '<p><span data-placeholder="{{tabela}}" style="color: red;">{{tabela}}</span></p>';
     const apresentado = '<p><span data-placeholder="{{tabela}}" data-placeholder-preview-id="p1" style="color: red; display: none;">{{tabela}}</span></p>'

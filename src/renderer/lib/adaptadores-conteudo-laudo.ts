@@ -1,5 +1,6 @@
 import { VERSAO_CAMPOS_TABELA_B601 } from '@shared/catalogos/b601-tabelas.catalogo';
 import type { Editor } from 'tinymce';
+import { edicaoDiretaLaudoAtiva } from './politica-edicao-conteudo';
 import { personalizarTabelaPlaceholder, restaurarTabelaPlaceholder, excluirTabelaPlaceholder } from './apresentacao-placeholders';
 import { gerarDescricaoAgrupadaB601, gerarDescricaoColetaB601 } from '@shared/utils/b601-descricao-agrupada';
 
@@ -77,7 +78,7 @@ export function materializarEdicaoPontual(editor: Editor, campo: HTMLElement): b
   const previa = campo.closest<HTMLElement>('[data-placeholder-preview="true"]');
   if (!previa) return true;
   if (!personalizarTabelaPlaceholder(editor, campo)) return false;
-  if (!previa.classList.contains('conteudo-laudo-editando')) {
+  if (!edicaoDiretaLaudoAtiva(previa) && !previa.classList.contains('conteudo-laudo-editando')) {
     previa.querySelectorAll('td, th').forEach(celula => celula.setAttribute('contenteditable', 'false'));
   }
   return true;

@@ -34,6 +34,7 @@ export function removerFormatacaoPlaceholdersDoDom(raiz: HTMLElement): void {
   });
   raiz.querySelectorAll('[data-acao-tabela-placeholder]').forEach(elemento => elemento.remove());
   raiz.querySelectorAll<HTMLElement>('[data-placeholder-tabela-personalizada="true"]').forEach(tabela => {
+    tabela.removeAttribute('data-placeholder-preview-id');
     tabela.removeAttribute('contenteditable');
     if (tabela.style.display === 'none') tabela.style.removeProperty('display');
     tabela.querySelectorAll<HTMLElement>('[contenteditable]').forEach(celula => celula.removeAttribute('contenteditable'));
@@ -52,7 +53,7 @@ export function removerFormatacaoPlaceholdersDoDom(raiz: HTMLElement): void {
     if (!placeholder.hasAttribute('data-placeholder-personalizado-html')) placeholder.textContent = chave;
     placeholder.removeAttribute('contenteditable');
     placeholder.removeAttribute('data-placeholder-apresentacao');
-    if (!tabelaPersonalizada) placeholder.removeAttribute('data-placeholder-preview-id');
+    placeholder.removeAttribute('data-placeholder-preview-id');
     placeholder.classList.remove('campo-reservado');
     placeholder.removeAttribute('data-reservado');
     if (tabelaPersonalizada) placeholder.style.display = 'none';

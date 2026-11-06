@@ -1,4 +1,5 @@
 import { permiteEdicaoCampo } from '@/lib/politica-edicao-conteudo';
+import { registrarEdicaoDiretaLaudo } from '@/lib/edicao-direta-laudo';
 import { registrarPreparacaoConteudo } from '@/lib/preparacao-conteudo-editor';
 import { registrarConteudoInterativo } from '@/lib/conteudo-interativo';
 import { useConfirmacaoConteudo } from './ConfirmacaoConteudo';
@@ -829,6 +830,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
               registrarInicializacao('editor_pronto', { tentativaInterna: tentativaInicializacao });
               faseInicializacaoRef.current = 'pronto';
               editorProntoParaAlteracoesRef.current = true;
+              if (laudoId) editor.dispatch('LaudoPreparado');
               setFalhaInicializacao(null);
               setReady(true);
             };
@@ -1517,6 +1519,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
               doc.addEventListener('keydown', solicitarSalvar, true);
               editor.on('remove', () => doc.removeEventListener('keydown', solicitarSalvar, true));
               const body = editor.getBody();
+              if (laudoId) registrarEdicaoDiretaLaudo(editor);
               registrarSeletoresTabela(editor, definirSessaoSeletor);
               registrarSeletoresCamposB601(editor, html => onChange(html, 'usuario'));
               registrarColetaB601(editor, laudoId, html => onChange(html, 'usuario'));
@@ -1590,7 +1593,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
                 const campo = encontrarCampoReservado(evento.target);
                 if (!campo || !onCampoReservadoDuploCliqueRef.current) return;
                 if (!permiteEdicaoCampo(campo, editor.mode.isReadOnly())) {
-                  if (!editor.mode.isReadOnly()) editor.notificationManager.open({ type: 'info', text: 'Clique em Editar para personalizar este valor.' });
+                  if (!editor.mode.isReadOnly()) editor.notificationManager.open({ type: 'info', text: laudoId ? 'Este campo não permite edição direta.' : 'Clique em Editar para personalizar este valor.' });
                   return;
                 }
                 evento.preventDefault();

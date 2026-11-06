@@ -34,6 +34,8 @@ export function registrarConteudoInterativo(editor: Editor, opcoes: {
   aoRestaurar: () => void;
 }) {
   instalarEstilos(editor);
+  const edicaoDireta = Boolean(opcoes.laudoId);
+  if (edicaoDireta) editor.getBody().setAttribute('data-laudo-edicao-direta', 'true');
   const edicoes = new WeakSet<HTMLElement>();
   const identidades = new WeakMap<HTMLElement, string>();
   let encerrado = false;
@@ -55,23 +57,25 @@ export function registrarConteudoInterativo(editor: Editor, opcoes: {
         if (!adaptador) return;
         const condicional = adaptador.categoria === 'condicional';
         const grupo = adaptador.categoria === 'descricao';
-        if (adaptador.agrupaDescendentes && alvo.parentElement?.closest(adaptador.seletor)) return;
-        const editando = edicoes.has(alvo);
+        const agrupado = adaptador.agrupaDescendentes && alvo.parentElement?.closest(adaptador.seletor);
+        if (agrupado && !edicaoDireta) return;
+        const editando = edicaoDireta || edicoes.has(alvo);
         const leitura = editor.mode.isReadOnly();
         alvo.classList.add('conteudo-laudo');
         alvo.classList.toggle('conteudo-laudo-rep', !condicional && !grupo);
         alvo.classList.toggle('conteudo-laudo-condicional', condicional);
-        alvo.classList.toggle('conteudo-laudo-editando', editando);
+        alvo.classList.toggle('conteudo-laudo-editando', !edicaoDireta && editando);
         alvo.querySelectorAll(':scope > [data-acao-tabela-placeholder], :scope > [data-controles-bloco-condicional]').forEach(no => no.remove());
         alvo.setAttribute('contenteditable', String(editando && !leitura));
-        if (condicional) { if (editando) alvo.setAttribute('data-cond-em-edicao', 'true'); else alvo.removeAttribute('data-cond-em-edicao'); }
+        if (condicional) { if (editando && !edicaoDireta) alvo.setAttribute('data-cond-em-edicao', 'true'); else alvo.removeAttribute('data-cond-em-edicao'); }
         alvo.querySelectorAll<HTMLElement>('td, th, select').forEach(celula => {
           if (celula.closest('.conteudo-laudo') !== alvo || celula.closest('[data-b601-complemento]')) return;
           if (celula.tagName === 'SELECT') (celula as HTMLSelectElement).disabled = !permiteEdicaoCampo(celula.parentElement || celula, leitura, Boolean(celula.closest(SELETOR_SELECAO_PONTUAL)));
           else celula.setAttribute('contenteditable', String(!leitura && editando && celula.tagName !== 'TH' && celula.getAttribute('data-placeholder-celula-fixa') !== 'true'));
         });
+        if (agrupado) return;
         let controles = alvo.querySelector<HTMLElement>(':scope > [data-controles-conteudo]');
-        const assinatura = `${editando}:${leitura}:${processando}:${condicional}:${grupo}:${alvo.hasAttribute('data-placeholder-tabela-personalizada')}`;
+        const assinatura = `${edicaoDireta}:${editando}:${leitura}:${processando}:${condicional}:${grupo}:${alvo.hasAttribute('data-placeholder-tabela-personalizada')}`;
         if (controles?.getAttribute('data-estado') === assinatura) return;
         controles?.remove();
         controles = documento.createElement('span');
@@ -81,13 +85,14 @@ export function registrarConteudoInterativo(editor: Editor, opcoes: {
         controles.setAttribute('contenteditable', 'false');
         controles.setAttribute('data-estado', assinatura);
         const estado = documento.createElement('span');
-        estado.textContent = editando ? 'Em edição' : condicional ? 'Bloco condicional' : grupo ? 'Descrição pericial' : 'Dados da REP';
+        estado.textContent = !edicaoDireta && editando ? 'Em edição' : condicional ? 'Bloco condicional' : grupo ? 'Descrição pericial' : 'Dados da REP';
         controles.append(estado);
         for (const acao of ['editar', 'restaurar', 'excluir'] as const) {
+          if (edicaoDireta && acao === 'editar') continue;
           const botao = documento.createElement('button');
           botao.type = 'button';
           botao.textContent = acao === 'editar' ? editando ? 'Concluir' : 'Editar' : acao === 'restaurar' ? 'Restaurar dados da REP' : 'Excluir';
-          const motivo = alvo.parentElement?.closest('.conteudo-laudo:not(.conteudo-laudo-editando)') ? 'Conclua a liberação do bloco que contém este conteúdo.' : leitura ? 'Laudo em modo somente leitura.' : processando ? 'Aguarde a operação atual.' : acao === 'restaurar' && !adaptador.permiteRestaurar(alvo, opcoes.laudoId) && grupo ? 'A restauração requer um laudo vinculado à REP.' : acao === 'restaurar' && !adaptador.permiteRestaurar(alvo, opcoes.laudoId) && condicional ? 'Este bloco não possui origem vinculada ao modelo.' : acao === 'excluir' && !adaptador.permiteExcluir ? 'A exclusão de grupos descritivos não está disponível.' : acao === 'restaurar' && !grupo && !condicional && !alvo.hasAttribute('data-placeholder-tabela-personalizada') ? 'Esta tabela já utiliza os dados da REP.' : '';
+          const motivo = !edicaoDireta && alvo.parentElement?.closest('.conteudo-laudo:not(.conteudo-laudo-editando)') ? 'Conclua a liberação do bloco que contém este conteúdo.' : leitura ? 'Laudo em modo somente leitura.' : processando ? 'Aguarde a operação atual.' : acao === 'restaurar' && !adaptador.permiteRestaurar(alvo, opcoes.laudoId) && grupo ? 'A restauração requer um laudo vinculado à REP.' : acao === 'restaurar' && !adaptador.permiteRestaurar(alvo, opcoes.laudoId) && condicional ? 'Este bloco não possui origem vinculada ao modelo.' : acao === 'excluir' && !adaptador.permiteExcluir ? 'A exclusão de grupos descritivos não está disponível.' : acao === 'restaurar' && !grupo && !condicional && !alvo.hasAttribute('data-placeholder-tabela-personalizada') ? 'Esta tabela já utiliza os dados da REP.' : '';
           botao.disabled = Boolean(motivo);
           botao.title = motivo || botao.textContent;
           botao.setAttribute('aria-label', botao.title);
@@ -100,7 +105,7 @@ export function registrarConteudoInterativo(editor: Editor, opcoes: {
   });
   const executar = async (alvo: HTMLElement, acao: string): Promise<ResultadoAcaoConteudo> => {
     const adaptador = obterAdaptadorConteudo(alvo);
-    if (!adaptador || processando || editor.mode.isReadOnly() || (acao !== 'editar' && acao !== 'restaurar' && acao !== 'excluir')) return 'indisponivel';
+    if (!adaptador || processando || editor.mode.isReadOnly() || (acao !== 'editar' && acao !== 'restaurar' && acao !== 'excluir') || (edicaoDireta && acao === 'editar')) return 'indisponivel';
     if (acao === 'excluir' && !adaptador.permiteExcluir || acao === 'restaurar' && !adaptador.permiteRestaurar(alvo, opcoes.laudoId)) return 'indisponivel';
     const id = identidade(alvo);
     const valido = () => !encerrado && !editor.removed && !editor.destroyed && editor.getBody().contains(alvo) && identidade(alvo) === id && !editor.mode.isReadOnly();
