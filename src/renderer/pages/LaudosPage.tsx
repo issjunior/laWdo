@@ -116,6 +116,7 @@ import { useSidebar } from '@/components/ui/sidebar';
 import { RepTimelineDialog } from '@/components/timeline/RepTimelineDialog';
 import { AtualizarRepGdlDialog } from '@/components/rep/AtualizarRepGdlDialog';
 import { PlaceholderContextMenu } from '@/components/editor/PlaceholderContextMenu';
+import { CorretorOrtograficoDialog } from '@/components/laudo/CorretorOrtograficoDialog';
 import { CAMPOS_ESPECIFICOS_PLACEHOLDERS } from '@/components/rep/exam-fields/placeholders';
 import { EXAM_MENU_REGISTRY, EXAM_TOGGLES } from '@/components/rep/exam-fields/index';
 import type { ExamToggle } from '@/components/rep/exam-fields/index';
@@ -707,6 +708,7 @@ export const LaudosPage: React.FC = () => {
   const projeteisAberto = consultaProjeteis?.laudoId === editando?.id && consultaProjeteis?.aberto === true;
   const permiteConsultarProjeteis = normalizarCodigoExame(editando?.tipo_exame_codigo ?? '').startsWith('B');
   const [atalhosLaudoAberto, setAtalhosLaudoAberto] = useState(false);
+  const [corretorAberto, definirCorretorAberto] = useState(false);
   const [itensIndicePlaceholders, setItensIndicePlaceholders] = useState<ItemIndicePlaceholder[]>([]);
   const avisosFalhaPlaceholdersRef = useRef<Set<string>>(new Set());
   const exameToggles = useMemo<ExamToggle[] | undefined>(() => {
@@ -4434,6 +4436,7 @@ export const LaudosPage: React.FC = () => {
                 setConsultaProjeteis({ laudoId: editando.id, aberto: true });
               } : undefined}
               onAbrirAtalhos={() => setAtalhosLaudoAberto(true)}
+              onAbrirCorretor={() => definirCorretorAberto(true)}
               onRecolherAutomaticamente={() => setPanelCollapsed(true)}
               conteudoPainel={conteudoPainelLateral}
             >
@@ -4678,6 +4681,7 @@ export const LaudosPage: React.FC = () => {
           aoFechar: () => botaoProjeteisRef.current?.focus(),
         }} /></React.Suspense>}
         <AtalhosLaudoDialog aberto={atalhosLaudoAberto} onAbertoChange={setAtalhosLaudoAberto} />
+        <CorretorOrtograficoDialog aberto={corretorAberto} onAbertoChange={definirCorretorAberto} />
         <IndicePlaceholdersDialog
           open={indicePlaceholdersOpen}
           onOpenChange={setIndicePlaceholdersOpen}

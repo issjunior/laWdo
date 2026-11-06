@@ -1,4 +1,5 @@
 import type { AmbienteGdl } from '../shared/gdl/ambiente.js';
+export type { ApiCorretor } from '../shared/types/corretor.types.js';
 import type { FalhaListaRepsGdl } from '../shared/types/gdl-minhas-reps.types.js';
 import type { FalhaPdf } from '../shared/types/pdf.types.js'
 export type { RepsMesmoCasoGdl } from '../shared/gdl/reps-mesmo-caso.js';

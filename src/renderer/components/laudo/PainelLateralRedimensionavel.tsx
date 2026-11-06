@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Bot, Crosshair, Images, Keyboard, ListRestart, Wrench, type LucideIcon } from 'lucide-react'
+import { Bot, Crosshair, Images, Keyboard, ListRestart, SpellCheck, Wrench, type LucideIcon } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -34,6 +34,7 @@ interface PainelLateralRedimensionavelProps {
   onReindexarSecoes: () => void
   onAbrirProjeteis?: () => void
   onAbrirAtalhos: () => void
+  onAbrirCorretor?: () => void
   onRecolherAutomaticamente?: () => void
   children: ReactNode
   conteudoPainel: ReactNode
@@ -114,6 +115,7 @@ export function PainelLateralRedimensionavel({
   onRecolherAutomaticamente,
   onAbrirAtalhos,
   onAbrirProjeteis,
+  onAbrirCorretor,
   children,
   conteudoPainel,
 }: PainelLateralRedimensionavelProps) {
@@ -240,6 +242,14 @@ export function PainelLateralRedimensionavel({
             <Crosshair className="size-4" />
           </Button></TooltipTrigger>
           <TooltipContent side="left">Identificação de projéteis</TooltipContent>
+        </Tooltip></TooltipProvider>}
+        {onAbrirCorretor && <TooltipProvider delayDuration={200}><Tooltip>
+          <TooltipTrigger asChild><Button type="button" variant="ghost" size="icon"
+            className="size-8 rounded-lg border border-transparent"
+            aria-label="Corretor ortográfico" aria-haspopup="dialog" onClick={onAbrirCorretor}>
+            <SpellCheck className="size-4" />
+          </Button></TooltipTrigger>
+          <TooltipContent side="left">Corretor ortográfico</TooltipContent>
         </Tooltip></TooltipProvider>}
         <BotaoFerramentasTrilho
           operacaoEmAndamento={operacaoEmAndamento}

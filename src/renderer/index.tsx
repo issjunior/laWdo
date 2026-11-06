@@ -114,6 +114,7 @@ interface IpcCapturaLogsRenderer {
 }
 
 interface IpcAPIRendererLegada {
+  corretor: import('../shared/types/corretor.types.js').ApiCorretor;
   projetil: import('../shared/types/projetil.types.js').ProjetilIpcRenderer;
   ping: () => Promise<string>;
   getAppInfo: () => Promise<AppInfoLegado>;

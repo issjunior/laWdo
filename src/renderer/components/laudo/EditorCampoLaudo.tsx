@@ -1,5 +1,7 @@
-import { useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { Editor } from '@tinymce/tinymce-react';
+import { MenuCorretorEditor } from '@/components/editor/MenuCorretorEditor';
+import { registrarCorretorEditor } from '@/lib/corretor-editor';
 import { ESTILO_TIPOGRAFIA_EDITOR_LAUDO } from '@/lib/tipografia-editor-laudo';
 import { MEDIDAS_RECUO_PRIMEIRA_LINHA } from '@/lib/recuo-editor-laudo';
 
@@ -23,9 +25,12 @@ function obterTipografiaCampo(elemento?: HTMLElement): string {
 }
 
 export function EditorCampoLaudo({ valor, onChange, elementoOrigem, onRecuoChange }: EditorCampoLaudoProps) {
+  const identificador = useId();
+  const editorId = `campo-laudo-${identificador}`;
   const valorInicial = useRef(valor);
   const [tipografiaInicial] = useState(() => obterTipografiaCampo(elementoOrigem));
-  return <Editor
+  return <MenuCorretorEditor editorId={editorId}><div><Editor
+    id={editorId}
     licenseKey="gpl"
     tinymceScriptSrc="./tinymce/tinymce.min.js"
     initialValue={valorInicial.current}
@@ -33,10 +38,22 @@ export function EditorCampoLaudo({ valor, onChange, elementoOrigem, onRecuoChang
     init={{
       menubar: false,
       statusbar: false,
+      browser_spellcheck: true,
+      contextmenu: false,
       ui_mode: 'split',
       height: 320,
       toolbar: 'undo redo | bold italic underline superscript subscript | recuoprimeiralinha | removeformat',
       setup: editor => {
+        editor.on('init', () => registrarCorretorEditor(editor, evento => {
+          const recipiente = editor.getContainer();
+          const retangulo = editor.iframeElement?.getBoundingClientRect() ?? recipiente.getBoundingClientRect();
+          recipiente.dispatchEvent(new MouseEvent('contextmenu', {
+            bubbles: true,
+            cancelable: true,
+            clientX: evento.clientX + retangulo.left,
+            clientY: evento.clientY + retangulo.top,
+          }));
+        }));
         editor.ui.registry.addMenuButton('recuoprimeiralinha', {
           text: 'Parágrafo',
           tooltip: 'Recuo da primeira linha do parágrafo',
@@ -62,5 +79,5 @@ export function EditorCampoLaudo({ valor, onChange, elementoOrigem, onRecuoChang
       language_url: './tinymce/langs/pt_BR.js',
       content_style: `body { ${tipografiaInicial} text-align: justify; padding: 12px; }`,
     }}
-  />;
+  /></div></MenuCorretorEditor>;
 }

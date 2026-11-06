@@ -15,6 +15,7 @@ import { CURRENT_SCHEMA_VERSION, setupDatabase } from './database/index.js';
 import { closeDatabase, executeQuery } from './database/sqlite.js';
 import { getLogger, logDebug, setupLogging } from './utils/logger.js';
 import { registerIpcHandlers } from './ipc/index.js';
+import { prepararCorretor, registrarContextoCorretor } from './services/corretor.service.js';
 import { atualizacaoService } from './services/atualizacao.service.js';
 import { carregarEstadoJanelaPrincipal, observarEstadoJanelaPrincipal } from './utils/estado-janela-principal.js';
 import { DiagnosticoSessaoService } from './services/diagnostico-sessao.service.js';
@@ -504,6 +505,7 @@ const createWindow = async (): Promise<void> => {
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
+      spellcheck: true,
     },
     icon: caminhoIcone,
     title: 'laWdo',
@@ -521,6 +523,8 @@ const createWindow = async (): Promise<void> => {
       : {}),
   });
   mainWindow.removeMenu();
+  await prepararCorretor(mainWindow.webContents.session);
+  registrarContextoCorretor(mainWindow.webContents);
   if (estado.maximizada) mainWindow.maximize();
   if (ativacaoPendente) {
     mainWindow.focus();

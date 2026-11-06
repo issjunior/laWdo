@@ -6,6 +6,8 @@ import type { RepsMesmoCasoGdl } from './types.js';
 import type { EstadoConexaoGdl } from './types.js';
 import type { SalvarTemplateCompletoInput, CriarSecaoTemplateInput, AtualizarSecaoTemplateInput } from '../shared/types/template.types.js';
 import { contextBridge, ipcRenderer } from 'electron';
+import type { SugestoesCorretor } from '../shared/types/corretor.types.js';
+import type { ApiCorretor } from './types.js';
 import type { ProjetilPersonalizadoEntrada, ProjetilReferencia } from '../shared/types/projetil.types.js';
 import type { FalhaPdf } from '../shared/types/pdf.types.js';
 import type { FalhaImagemImpressao } from '../shared/types/imagem-laudo.types.js';
@@ -156,6 +158,7 @@ type ExportacaoLaudoParams = {
 
 // Tipos para a API exposta
 export interface IpcAPI {
+  corretor: ApiCorretor;
   projetil: {
     listarPersonalizados: () => Promise<{ success: boolean; data?: ProjetilReferencia[]; error?: string }>;
     salvarPersonalizado: (dados: ProjetilPersonalizadoEntrada, id?: string) => Promise<{ success: boolean; data?: ProjetilReferencia; error?: string }>;
@@ -543,6 +546,7 @@ function ehEstadoConexaoGdl(valor: unknown): valor is EstadoConexaoGdl {
 }
 
 const ALLOWED_CHANNELS = new Set([
+  'corretor:obter', 'corretor:configurar', 'corretor:adicionar', 'corretor:remover',
   'projetil:listarPersonalizados',
   'projetil:salvarPersonalizado',
   'projetil:excluirPersonalizado',
@@ -1262,6 +1266,24 @@ const sendSeguro = (channel: string, ...args: IpcParams): void => {
 
 // Expor API segura para o renderer
 contextBridge.exposeInMainWorld('ipcAPI', {
+  corretor: {
+    obter: () => invocarComDiagnostico('corretor:obter'),
+    configurar: ativo => invocarComDiagnostico('corretor:configurar', ativo),
+    adicionar: palavra => invocarComDiagnostico('corretor:adicionar', palavra),
+    remover: palavra => invocarComDiagnostico('corretor:remover', palavra),
+    onSugestoes: callback => {
+      const listener = (_evento: Electron.IpcRendererEvent, dados: unknown) => {
+        if (!dados || typeof dados !== 'object') return;
+        const valor = dados as Record<string, unknown>;
+        if (typeof valor.palavra !== 'string' || valor.palavra.length > 100 || !Array.isArray(valor.sugestoes)) return;
+        const sugestoes = valor.sugestoes.filter((item): item is string => typeof item === 'string' && item.length <= 100).slice(0, 5);
+        const resposta: SugestoesCorretor = { palavra: valor.palavra, sugestoes };
+        callback(resposta);
+      };
+      ipcRenderer.on('corretor:sugestoes', listener);
+      return () => ipcRenderer.removeListener('corretor:sugestoes', listener);
+    },
+  },
   projetil: {
     listarPersonalizados: () => invocarComDiagnostico('projetil:listarPersonalizados'),
     salvarPersonalizado: (dados: ProjetilPersonalizadoEntrada, id?: string) => invocarComDiagnostico('projetil:salvarPersonalizado', dados, id),

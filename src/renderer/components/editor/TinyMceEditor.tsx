@@ -1,4 +1,5 @@
 import { permiteEdicaoCampo } from '@/lib/politica-edicao-conteudo';
+import { registrarCorretorEditor } from '@/lib/corretor-editor';
 import { registrarEdicaoDiretaLaudo } from '@/lib/edicao-direta-laudo';
 import { registrarPreparacaoConteudo } from '@/lib/preparacao-conteudo-editor';
 import { registrarConteudoInterativo } from '@/lib/conteudo-interativo';
@@ -858,6 +859,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
           branding: false,
           statusbar: true,
           contextmenu: false,
+          browser_spellcheck: Boolean(laudoId),
           skin_url: './tinymce/skins/ui/oxide',
           content_css: './tinymce/skins/content/default/content.css',
           icons_url: './tinymce/icons/default/icons.min.js',
@@ -1543,9 +1545,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
                 onChange(editor.getContent());
               });
 
-              doc.addEventListener('contextmenu', (e: MouseEvent) => {
-                e.preventDefault();
-
+              const encaminharMenuContexto = (e: MouseEvent) => {
                 const container = editor.getContainer();
                 const iframe = editor.iframeElement as HTMLIFrameElement | null;
                 const iframeRect = iframe?.getBoundingClientRect() ?? container.getBoundingClientRect();
@@ -1559,7 +1559,15 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
                 });
 
                 container.dispatchEvent(newEvent);
-              });
+              };
+              if (laudoId && window.ipcAPI?.corretor) {
+                registrarCorretorEditor(editor, encaminharMenuContexto);
+              } else {
+                doc.addEventListener('contextmenu', (evento: MouseEvent) => {
+                  evento.preventDefault();
+                  encaminharMenuContexto(evento);
+                });
+              }
 
               registrarConteudoInterativo(editor, {
                 laudoId,
