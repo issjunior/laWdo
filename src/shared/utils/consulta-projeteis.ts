@@ -1,8 +1,30 @@
-import type { ComparacaoMedida, ConsultaProjetil, MedidaProjetil, ProjetilReferencia, ResultadoProjetil } from '../types/projetil.types.js';
+import type { ComparacaoMedida, ConsultaProjetil, FormularioMedidasProjetil, MedidaProjetil, ProjetilReferencia, ResultadoProjetil } from '../types/projetil.types.js';
 import { LIMITE_PROXIMIDADE_PERCENTUAL, medidaProximaDaReferencia } from './proximidade-medida.js';
 
 function numeroPositivo(valor: number | null): valor is number {
   return valor !== null && Number.isFinite(valor) && valor > 0;
+}
+
+export function converterMedidaProjetil(valor: string): number | null {
+  if (!valor.trim()) return null;
+  const convertido = Number(valor.trim().replace(',', '.'));
+  return Number.isFinite(convertido) ? convertido : NaN;
+}
+
+export function obterErroMedidasProjetil(formulario: FormularioMedidasProjetil): string | null {
+  return (['calibreRealMm', 'alturaMaximaMm', 'massaGramas'] as const).some(chave => {
+    const valor = converterMedidaProjetil(formulario[chave]);
+    return valor !== null && (!Number.isFinite(valor) || valor <= 0);
+  }) ? 'Use apenas medidas positivas.' : null;
+}
+
+export function referenciaProjetilPersonalizadaValida(valor: unknown): valor is ProjetilReferencia {
+  if (!valor || typeof valor !== 'object' || Array.isArray(valor)) return false;
+  const dado = valor as Record<string, unknown>;
+  return typeof dado.id === 'string' && typeof dado.calibre === 'string' && typeof dado.tipo === 'string'
+    && dado.situacao === 'personalizada' && typeof dado.massaGramas === 'number' && Number.isFinite(dado.massaGramas) && dado.massaGramas > 0
+    && (['calibreRealMinMm', 'calibreRealMaxMm', 'alturaMinMm', 'alturaMaxMm'] as const)
+      .every(chave => dado[chave] === null || (typeof dado[chave] === 'number' && Number.isFinite(dado[chave]) && dado[chave] > 0));
 }
 
 function comparar(observado: number | null, minimo: number | null, maximo: number | null, participa = true): ComparacaoMedida {

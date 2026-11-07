@@ -96,4 +96,32 @@ describe('projéteis na página Laudos', () => {
     expect(within(dialogo).getByRole('radio', { name: 'Priorizar massa' })).toBeChecked();
     expect(salvar).not.toHaveBeenCalled();
   });
+
+  it('reaplica as medidas da tabela e os padrões da classificação a cada solicitação', async () => {
+    function Sessao() {
+      const [aberto, setAberto] = useState(false);
+      const [id, setId] = useState(0);
+      return <><button onClick={() => { setId(atual => atual + 1); setAberto(true); }}>Abrir pela tabela</button>
+        <FerramentaProjeteis dialogo={{
+          aberto,
+          aoAlterarAbertura: setAberto,
+          aoFechar: vi.fn(),
+          preenchimento: { id, medidas: { massaGramas: '5,7', calibreRealMm: '9', alturaMaximaMm: '17,39' } },
+        }} /></>;
+    }
+    render(<Sessao />);
+    fireEvent.click(screen.getByRole('button', { name: 'Abrir pela tabela' }));
+    await waitFor(() => expect(screen.getByLabelText('Massa (g)')).toHaveValue('5,7'));
+    expect(screen.getByLabelText('Calibre real médio (mm)')).toHaveValue('9');
+    expect(screen.getByLabelText('Altura máxima (mm)')).toHaveValue('17,39');
+    fireEvent.change(screen.getByLabelText('Massa (g)'), { target: { value: '8' } });
+    fireEvent.click(screen.getByRole('radio', { name: 'Priorizar altura máxima' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Houve perda de material' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Fechar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Abrir pela tabela' }));
+    await waitFor(() => expect(screen.getByLabelText('Massa (g)')).toHaveValue('5,7'));
+    expect(screen.getByRole('radio', { name: 'Priorizar massa' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Houve perda de material' })).not.toBeChecked();
+    expect(screen.getByRole('button', { name: 'Proximidade: 5,00%' })).toBeInTheDocument();
+  });
 });

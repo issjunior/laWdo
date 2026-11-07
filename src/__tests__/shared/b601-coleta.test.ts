@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { criarDadosB601 } from '../../shared/types/b601.types';
 import { criarPecaColeta } from '../fixtures/b601-coleta';
 import { gerarDescricaoAgrupadaB601, gerarDescricaoColetaB601 } from '../../shared/utils/b601-descricao-agrupada';
-import { sugerirRepColeta, esquemaRepsMesmoCasoGdl } from '../../shared/gdl/reps-mesmo-caso';
+import { categoriaColetaPorCodigoNatureza, sugerirRepColeta, esquemaRepsMesmoCasoGdl } from '../../shared/gdl/reps-mesmo-caso';
 import { laudoPadraoB601LocalNecropsiaV1 } from '../../main/templates/integrados/b601/laudo-padrao-b601-local-necropsia.v1';
 import { validarTemplateIntegrado } from '../../main/templates/integrados/validar-template-integrado';
 import { preservarComplementoB601 } from '../../main/services/b601-secoes.service';
@@ -46,19 +46,29 @@ describe('template B-601 Local com Necropsia', () => {
     expect(gerarDescricaoColetaB601(dados, '105', 'projeteis')).toContain('data-b601-peca="massa"');
     const documento = new DOMParser().parseFromString(gerarDescricaoColetaB601(dados, '101', 'estojos'), 'text/html');
     expect(Array.from(documento.querySelectorAll('thead tr:last-child th')).map(elemento => elemento.textContent))
-      .toContain('Procedência');
+      .not.toContain('Procedência');
     expect(documento.body.textContent).toContain('LOCAL DE CRIME');
     expect(documento.querySelector('tbody tr td:nth-child(4)')?.textContent).toBe('XXX');
   });
 
   it('sugere só uma referência compatível e não inventa vínculos para outras origens', () => {
     const referencias = esquemaRepsMesmoCasoGdl.parse({ ambiente: 'producao', numeroRep: '100', anoRep: '2026', numeroCaso: '42', consultadoEm: new Date().toISOString(),
-      reps: [{ numero: '20', ano: '2026', codigoNatureza: 'M110' }, { numero: '21', ano: '2026', codigoNatureza: 'T002' }] });
+      reps: [{ numero: '20', ano: '2026', codigoNatureza: 'M112' }, { numero: '21', ano: '2026', codigoNatureza: 'T003' }] });
+    expect(referencias.reps.map(rep => rep.categoriaColeta)).toEqual(['local', 'necropsia']);
     expect(sugerirRepColeta('LOCAL DE CRIME', referencias)).toBe('20/2026');
     expect(sugerirRepColeta('NECRÓPSIA', referencias)).toBe('21/2026');
     expect(sugerirRepColeta('HOSPITAL', referencias)).toBe('');
-    referencias.reps.push({ numero: '22', ano: '2026', codigoNatureza: 'T002' });
+    referencias.reps.push({ numero: '22', ano: '2026', codigoNatureza: 'T006', categoriaColeta: 'necropsia' });
     expect(sugerirRepColeta('94', referencias)).toBe('');
+  });
+
+  it('valida códigos e rejeita categoria incompatível com a família', () => {
+    expect(categoriaColetaPorCodigoNatureza('M112')).toBe('local');
+    expect(categoriaColetaPorCodigoNatureza('T002')).toBe('necropsia');
+    expect(categoriaColetaPorCodigoNatureza('B601')).toBeNull();
+    const base = { ambiente: 'producao', numeroRep: '100', anoRep: '2026', numeroCaso: '42', consultadoEm: new Date().toISOString() };
+    expect(esquemaRepsMesmoCasoGdl.safeParse({ ...base, reps: [{ numero: '20', ano: '2026', codigoNatureza: 'M12' }] }).success).toBe(false);
+    expect(esquemaRepsMesmoCasoGdl.safeParse({ ...base, reps: [{ numero: '20', ano: '2026', codigoNatureza: 'M112', categoriaColeta: 'necropsia' }] }).success).toBe(false);
   });
 
   it('preserva fotografias e legendas ao recriar os quadros após alteração das peças', () => {

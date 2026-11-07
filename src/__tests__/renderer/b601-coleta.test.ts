@@ -13,7 +13,7 @@ import { laudoPadraoB601LocalNecropsiaV1 } from '../../main/templates/integrados
 import { prepararCamposProjeteisB601, limparInteracaoCamposB601 } from '@/lib/b601-campos-projetil';
 
 const snapshot = esquemaRepsMesmoCasoGdl.parse({ ambiente: 'producao', numeroRep: '100', anoRep: '2026', numeroCaso: '42', consultadoEm: new Date().toISOString(),
-  reps: [{ numero: '20', ano: '2026', codigoNatureza: 'M110' }, { numero: '21', ano: '2026', codigoNatureza: 'T002' }] });
+  reps: [{ numero: '20', ano: '2026', codigoNatureza: 'M112' }, { numero: '21', ano: '2026', codigoNatureza: 'T003' }] });
 const contexto = { repData: { numero: '100/2026', campos_especificos: JSON.stringify({ b601: { ...criarDadosB601(), pecas: [criarPecaColeta('local', '93'), criarPecaColeta('necro', '94')] }, integracaoGdl: { repsMesmoCaso: snapshot } }) } };
 const tabela = () => buildPlaceholderMapping(contexto).b601_tabela_material_coleta;
 const encerramentos: (() => void)[] = [];
@@ -92,11 +92,11 @@ describe('coleta B-601 no editor e na exportação', () => {
     const html = buildPlaceholderMapping(contextoHifen).b601_tabela_material_coleta;
     montarEditor(html);
     expect(document.querySelector<HTMLSelectElement>('[data-b601-exame-coleta] select')?.value).toBe('20/2026');
-    aplicarReferenciasColetaB601(document.body, { ...snapshot, reps: [{ numero: '39253', ano: '2022', codigoNatureza: 'M110' }] });
+    aplicarReferenciasColetaB601(document.body, { ...snapshot, reps: [{ numero: '39253', ano: '2022', codigoNatureza: 'M112', categoriaColeta: 'local' }] });
     prepararColetaB601(document.body);
     const controle = document.querySelector<HTMLSelectElement>('[data-b601-exame-coleta] select')!;
     expect(controle.textContent).toContain('39.253/2022');
-    expect(controle.textContent).not.toMatch(/REP |M110|T002/);
+    expect(controle.textContent).not.toMatch(/REP |M112|T003/);
   });
 
   it('materializa a tabela na escolha, preserva o texto e permite desfazer', async () => {
@@ -122,8 +122,8 @@ describe('coleta B-601 no editor e na exportação', () => {
     const campo = document.querySelector('[data-b601-exame-coleta] [data-b601-coleta-texto]')!;
     campo.textContent = 'Exame manual 123';
     aplicarReferenciasColetaB601(document.body, { ...snapshot, reps: [
-      { numero: '99', ano: '2026', codigoNatureza: 'M110' },
-      { numero: '98', ano: '2026', codigoNatureza: 'T002' },
+      { numero: '99', ano: '2026', codigoNatureza: 'M195', categoriaColeta: 'local' },
+      { numero: '98', ano: '2026', codigoNatureza: 'T006', categoriaColeta: 'necropsia' },
     ] });
     prepararColetaB601(document.body);
     const controles = document.querySelectorAll<HTMLSelectElement>('[data-b601-exame-coleta] select');
@@ -146,7 +146,7 @@ describe('coleta B-601 no editor e na exportação', () => {
     aplicarReferenciasColetaB601(document.body, { ...snapshot, reps: [] });
     prepararColetaB601(document.body);
     expect(Array.from(document.querySelectorAll<HTMLSelectElement>('[data-b601-exame-coleta] select')).map(c => c.value)).toEqual(['XXX', 'XXX']);
-    aplicarReferenciasColetaB601(document.body, { ...snapshot, reps: [...snapshot.reps, { numero: '99', ano: '2026', codigoNatureza: 'M110' }] });
+    aplicarReferenciasColetaB601(document.body, { ...snapshot, reps: [...snapshot.reps, { numero: '99', ano: '2026', codigoNatureza: 'M130', categoriaColeta: 'local' }] });
     prepararColetaB601(document.body);
     expect(Array.from(document.querySelectorAll<HTMLSelectElement>('[data-b601-exame-coleta] select')).map(c => c.value)).toEqual(['XXX', '21/2026']);
     expect(document.querySelector('[data-b601-exame-coleta] select')?.textContent).toContain('Preencher manualmente');
@@ -197,7 +197,7 @@ describe('coleta B-601 no editor e na exportação', () => {
     expect(restaurarTabelaPlaceholder(sessao.editor as unknown as Editor, botao)).toBe(true);
     const pecaAtual = criarPecaColeta('local', '93', 3);
     pecaAtual.comuns.lacreEntrada = 'L2';
-    const contextoAtual = { repData: { numero: '100/2026', campos_especificos: JSON.stringify({ b601: { ...criarDadosB601(), pecas: [pecaAtual] }, integracaoGdl: { repsMesmoCaso: { ...snapshot, reps: [{ numero: '99', ano: '2026', codigoNatureza: 'M110' }] } } }) } };
+    const contextoAtual = { repData: { numero: '100/2026', campos_especificos: JSON.stringify({ b601: { ...criarDadosB601(), pecas: [pecaAtual] }, integracaoGdl: { repsMesmoCaso: { ...snapshot, reps: [{ numero: '99', ano: '2026', codigoNatureza: 'M112', categoriaColeta: 'local' }] } } }) } };
     const copia = criarCopiaVisualizacaoPlaceholders(sessao.getContent(), { modo: 'dados', valores: construirMapaPlaceholdersResolvidos(contextoAtual), placeholdersPersonalizados: [], descreverPendente: () => '' });
     document.body.innerHTML = copia.innerHTML;
     sessao.disparar('SetContent');

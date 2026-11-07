@@ -88,7 +88,8 @@ export function registrarMenuPreenchimentoB601(editor: Editor, aoAlterar: (html:
             const controle = campo.querySelector<HTMLSelectElement>('select[data-b601-campo-select][data-valor-livre]');
             if (controle) {
               controle.setAttribute('data-valor-livre', valor);
-              controle.dispatchEvent(new janela.Event('change', { bubbles: true }));
+              controle.value = '';
+              controle.dispatchEvent(new janela.CustomEvent('change', { bubbles: true, detail: 'preenchimento-rapido-b601' }));
             } else preencherCampoReservado(campo, valor);
           }
         });

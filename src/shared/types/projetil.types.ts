@@ -1,5 +1,6 @@
 export type SituacaoProjetil = 'estimada' | 'personalizada';
 export type MedidaProjetil = 'calibreRealMm' | 'alturaMaximaMm' | 'massaGramas';
+export type FormularioMedidasProjetil = Record<MedidaProjetil, string>;
 
 export interface OrigemProjetil {
   fonte: string;

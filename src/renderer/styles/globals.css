@@ -102,6 +102,35 @@ body.dark-content .seletor-tabela-pendente {
   max-width: min(100%, 10rem);
 }
 
+.seletor-tabela-identificar-projetil {
+  @apply ml-1 inline-flex size-7 items-center justify-center rounded-md border border-solid border-input bg-card text-foreground;
+  box-shadow: 0 1px 2px rgb(0 0 0 / .05);
+  vertical-align: middle;
+  cursor: pointer;
+}
+
+.seletor-tabela-identificar-projetil > svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.seletor-tabela-identificar-projetil:hover:not(:disabled) {
+  @apply border-ring bg-accent;
+}
+
+.seletor-tabela-identificar-projetil:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 1px;
+}
+
+.seletor-tabela-identificar-projetil:disabled {
+  @apply cursor-not-allowed opacity-50;
+}
+
 .seletor-tabela-entrada {
   position: fixed !important;
   z-index: 100;

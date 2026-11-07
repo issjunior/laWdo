@@ -1,4 +1,3 @@
-import { PAISES } from './paises.catalogo.js';
 import { opcoesCalibreNominalCartucho, opcoesMarcaCartucho, opcoesOrigemColeta } from './balistica-opcoes.catalogo.js';
 import { CATALOGO_TIPOS_PECA_B601, OPCOES_TIPO_PROJETIL_B601, OPCOES_TIPO_RAIAMENTO_B601 } from './b601.catalogo.js';
 import { catalogoProjeteis } from './projeteis.catalogo.js';
@@ -7,7 +6,7 @@ import { criarOpcoesFormatoProjetil } from '../utils/formato-projetil.js';
 export const VERSAO_CAMPOS_TABELA_B601 = '1';
 export const VALOR_MANUAL_TABELA_B601 = '__manual__';
 
-type FonteOpcoes = 'origem' | 'paises' | 'tipo' | 'formato' | 'calibre_projetil' | 'raiamento' | 'marca' | 'calibre_estojo' | 'revestimento' | 'aderencias';
+type FonteOpcoes = 'origem' | 'tipo' | 'formato' | 'calibre_projetil' | 'raiamento' | 'marca' | 'calibre_estojo' | 'revestimento' | 'aderencias';
 export interface CampoTabelaB601 {
   chave: string;
   rotulo: string;
@@ -17,9 +16,8 @@ export interface CampoTabelaB601 {
 export interface FormatoPersonalizadoB601 { tipo: string; sigla: string | null; calibre?: string }
 
 const origem: CampoTabelaB601 = { chave: 'origem', rotulo: 'Origem', fonte: 'origem' };
-const procedencia: CampoTabelaB601 = { chave: 'procedencia', rotulo: 'Procedência', fonte: 'paises' };
 export const CAMPOS_PROJETEIS_B601: readonly CampoTabelaB601[] = [
-  origem, procedencia,
+  origem,
   { chave: 'tipo', rotulo: 'Tipo', fonte: 'tipo' },
   { chave: 'constituicao_formato', rotulo: 'Constituição e formato', fonte: 'formato' },
   { chave: 'massa', rotulo: 'Massa (g)' },
@@ -33,7 +31,7 @@ export const CAMPOS_PROJETEIS_B601: readonly CampoTabelaB601[] = [
   { chave: 'aderencias', rotulo: 'Aderências', fonte: 'aderencias', aceitaTextoLivre: true },
 ];
 export const CAMPOS_ESTOJOS_B601: readonly CampoTabelaB601[] = [
-  origem, procedencia,
+  origem,
   { chave: 'marca', rotulo: 'Marca', fonte: 'marca' },
   { chave: 'calibre_nominal', rotulo: 'Calibre nominal', fonte: 'calibre_estojo' },
   { chave: 'composicao', rotulo: 'Composição do estojo', fonte: 'revestimento' },
@@ -54,7 +52,6 @@ export function normalizarOpcoesTabelaB601(opcoes: readonly { texto: string; val
     : chave === 'tipo_raiamento' ? [...OPCOES_TIPO_RAIAMENTO_B601]
     : chave === 'aderencias' ? ['Caliça', 'Material biológico'] : [];
   const canonicos = new Map(naturais.map(valor => [comparar(valor), frase(valor).replace('gillete', 'Gillete')]));
-  if (chave === 'procedencia') PAISES.forEach(pais => canonicos.set(comparar(pais), pais));
   for (const valor of ['Prejudicado', 'Ausente', 'Não aparente']) canonicos.set(comparar(valor), valor);
   const normalizar = (valor: string) => canonicos.get(comparar(valor)) ?? valor.charAt(0).toLocaleUpperCase('pt-BR') + valor.slice(1);
   const unicas = new Map<string, { texto: string; valor: string }>();
@@ -75,7 +72,6 @@ export function obterOpcoesCampoTabelaB601(campo: CampoTabelaB601, personalizado
   let opcoes: { texto: string; valor: string }[] = [];
   switch (campo.fonte) {
     case 'origem': opcoes = simples(opcoesOrigemColeta.map(opcao => opcao.label)); break;
-    case 'paises': opcoes = simples([...PAISES].sort((a, b) => a.localeCompare(b, 'pt-BR'))); break;
     case 'tipo': opcoes = simples(OPCOES_TIPO_PROJETIL_B601.map(opcao => opcao.valor)); break;
     case 'raiamento': opcoes = simples(OPCOES_TIPO_RAIAMENTO_B601); break;
     case 'marca': opcoes = simples(opcoesMarcaCartucho.map(opcao => opcao.label)); break;

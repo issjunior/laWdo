@@ -3,7 +3,7 @@ import { SELETOR_SELECAO_PONTUAL, materializarEdicaoPontual } from './adaptadore
 import { registrarPreparacaoConteudo } from './preparacao-conteudo-editor';
 import { toast } from 'sonner';
 import type { Editor } from 'tinymce';
-import { codigoColetaPorOrigem, esquemaRepsMesmoCasoGdl, sugerirRepColeta, formatarReferenciaColeta } from '@shared/gdl/reps-mesmo-caso';
+import { categoriaColetaPorOrigem, esquemaRepsMesmoCasoGdl, sugerirRepColeta, formatarReferenciaColeta } from '@shared/gdl/reps-mesmo-caso';
 import type { RepsMesmoCasoGdl } from '@shared/gdl/reps-mesmo-caso';
 import { CATALOGO_TIPOS_PECA_B601 } from '@shared/catalogos/b601.catalogo';
 import { opcoesOrigemColeta } from '@shared/catalogos/balistica-opcoes.catalogo';
@@ -122,8 +122,8 @@ export function prepararColetaB601(raiz: HTMLElement, somenteLeitura = false): v
         const original = campo.getAttribute('data-b601-quantidade-original');
         if (original) valores.set(original, original);
       } else {
-        const codigoOrigem = codigoColetaPorOrigem(obterOrigemExame(campo));
-        referencias?.reps.filter(rep => rep.codigoNatureza === codigoOrigem)
+        const categoriaOrigem = categoriaColetaPorOrigem(obterOrigemExame(campo));
+        referencias?.reps.filter(rep => rep.categoriaColeta === categoriaOrigem)
           .forEach(rep => valores.set(formatarReferenciaColeta(rep), formatarReferenciaColeta(rep)));
       }
       valores.set('__manual__', 'Preencher manualmente');

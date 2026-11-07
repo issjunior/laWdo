@@ -9,30 +9,89 @@ import { catalogoProjeteis } from '@shared/catalogos/projeteis.catalogo';
 import { criarOpcoesFormatoProjetil, normalizarFormatoProjetil } from '@shared/utils/formato-projetil';
 import { OPCOES_TIPO_PROJETIL_B601, OPCOES_TIPO_RAIAMENTO_B601 } from '@shared/catalogos/b601.catalogo';
 import { criarHtmlCampoReservado } from '@shared/utils/campo-reservado';
+import { consultarProjeteis, converterMedidaProjetil, obterErroMedidasProjetil, referenciaProjetilPersonalizadaValida } from '@shared/utils/consulta-projeteis';
+import { LIMITE_PROXIMIDADE_PERCENTUAL } from '@shared/utils/proximidade-medida';
+import type { FormularioMedidasProjetil, ProjetilReferencia } from '@shared/types/projetil.types';
 
 const seletorCampo = '[data-b601-grupo="105"] [data-b601-origem-projetil="true"], [data-b601-grupo="105"] [data-b601-campo-projetil], [data-b601-grupo="101"] [data-b601-campo-estojo]';
 const seletorControle = 'select[data-b601-campo-select="true"]';
 const seletorTexto = '[data-b601-campo-texto="true"]';
 const seletorLegenda = '[data-b601-legenda-formatos="automatica"], [data-b601-legenda-tipos="automatica"]';
+const seletorIdentificacao = 'button[data-b601-identificar-projetil="true"]';
 const siglasPadrao = [...new Set(catalogoProjeteis.flatMap(item => item.sigla ? [item.sigla] : []))];
-type FormatoPersonalizado = { tipo: string; sigla: string | null; calibre?: string };
-let carregamentoPersonalizados: Promise<FormatoPersonalizado[]> | undefined;
+let carregamentoPersonalizados: Promise<ProjetilReferencia[]> | undefined;
 
-function carregarFormatosPersonalizados(): Promise<FormatoPersonalizado[]> {
+export interface SolicitacaoIdentificacaoProjetilB601 {
+  identificador: string;
+  medidas: FormularioMedidasProjetil;
+  restaurarFoco: () => void;
+}
+
+interface OpcoesCamposProjeteisB601 {
+  habilitarClassificacao?: boolean;
+}
+
+function carregarFormatosPersonalizados(): Promise<ProjetilReferencia[]> {
   if (!carregamentoPersonalizados) {
     carregamentoPersonalizados = (async () => {
       const resposta = await window.ipcAPI.projetil.listarPersonalizados();
       if (!resposta.success || !Array.isArray(resposta.data)) throw new Error(resposta.error || 'Resposta inválida ao carregar formatos de projéteis.');
-      const registros: unknown[] = resposta.data;
-      return registros.flatMap(item => {
-        if (!item || typeof item !== 'object' || !('tipo' in item) || typeof item.tipo !== 'string') return [];
-        const sigla = 'sigla' in item && typeof item.sigla === 'string' ? item.sigla : null;
-        const calibre = 'calibre' in item && typeof item.calibre === 'string' ? item.calibre.trim() : '';
-        return [{ tipo: item.tipo, sigla, calibre }];
-      });
+      return (resposta.data as unknown[]).filter(referenciaProjetilPersonalizadaValida);
     })().finally(() => { carregamentoPersonalizados = undefined; });
   }
   return carregamentoPersonalizados;
+}
+
+function normalizarRotuloMedida(valor: string): string {
+  return valor.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR')
+    .replace(/\s*\([^)]*\)\s*$/, '').trim().replace(/\s+/g, ' ');
+}
+
+function textoPersistivelCelula(celula: Element | undefined): string {
+  if (!celula) return '';
+  const copia = celula.cloneNode(true) as HTMLElement;
+  copia.querySelectorAll('[data-mce-bogus="all"], select, button').forEach(elemento => elemento.remove());
+  const texto = copia.textContent?.trim() || '';
+  return texto === 'XXX' ? '' : texto;
+}
+
+export function lerMedidasCampoCalibreB601(campo: HTMLElement): FormularioMedidasProjetil {
+  const celula = campo.closest<HTMLTableCellElement>('td, th');
+  const tabela = campo.closest<HTMLTableElement>('table');
+  const vazio: FormularioMedidasProjetil = { calibreRealMm: '', alturaMaximaMm: '', massaGramas: '' };
+  if (!celula || !tabela || celula.cellIndex <= 0) return vazio;
+  const linhas = Array.from(tabela.querySelectorAll<HTMLTableRowElement>('tbody tr'));
+  const ler = (chave: string) => {
+    const linha = linhas.find(item => normalizarRotuloMedida(item.firstElementChild?.textContent || '') === chave);
+    return textoPersistivelCelula(linha?.children[celula.cellIndex]);
+  };
+  return { massaGramas: ler('massa'), calibreRealMm: ler('diametro medio'), alturaMaximaMm: ler('altura') };
+}
+
+function identidadeCalibre(valor: string): string {
+  return valor.trim().replace(/\s+/g, ' ').toLocaleLowerCase('pt-BR');
+}
+
+function ordenarCalibresPorMedidas(campo: HTMLElement, referencias: readonly ProjetilReferencia[]): string[] | null {
+  const medidas = lerMedidasCampoCalibreB601(campo);
+  if (obterErroMedidasProjetil(medidas)) return null;
+  const consulta = {
+    calibreRealMm: converterMedidaProjetil(medidas.calibreRealMm),
+    alturaMaximaMm: converterMedidaProjetil(medidas.alturaMaximaMm),
+    massaGramas: converterMedidaProjetil(medidas.massaGramas),
+    medidaPrioritaria: 'massaGramas' as const,
+    perdaMaterial: false,
+    limiteProximidadePercentual: LIMITE_PROXIMIDADE_PERCENTUAL,
+    sigla: null,
+  };
+  if (consulta.calibreRealMm === null && consulta.alturaMaximaMm === null && consulta.massaGramas === null) return null;
+  const calibres = new Map<string, string>();
+  for (const resultado of consultarProjeteis([...referencias], consulta)) {
+    const calibre = resultado.projetil.calibre.trim();
+    const identidade = identidadeCalibre(calibre);
+    if (calibre && !calibres.has(identidade)) calibres.set(identidade, calibre);
+  }
+  return [...calibres.values()];
 }
 
 function obterDefinicaoCampo(campo: HTMLElement) {
@@ -43,8 +102,22 @@ function obterDefinicaoCampo(campo: HTMLElement) {
   return definicao?.fonte ? definicao : undefined;
 }
 
-function obterOpcoes(campo: HTMLElement, personalizados: readonly FormatoPersonalizado[], atual: string): { texto: string; valor: string }[] {
+function obterOpcoes(campo: HTMLElement, personalizados: readonly ProjetilReferencia[], atual: string, classificarCalibre: boolean): { texto: string; valor: string }[] {
   const definicao = obterDefinicaoCampo(campo);
+  const tipo = campo.getAttribute('data-b601-campo-projetil');
+  if (tipo === 'calibre_nominal_provavel' && classificarCalibre) {
+    const referencias = [...catalogoProjeteis, ...personalizados];
+    const ordenados = ordenarCalibresPorMedidas(campo, referencias);
+    const calibres = ordenados ?? [...new Map(referencias.map(item => [identidadeCalibre(item.calibre), item.calibre.trim()])).values()]
+      .filter(Boolean).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    if (atual && atual !== 'XXX' && atual !== 'Prejudicado' && !calibres.some(valor => identidadeCalibre(valor) === identidadeCalibre(atual))) {
+      calibres.push(atual);
+    }
+    const opcoes = calibres.map(valor => ({ texto: valor, valor }));
+    opcoes.push({ texto: 'Prejudicado', valor: 'Prejudicado' });
+    if (definicao) opcoes.push({ texto: 'Preenchimento manual…', valor: VALOR_MANUAL_TABELA_B601 });
+    return opcoes;
+  }
   if (definicao) return obterOpcoesCampoTabelaB601(definicao, personalizados, atual);
   const campoEstojo = campo.getAttribute('data-b601-campo-estojo');
   if (campoEstojo) {
@@ -53,7 +126,6 @@ function obterOpcoes(campo: HTMLElement, personalizados: readonly FormatoPersona
     return ['composicao', 'espoleta'].includes(campoEstojo)
       ? ['Latonado', 'Niquelado'].map(valor => ({ texto: valor, valor })) : [];
   }
-  const tipo = campo.getAttribute('data-b601-campo-projetil');
   if (tipo === 'tipo') return OPCOES_TIPO_PROJETIL_B601.map(opcao => ({ texto: opcao.valor, valor: opcao.valor }));
   if (tipo === 'tipo_raiamento') return OPCOES_TIPO_RAIAMENTO_B601.map(valor => ({ texto: valor, valor }));
   if (tipo === 'calibre_nominal_provavel') {
@@ -72,7 +144,7 @@ function obterOpcoes(campo: HTMLElement, personalizados: readonly FormatoPersona
     : opcoesOrigemColeta.map(opcao => ({ texto: opcao.label, valor: opcao.label }));
 }
 
-function atualizarLegendaFormatos(grupo: HTMLElement, personalizados: readonly FormatoPersonalizado[]): void {
+function atualizarLegendaFormatos(grupo: HTMLElement, personalizados: readonly ProjetilReferencia[]): void {
   const siglas = [...siglasPadrao, ...personalizados.flatMap(item => item.sigla ? [item.sigla] : [])];
   const opcoes = criarOpcoesFormatoProjetil(siglas, personalizados.map(item => item.tipo));
   const legendaAntiga = 'LEGENDA: CHOG = Chumbo Ogival; ETOG = Encamisado Total Ogival; EXPO = Expansivo Ponta Oca.';
@@ -118,7 +190,36 @@ function lerUnidades(grupo: HTMLElement): { pecaId: string; unidade: number }[] 
   }
 }
 
-export function prepararCamposProjeteisB601(raiz: HTMLElement, somenteLeitura = false, personalizados: readonly FormatoPersonalizado[] = []): void {
+function prepararAcaoIdentificacao(campo: HTMLElement, identificador: string, habilitar: boolean): void {
+  campo.querySelectorAll(seletorIdentificacao).forEach(botao => botao.remove());
+  if (!habilitar || campo.getAttribute('data-b601-campo-projetil') !== 'calibre_nominal_provavel') return;
+  const acionador = campo.querySelector<HTMLButtonElement>('[data-seletor-tabela-acionador]');
+  if (!acionador) return;
+  const botao = campo.ownerDocument.createElement('button');
+  botao.type = 'button';
+  botao.className = 'seletor-tabela-identificar-projetil';
+  botao.setAttribute('data-b601-identificar-projetil', 'true');
+  botao.setAttribute('data-mce-bogus', 'all');
+  botao.setAttribute('contenteditable', 'false');
+  botao.setAttribute('aria-label', `Abrir identificação de projéteis com as medidas de ${identificador}`);
+  botao.title = `Identificar ${identificador} pelas medidas da tabela`;
+  const medidas = lerMedidasCampoCalibreB601(campo);
+  botao.disabled = Object.values(medidas).every(valor => !valor.trim());
+  const icone = campo.ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  icone.setAttribute('viewBox', '0 0 24 24');
+  icone.setAttribute('aria-hidden', 'true');
+  const circulo = campo.ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'circle');
+  circulo.setAttribute('cx', '12');
+  circulo.setAttribute('cy', '12');
+  circulo.setAttribute('r', '3');
+  const caminho = campo.ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'path');
+  caminho.setAttribute('d', 'M12 2v4m0 12v4M2 12h4m12 0h4');
+  icone.append(circulo, caminho);
+  botao.append(icone);
+  acionador.after(botao);
+}
+
+export function prepararCamposProjeteisB601(raiz: HTMLElement, somenteLeitura = false, personalizados: readonly ProjetilReferencia[] = [], opcoes: OpcoesCamposProjeteisB601 = {}): void {
   raiz.querySelectorAll<HTMLElement>('[data-b601-grupo="105"]').forEach(grupo => {
     const versionado = grupo.hasAttribute('data-b601-campos-versao');
     const unidades = lerUnidades(grupo);
@@ -162,8 +263,11 @@ export function prepararCamposProjeteisB601(raiz: HTMLElement, somenteLeitura = 
   raiz.querySelectorAll<HTMLElement>(seletorLegenda).forEach(legenda => legenda.setAttribute('contenteditable', 'false'));
   raiz.querySelectorAll<HTMLElement>(seletorCampo).forEach(campo => {
     const definicao = obterDefinicaoCampo(campo);
-    if (!definicao && campo.closest('[data-b601-modelo-coleta="true"]')
-      && !['tipo', 'tipo_raiamento', 'calibre_nominal_provavel'].includes(campo.getAttribute('data-b601-campo-projetil') || '')) {
+    const campoAposentado = campo.hasAttribute('data-b601-campo')
+      && Boolean(campo.closest(`[data-b601-campos-versao="${VERSAO_CAMPOS_TABELA_B601}"]`));
+    const campoColetaNaoSuportado = Boolean(campo.closest('[data-b601-modelo-coleta="true"]'))
+      && !['tipo', 'tipo_raiamento', 'calibre_nominal_provavel'].includes(campo.getAttribute('data-b601-campo-projetil') || '');
+    if (!definicao && (campoAposentado || campoColetaNaoSuportado)) {
       limparApresentacaoSeletoresTabela(campo);
       campo.querySelectorAll(seletorControle).forEach(controle => controle.remove());
       campo.querySelectorAll(seletorTexto).forEach(texto => texto.replaceWith(...Array.from(texto.childNodes)));
@@ -198,11 +302,11 @@ export function prepararCamposProjeteisB601(raiz: HTMLElement, somenteLeitura = 
       campo.append(controle);
     }
     const chave = definicao?.chave || campoEstojo || tipo || 'origem';
-    const opcoes = normalizarOpcoesTabelaB601(obterOpcoes(campo, personalizados, atual), chave);
-    const assinaturaOpcoes = JSON.stringify(opcoes);
+    const opcoesCampo = normalizarOpcoesTabelaB601(obterOpcoes(campo, personalizados, atual, opcoes.habilitarClassificacao === true), chave);
+    const assinaturaOpcoes = JSON.stringify(opcoesCampo);
     if (controle.getAttribute('data-opcoes') !== assinaturaOpcoes) {
     controle.setAttribute('data-opcoes', assinaturaOpcoes);
-    controle.replaceChildren(...opcoes.map(opcao => {
+    controle.replaceChildren(...opcoesCampo.map(opcao => {
       const elemento = raiz.ownerDocument.createElement('option');
       elemento.value = opcao.valor;
       if (ehCalibre) elemento.label = opcao.texto;
@@ -219,6 +323,7 @@ export function prepararCamposProjeteisB601(raiz: HTMLElement, somenteLeitura = 
     controle.setAttribute('data-valor-livre', atual);
     const textoApresentado = normalizarOpcoesTabelaB601([{ valor: atual, texto: atual }], chave)[0]?.texto;
     prepararApresentacaoSeletorTabela(controle, textoApresentado || 'XXX');
+    prepararAcaoIdentificacao(campo, identificador, opcoes.habilitarClassificacao === true);
     campo.setAttribute('data-b601-campo-editavel', 'true');
     campo.setAttribute('contenteditable', 'false');
     for (const atributo of ['tabindex', 'role', 'title', 'aria-label']) campo.removeAttribute(atributo);
@@ -227,6 +332,7 @@ export function prepararCamposProjeteisB601(raiz: HTMLElement, somenteLeitura = 
 
 export function limparInteracaoCamposB601(raiz: ParentNode): void {
   limparApresentacaoSeletoresTabela(raiz);
+  raiz.querySelectorAll(seletorIdentificacao).forEach(botao => botao.remove());
   raiz.querySelectorAll(seletorLegenda).forEach(legenda => legenda.removeAttribute('contenteditable'));
   raiz.querySelectorAll<HTMLElement>(seletorCampo).forEach(campo => {
     campo.querySelectorAll(seletorControle).forEach(controle => controle.remove());
@@ -235,15 +341,22 @@ export function limparInteracaoCamposB601(raiz: ParentNode): void {
   });
 }
 
-export function registrarSeletoresCamposB601(editor: Editor, aoAlterar: (html: string) => void): void {
+export function registrarSeletoresCamposB601(
+  editor: Editor,
+  aoAlterar: (html: string) => void,
+  aoSolicitarIdentificacao?: (solicitacao: SolicitacaoIdentificacaoProjetilB601) => void,
+): void {
   const documento = editor.getDoc();
   const janela = documento.defaultView;
   if (!janela) return;
-  let personalizados: FormatoPersonalizado[] = [];
+  let personalizados: ProjetilReferencia[] = [];
   let carregouFormatos = false;
   let encerrado = false;
   const sincronizar = () => {
-    editor.undoManager.ignore(() => prepararCamposProjeteisB601(editor.getBody(), editorBloqueadoParaSeletores(editor), personalizados));
+    editor.undoManager.ignore(() => prepararCamposProjeteisB601(
+      editor.getBody(), editorBloqueadoParaSeletores(editor), personalizados,
+      { habilitarClassificacao: Boolean(aoSolicitarIdentificacao) },
+    ));
     if (!carregouFormatos && editor.getBody().querySelector('[data-b601-grupo="105"]')) {
       carregouFormatos = true;
       void carregarFormatosPersonalizados().then(formatos => {
@@ -258,6 +371,7 @@ export function registrarSeletoresCamposB601(editor: Editor, aoAlterar: (html: s
   const alterar = (evento: Event) => {
     const alvo = evento.target;
     if (!(alvo instanceof janela.HTMLSelectElement) || !alvo.matches(seletorControle)) return;
+    const preenchimentoRapido = evento instanceof janela.CustomEvent && evento.detail === 'preenchimento-rapido-b601';
     const campo = alvo.closest<HTMLElement>(seletorCampo);
     if (!campo || editorBloqueadoParaSeletores(editor) || !permiteEdicaoCampo(campo, editorBloqueadoParaSeletores(editor), campo.matches(SELETOR_SELECAO_PONTUAL))) return;
     evento.stopImmediatePropagation();
@@ -279,8 +393,10 @@ export function registrarSeletoresCamposB601(editor: Editor, aoAlterar: (html: s
         if (grupo && campo.getAttribute('data-b601-campo-projetil') === 'constituicao_formato') atualizarLegendaFormatos(grupo, personalizados);
       });
       sincronizar();
-      editor.nodeChanged();
-      aoAlterar(editor.getContent());
+      if (!preenchimentoRapido) {
+        editor.nodeChanged();
+        aoAlterar(editor.getContent());
+      }
     };
     if (definicao && valor === VALOR_MANUAL_TABELA_B601) {
       sincronizar();
@@ -308,24 +424,51 @@ export function registrarSeletoresCamposB601(editor: Editor, aoAlterar: (html: s
   const preservarInteracao = (evento: MouseEvent | KeyboardEvent) => {
     const alvo = evento.target;
     if (!(alvo instanceof janela.Element)) return;
+    if (alvo.closest(seletorIdentificacao)) {
+      evento.stopImmediatePropagation();
+      return;
+    }
     const controle = alvo.closest<HTMLSelectElement>(seletorControle);
     if (!controle) return;
     if (evento instanceof janela.KeyboardEvent && (evento.ctrlKey || evento.metaKey)) return;
     evento.stopImmediatePropagation();
   };
+  const solicitarIdentificacao = (evento: MouseEvent) => {
+    const alvo = evento.target;
+    const botao = alvo instanceof janela.Element ? alvo.closest<HTMLButtonElement>(seletorIdentificacao) : null;
+    if (!botao || botao.disabled || !aoSolicitarIdentificacao) return;
+    evento.preventDefault();
+    evento.stopImmediatePropagation();
+    const campo = botao.closest<HTMLElement>('[data-b601-campo-projetil="calibre_nominal_provavel"]');
+    if (!campo || !editor.getBody().contains(campo)) return;
+    aoSolicitarIdentificacao({
+      identificador: campo.getAttribute('data-b601-pq') || 'projétil',
+      medidas: lerMedidasCampoCalibreB601(campo),
+      restaurarFoco: () => {
+        if (!encerrado && editor.getBody().contains(botao)) botao.focus({ preventScroll: true });
+      },
+    });
+  };
+  const atualizarClassificacao = () => {
+    if (aoSolicitarIdentificacao) agendarSincronizacao();
+  };
   sincronizar();
   documento.addEventListener('change', alterar, true);
+  documento.addEventListener('click', solicitarIdentificacao, true);
   documento.addEventListener('mousedown', preservarInteracao, true);
   documento.addEventListener('click', preservarInteracao, true);
   documento.addEventListener('keydown', preservarInteracao, true);
-  registrarPreparacaoConteudo(editor, sincronizar);
+  const agendarSincronizacao = registrarPreparacaoConteudo(editor, sincronizar);
+  documento.addEventListener('input', atualizarClassificacao, true);
   editor.on('PreProcess', evento => limparInteracaoCamposB601(evento.node));
   editor.on('remove', () => {
     encerrado = true;
     documento.removeEventListener('change', alterar, true);
+    documento.removeEventListener('click', solicitarIdentificacao, true);
     documento.removeEventListener('mousedown', preservarInteracao, true);
     documento.removeEventListener('click', preservarInteracao, true);
     documento.removeEventListener('keydown', preservarInteracao, true);
+    documento.removeEventListener('input', atualizarClassificacao, true);
     editor.off('ConteudoInterativoAlterado SetContent LoadContent Undo Redo SwitchMode', sincronizar);
   });
 }

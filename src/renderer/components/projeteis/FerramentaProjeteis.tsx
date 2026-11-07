@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { BookOpen, ChevronDown, ChevronUp, Medal, MoveVertical, RotateCcw, Ruler, Weight, type LucideIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -20,29 +20,15 @@ import { SiglaProjetil } from '@/components/projeteis/SiglaProjetil';
 import { RaiamentoProjetil } from '@/components/projeteis/RaiamentoProjetil';
 import { catalogoProjeteis } from '@shared/catalogos/projeteis.catalogo';
 import { siglasProjeteis } from '@shared/catalogos/siglas-projeteis';
-import { consultarProjeteis } from '@shared/utils/consulta-projeteis';
-import type { ComparacaoMedida, ConsultaProjetil, MedidaProjetil, ProjetilPersonalizadoEntrada, ProjetilReferencia, ResultadoProjetil } from '@shared/types/projetil.types';
+import { consultarProjeteis, converterMedidaProjetil, obterErroMedidasProjetil, referenciaProjetilPersonalizadaValida } from '@shared/utils/consulta-projeteis';
+import type { ComparacaoMedida, ConsultaProjetil, FormularioMedidasProjetil, MedidaProjetil, ProjetilPersonalizadoEntrada, ProjetilReferencia, ResultadoProjetil } from '@shared/types/projetil.types';
 
-type Formulario = Record<MedidaProjetil, string>;
-const formularioVazio: Formulario = { calibreRealMm: '', alturaMaximaMm: '', massaGramas: '' };
+const formularioVazio: FormularioMedidasProjetil = { calibreRealMm: '', alturaMaximaMm: '', massaGramas: '' };
 const campos: { chave: MedidaProjetil; titulo: string; unidade: string; icone: LucideIcon }[] = [
   { chave: 'calibreRealMm', titulo: 'Calibre real médio', unidade: 'mm', icone: Ruler },
   { chave: 'alturaMaximaMm', titulo: 'Altura máxima', unidade: 'mm', icone: MoveVertical },
   { chave: 'massaGramas', titulo: 'Massa', unidade: 'g', icone: Weight },
 ];
-
-function numero(valor: string): number | null {
-  if (!valor.trim()) return null;
-  const convertido = Number(valor.trim().replace(',', '.'));
-  return Number.isFinite(convertido) ? convertido : NaN;
-}
-
-function erroMedidas(formulario: Formulario): string | null {
-  return campos.some(campo => {
-    const valor = numero(formulario[campo.chave]);
-    return valor !== null && (!Number.isFinite(valor) || valor <= 0);
-  }) ? 'Use apenas medidas positivas.' : null;
-}
 
 function formatar(valor: number): string { return valor.toLocaleString('pt-BR', { maximumFractionDigits: 4 }); }
 
@@ -114,25 +100,19 @@ function CartaoCandidato({ resultado, posicao, perdaMassa, destaque = false }: {
   </CardContent></Card>;
 }
 
-function referenciaValida(valor: unknown): valor is ProjetilReferencia {
-  if (!valor || typeof valor !== 'object' || Array.isArray(valor)) return false;
-  const dado = valor as Record<string, unknown>;
-  return typeof dado.id === 'string' && typeof dado.calibre === 'string' && typeof dado.tipo === 'string'
-    && dado.situacao === 'personalizada' && typeof dado.massaGramas === 'number' && Number.isFinite(dado.massaGramas) && dado.massaGramas > 0
-    && (['calibreRealMinMm', 'calibreRealMaxMm', 'alturaMinMm', 'alturaMaxMm'] as const)
-      .every(chave => dado[chave] === null || (typeof dado[chave] === 'number' && Number.isFinite(dado[chave]) && dado[chave] > 0));
-}
-
 interface FerramentaProjeteisProps {
   dialogo?: {
     aberto: boolean;
     aoAlterarAbertura: (aberto: boolean) => void;
     aoFechar: () => void;
+    preenchimento?: { id: number; medidas: FormularioMedidasProjetil };
   };
 }
 
 export function FerramentaProjeteis({ dialogo }: FerramentaProjeteisProps) {
-  const [consultaForm, setConsultaForm] = useState<Formulario>(formularioVazio);
+  const preenchimentoRef = useRef(dialogo?.preenchimento);
+  preenchimentoRef.current = dialogo?.preenchimento;
+  const [consultaForm, setConsultaForm] = useState<FormularioMedidasProjetil>(formularioVazio);
   const [medidaPrioritaria, setMedidaPrioritaria] = useState<MedidaProjetil>('massaGramas');
   const [perdaMaterial, setPerdaMaterial] = useState(false);
   const [limiteProximidade, setLimiteProximidade] = useState(LIMITE_PROXIMIDADE_PERCENTUAL);
@@ -143,22 +123,33 @@ export function FerramentaProjeteis({ dialogo }: FerramentaProjeteisProps) {
   const [personalizados, setPersonalizados] = useState<ProjetilReferencia[]>([]);
   const [dialogoAberto, setDialogoAberto] = useState(false);
   const [editandoId, setEditandoId] = useState<string | null>(null);
-  const [cadastroForm, setCadastroForm] = useState<Formulario & { calibre: string; tipo: string }>({ ...formularioVazio, calibre: '', tipo: '' });
+  const [cadastroForm, setCadastroForm] = useState<FormularioMedidasProjetil & { calibre: string; tipo: string }>({ ...formularioVazio, calibre: '', tipo: '' });
   const [salvando, setSalvando] = useState(false);
 
   const carregarPersonalizados = useCallback(async () => {
     try {
       const resposta = await window.ipcAPI.projetil.listarPersonalizados();
       if (!resposta.success || !Array.isArray(resposta.data)) throw new Error(resposta.error || 'Falha ao carregar projéteis personalizados.');
-      setPersonalizados(resposta.data.filter(referenciaValida));
+      setPersonalizados(resposta.data.filter(referenciaProjetilPersonalizadaValida));
     } catch (erro) { toast.error(erro instanceof Error ? erro.message : 'Falha ao carregar projéteis personalizados.'); }
   }, []);
   useEffect(() => { void carregarPersonalizados(); }, [carregarPersonalizados]);
+  useEffect(() => {
+    const preenchimento = preenchimentoRef.current;
+    if (!dialogo?.aberto || !preenchimento) return;
+    setConsultaForm({ ...preenchimento.medidas });
+    setMedidaPrioritaria('massaGramas');
+    setPerdaMaterial(false);
+    setLimiteProximidade(LIMITE_PROXIMIDADE_PERCENTUAL);
+    setTextoProximidade('5,00');
+    setSigla('todas');
+    setMostrarMais(false);
+  }, [dialogo?.aberto, dialogo?.preenchimento?.id]);
 
-  const erroConsulta = erroMedidas(consultaForm);
+  const erroConsulta = obterErroMedidasProjetil(consultaForm);
   const consulta = useMemo<ConsultaProjetil>(() => ({
-    calibreRealMm: numero(consultaForm.calibreRealMm), alturaMaximaMm: numero(consultaForm.alturaMaximaMm),
-    massaGramas: numero(consultaForm.massaGramas), medidaPrioritaria, perdaMaterial, limiteProximidadePercentual: limiteProximidade,
+    calibreRealMm: converterMedidaProjetil(consultaForm.calibreRealMm), alturaMaximaMm: converterMedidaProjetil(consultaForm.alturaMaximaMm),
+    massaGramas: converterMedidaProjetil(consultaForm.massaGramas), medidaPrioritaria, perdaMaterial, limiteProximidadePercentual: limiteProximidade,
     sigla: sigla === 'todas' ? null : sigla,
   }), [consultaForm, medidaPrioritaria, perdaMaterial, sigla, limiteProximidade]);
   const possuiConsulta = campos.some(campo => consulta[campo.chave] !== null) || consulta.sigla !== null;
@@ -195,12 +186,12 @@ export function FerramentaProjeteis({ dialogo }: FerramentaProjeteisProps) {
   }
 
   async function salvarCadastro() {
-    const erro = erroMedidas(cadastroForm);
+    const erro = obterErroMedidasProjetil(cadastroForm);
     if (erro) { toast.error(erro); return; }
     const dados: ProjetilPersonalizadoEntrada = {
       calibre: cadastroForm.calibre.trim(), tipo: cadastroForm.tipo.trim(),
-      calibreRealMm: numero(cadastroForm.calibreRealMm), alturaMaximaMm: numero(cadastroForm.alturaMaximaMm),
-      massaGramas: numero(cadastroForm.massaGramas) ?? 0,
+      calibreRealMm: converterMedidaProjetil(cadastroForm.calibreRealMm), alturaMaximaMm: converterMedidaProjetil(cadastroForm.alturaMaximaMm),
+      massaGramas: converterMedidaProjetil(cadastroForm.massaGramas) ?? 0,
     };
     setSalvando(true);
     try {

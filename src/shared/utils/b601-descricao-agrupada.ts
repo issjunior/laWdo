@@ -3,7 +3,7 @@ import { projetarB601ParaLaudo } from './b601-pecas-projecao.js'
 import type { PecaBalistica } from '../types/pecas-balistica.types.js'
 import { criarHtmlCampoReservado } from './campo-reservado.js'
 import { obterTipoProjetilB601 } from '../catalogos/b601.catalogo.js'
-import { codigoColetaPorOrigem } from '../gdl/reps-mesmo-caso.js'
+import { categoriaColetaPorOrigem } from '../gdl/reps-mesmo-caso.js'
 import { criarHtmlFigura, URL_FIGURA_DUMMY } from '../figura/html.js'
 
 export type TipoDescricaoB601 = '105' | '101'
@@ -118,13 +118,13 @@ export function gerarDescricaoColetaB601(dados: unknown, tipo: TipoDescricaoB601
   const raiamentos = new Map(projecao.pecas.map(peca => [peca.idLocal, peca.campos.tipo_raiamento || '']))
   const calibres = new Map(projecao.pecas.map(peca => [peca.idLocal, peca.campos.calibre_nominal_provavel || '']))
   const origens = [...new Set(itens.map(item => item.origem))].sort((a, b) => {
-    const prioridade = (origem: string) => codigoColetaPorOrigem(origem) === 'M110' ? 0 : codigoColetaPorOrigem(origem) === 'T002' ? 1 : 2
+    const prioridade = (origem: string) => categoriaColetaPorOrigem(origem) === 'local' ? 0 : categoriaColetaPorOrigem(origem) === 'necropsia' ? 1 : 2
     return prioridade(a) - prioridade(b)
   })
   let inicio = 0
   const grupos = tipo === '105' ? origens.map(origem => {
     const grupo = itens.filter(item => item.origem === origem)
-    const titulo = codigoColetaPorOrigem(origem) === 'M110' ? 'LOCAL' : codigoColetaPorOrigem(origem) === 'T002' ? 'NECRÓPSIA' : origem || 'XXX'
+    const titulo = categoriaColetaPorOrigem(origem) === 'local' ? 'LOCAL' : categoriaColetaPorOrigem(origem) === 'necropsia' ? 'NECRÓPSIA' : origem || 'XXX'
     const html = montarDescricao(grupo, tipo, dono, tipos, { origem: titulo, inicio }, raiamentos, calibres) + criarFotosColetaB601(`${dono}-${inicio}`, titulo, fotosPorOrigem)
     inicio += grupo.reduce((total, item) => total + item.quantidade, 0)
     return html

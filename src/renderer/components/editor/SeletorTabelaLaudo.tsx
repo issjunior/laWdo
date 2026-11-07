@@ -44,7 +44,13 @@ function ComboboxTabelaLaudo({ sessao }: { sessao: SessaoSeletorTabela }) {
           }}
           onKeyDown={evento => {
             if (evento.nativeEvent.isComposing) return;
-            if (evento.key === 'Escape') {
+            const prejudicado = sessao.aceitaTextoLivre && evento.ctrlKey && evento.shiftKey && !evento.altKey
+              && !evento.metaKey && evento.key.toLowerCase() === 'p';
+            const ausente = sessao.aceitaTextoLivre && evento.ctrlKey && evento.shiftKey && !evento.altKey
+              && !evento.metaKey && evento.key.toLowerCase() === 'a';
+            if (prejudicado || ausente) {
+              evento.preventDefault(); evento.stopPropagation(); confirmar(ausente ? 'Ausente' : 'Prejudicado', true);
+            } else if (evento.key === 'Escape') {
               evento.preventDefault(); evento.stopPropagation(); encerrando.current = true; sessao.fechar();
             } else if (evento.key === 'Enter') {
               evento.preventDefault(); confirmar(opcoes[indiceAtivo]?.valor ?? texto, indiceAtivo >= 0);
