@@ -16,6 +16,7 @@ import { DataTable } from '@/components/data-table/data-table';
 import type { DefinicaoColunaTabela } from '@/components/data-table/data-table-features';
 import { DataTableColumnHeader } from '@/components/data-table/data-table-column-header';
 import { toast } from 'sonner';
+import { prepararHtmlPreviaSeguro } from '@/lib/html-previa-segura';
 
 interface CategoriaArvore {
   id: string; chave: string; label: string; cor?: string; icone?: string;
@@ -409,7 +410,7 @@ const PecasPage: React.FC = () => {
               {formConteudo && (
                 <div className="space-y-2">
                   <Label>Prévia</Label>
-                  <div className="border rounded-md p-4 prose prose-sm max-w-none dark:prose-invert" dangerouslySetInnerHTML={{ __html: formConteudo }} />
+                  <div className="border rounded-md p-4 prose prose-sm max-w-none dark:prose-invert" dangerouslySetInnerHTML={{ __html: prepararHtmlPreviaSeguro(formConteudo) }} />
                 </div>
               )}
             </div>

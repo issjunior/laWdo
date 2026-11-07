@@ -34,13 +34,14 @@ function preparar(html = grupo, confirmar = vi.fn(async () => true), somenteLeit
   const aoAlterar = vi.fn(); const aoRestaurar = vi.fn();
   const laudo = vi.fn().mockResolvedValue({ success: true, data: { rep_id: 'rep' } });
   const rep = vi.fn().mockResolvedValue({ success: true, data: { campos_especificos: JSON.stringify({ b601: dados }) } });
-  Object.assign(window.ipcAPI, { laudo: { findById: laudo }, rep: { findById: rep } });
+  const obterBloco = vi.fn().mockResolvedValue({ success: true, data: '<div class="cond-bloco" data-cond-bloco="teste" data-cond-origem="origem-1"><p>Texto do modelo</p></div>' });
+  Object.assign(window.ipcAPI, { laudo: { findById: laudo, obterBlocoCondicionalOriginal: obterBloco }, rep: { findById: rep } });
   registrarConteudoInterativo(editor as unknown as Editor, { laudoId: 'laudo', confirmar, aoAlterar, aoRestaurar });
   const encerrar = () => eventos.get('remove')?.forEach(acao => acao());
   encerramentos.push(encerrar);
   const alvo = raiz.firstElementChild as HTMLElement;
   const botao = (acao: string, bloco = alvo) => bloco.querySelector<HTMLButtonElement>(`:scope > [data-controles-conteudo] [data-acao-conteudo="${acao}"]`)!;
-  return { raiz, alvo, editor, botao, laudo, rep, aoAlterar, aoRestaurar, confirmar, encerrar };
+  return { raiz, alvo, editor, botao, laudo, rep, obterBloco, aoAlterar, aoRestaurar, confirmar, encerrar };
 }
 
 afterEach(() => { encerramentos.splice(0).forEach(encerrar => encerrar()); document.body.innerHTML = ''; vi.clearAllMocks(); });
@@ -109,7 +110,8 @@ describe('ações de conteúdo protegido', () => {
   it('bloqueia cliques concorrentes enquanto aguarda confirmação', async () => {
     const confirmacao = pendencia<boolean>(); const confirmar = vi.fn(() => confirmacao.promessa);
     const sessao = preparar(grupo, confirmar);
-    sessao.botao('restaurar').click(); sessao.botao('restaurar').click(); sessao.botao('editar').click();
+    sessao.botao('restaurar').click(); sessao.botao('restaurar').click();
+    expect(sessao.alvo.querySelector('[data-acao-conteudo="editar"]')).toBeNull();
     expect(confirmar).toHaveBeenCalledTimes(1);
     expect(sessao.editor.undoManager.transact).not.toHaveBeenCalled();
     confirmacao.resolver(true); await aguardarSucesso();
@@ -124,22 +126,39 @@ describe('ações de conteúdo protegido', () => {
     expect(sessao.editor.undoManager.transact).toHaveBeenCalledTimes(1);
   });
 
+  it('restaura somente a ocorrência vinculada ao modelo', async () => {
+    const sessao = preparar('<div class="cond-bloco" data-cond-bloco="teste" data-cond-origem="origem-1" data-cond-instancia="instancia-1"><p>Texto alterado</p></div><div class="cond-bloco" data-cond-bloco="teste" data-cond-origem="origem-2"><p>Vizinho</p></div>');
+    sessao.botao('restaurar').click(); await aguardarSucesso();
+    expect(sessao.obterBloco).toHaveBeenCalledExactlyOnceWith('laudo', 'origem-1');
+    expect(sessao.raiz.firstElementChild?.textContent).toContain('Texto do modelo');
+    expect(sessao.raiz.firstElementChild?.getAttribute('data-cond-instancia')).toBe('instancia-1');
+    expect(sessao.raiz.lastElementChild?.textContent).toContain('Vizinho');
+    expect(sessao.editor.undoManager.transact).toHaveBeenCalledTimes(1);
+  });
+
+  it('mantém restauração indisponível em bloco manual ou antigo sem vínculo', () => {
+    const sessao = preparar('<div class="cond-bloco" data-cond-bloco="teste"><p>Texto local</p></div>');
+    expect(sessao.botao('restaurar')).toBeDisabled();
+    sessao.botao('restaurar').click();
+    expect(sessao.obterBloco).not.toHaveBeenCalled();
+  });
+
   it('mantém ações indisponíveis em somente leitura e não permite excluir descrições', () => {
     const leitura = preparar(grupo, vi.fn(async () => true), true);
-    for (const acao of ['editar', 'restaurar', 'excluir']) { expect(leitura.botao(acao)).toBeDisabled(); leitura.botao(acao).click(); }
+    expect(leitura.alvo.querySelector('[data-acao-conteudo="editar"]')).toBeNull();
+    for (const acao of ['restaurar', 'excluir']) { expect(leitura.botao(acao)).toBeDisabled(); leitura.botao(acao).click(); }
     expect(leitura.confirmar).not.toHaveBeenCalled(); expect(leitura.aoAlterar).not.toHaveBeenCalled();
     const edicao = preparar(); expect(edicao.botao('excluir')).toBeDisabled();
   });
 
-  it('só libera campo comum quando todos os blocos ancestrais estão em edição', () => {
+  it('libera campos dos blocos aninhados diretamente e mantém o modo somente leitura', () => {
     const sessao = preparar(`<div class="cond-bloco" data-cond-bloco="teste">${grupo}</div>`);
     const interno = sessao.alvo.querySelector<HTMLElement>('[data-b601-grupo]')!;
     const campo = interno.querySelector('p')!;
-    expect(sessao.botao('editar', interno)).toBeDisabled();
-    expect(permiteEdicaoCampo(campo, false)).toBe(false);
-    sessao.botao('editar').click(); sessao.botao('editar', interno).click();
+    expect(interno.querySelector('[data-acao-conteudo="editar"]')).toBeNull();
+    expect(sessao.alvo).toHaveAttribute('contenteditable', 'true');
+    expect(interno).toHaveAttribute('contenteditable', 'true');
     expect(permiteEdicaoCampo(campo, false)).toBe(true);
-    sessao.botao('editar').click(); expect(permiteEdicaoCampo(campo, false)).toBe(false);
     expect(permiteEdicaoCampo(campo, true, true)).toBe(false);
   });
 

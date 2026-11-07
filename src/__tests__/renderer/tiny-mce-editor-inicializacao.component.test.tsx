@@ -6,7 +6,11 @@ import { TinyMceEditor } from '@/components/editor/TinyMceEditor';
 interface PropriedadesEditorSimulado {
   onEditorChange: (html: string) => void;
   onInit?: unknown;
-  init: { init_instance_callback: (editor: EditorTinyMce) => void; setup: (editor: EditorTinyMce) => void };
+  init: {
+    init_instance_callback: (editor: EditorTinyMce) => void;
+    setup: (editor: EditorTinyMce) => void;
+    object_resizing?: boolean | string;
+  };
 }
 
 const estado = vi.hoisted(() => ({ propriedades: null as PropriedadesEditorSimulado | null }));
@@ -36,8 +40,10 @@ describe('inicialização do editor TinyMCE', () => {
     const aoClicarDummy = vi.fn();
     const aoAlterar = vi.fn();
     const aoBuscar = vi.fn();
-    const { rerender } = render(<TinyMceEditor onChange={aoAlterar} onFiguraRealClick={aoClicarReal} onDummyFigureClick={aoClicarDummy} onSolicitarBusca={aoBuscar} />);
+    const aoSalvar = vi.fn();
+    const { rerender } = render(<TinyMceEditor onChange={aoAlterar} onFiguraRealClick={aoClicarReal} onDummyFigureClick={aoClicarDummy} onSolicitarBusca={aoBuscar} onSolicitarSalvar={aoSalvar} />);
     await waitFor(() => expect(estado.propriedades).not.toBeNull());
+    expect(estado.propriedades!.init.object_resizing).toBe('img:not([data-quadro-figura])');
     const documento = document.implementation.createHTMLDocument();
     documento.body.innerHTML = '<figure class="laudo-figure" data-image-id="real"><img src="real.png"><figcaption>Legenda</figcaption></figure><figure class="laudo-figure" data-dummy="true" data-image-id="dummy"><img src="dummy.png"></figure><img src="outra.png">';
     const eventos = new Map<string, Array<() => void>>();
@@ -54,10 +60,16 @@ describe('inicialização do editor TinyMCE', () => {
     act(() => documento.dispatchEvent(atalhoBusca));
     expect(atalhoBusca.defaultPrevented).toBe(true);
     expect(aoBuscar).toHaveBeenCalledTimes(1);
+    const atalhoSalvar = new KeyboardEvent('keydown', { key: 's', ctrlKey: true, bubbles: true, cancelable: true });
+    act(() => documento.dispatchEvent(atalhoSalvar));
+    expect(atalhoSalvar.defaultPrevented).toBe(true);
+    expect(aoSalvar).toHaveBeenCalledTimes(1);
     const dialogo = document.createElement('div');
     dialogo.setAttribute('role', 'dialog'); document.body.append(dialogo);
     act(() => documento.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', ctrlKey: true })));
     expect(aoBuscar).toHaveBeenCalledTimes(1);
+    act(() => documento.dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true })));
+    expect(aoSalvar).toHaveBeenCalledTimes(1);
     dialogo.remove();
     const clicar = (elemento: Element) => fireEvent(elemento, new MouseEvent('click', { bubbles: true }));
     clicar(documento.querySelector('figcaption')!);

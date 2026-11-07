@@ -9,7 +9,9 @@ import { obterEstadoTemplatesIntegrados } from '../../templates/integrados/sincr
 import { ErroGeracaoPdf, gerarPdfPreparado } from '../../services/pdf-prontidao.service.js';
 import { criarOpcoesPdf } from '../../services/pdf-layout.js';
 import { ESTILOS_TABELAS_PLACEHOLDER_PDF } from '../../services/pdf-tabelas.js';
+import { ESTILOS_SECOES_PDF, removerEspacadoresEntreSecoes } from '../../services/pdf-secoes.js';
 import { sanitizarHtmlImportacao } from '../../services/importacao/sanitizacao.js';
+import { validarHtmlSeguro } from '../../services/html-seguro.service.js';
 
 const mensagemErro = (error: unknown): string =>
   error instanceof Error ? error.message : 'Erro desconhecido';
@@ -110,6 +112,7 @@ export const registerTemplateHandlers = (): void => {
       if (!ehTemplateCompleto(dados)) {
         return { success: false, error: 'Dados do template inválidos' };
       }
+      dados.secoes.forEach(secao => { if (secao.conteudo) validarHtmlSeguro(secao.conteudo, `O conteúdo da seção ${secao.nome}`); });
       const template = await templateService.salvarCompleto({
         ...dados,
         nome: sanitizeInput(dados.nome.trim()),
@@ -237,6 +240,7 @@ export const registerTemplateHandlers = (): void => {
       }
       if (data.ocultar_titulo !== undefined && typeof data.ocultar_titulo !== 'boolean') throw new Error('Ocultação do título inválida');
       if (data.contar_na_numeracao !== undefined && typeof data.contar_na_numeracao !== 'boolean') throw new Error('Participação na numeração inválida');
+      if (data.conteudo) validarHtmlSeguro(data.conteudo, 'O conteúdo da seção');
       const secao = await templateService.createSecao({
         template_id: data.template_id,
         nome: sanitizeInput(data.nome.trim()),
@@ -263,7 +267,12 @@ export const registerTemplateHandlers = (): void => {
       if (data.nome !== undefined) updateData.nome = sanitizeInput(data.nome);
       if (data.ordem !== undefined) updateData.ordem = data.ordem;
       if (data.parent_id !== undefined) updateData.parent_id = data.parent_id;
-      if (data.conteudo !== undefined) updateData.conteudo = data.conteudo;
+      if (typeof data.conteudo === 'string') {
+        validarHtmlSeguro(data.conteudo, 'O conteúdo da seção');
+        updateData.conteudo = data.conteudo;
+      } else if (data.conteudo === null) {
+        updateData.conteudo = null;
+      }
       if (data.condicao !== undefined) updateData.condicao = data.condicao;
       if (data.repetir_para !== undefined) updateData.repetir_para = data.repetir_para;
       if (data.ocultar_titulo !== undefined && typeof data.ocultar_titulo !== 'boolean') throw new Error('Ocultação do título inválida');
@@ -330,6 +339,7 @@ export const registerTemplateHandlers = (): void => {
   h1 { font-size: 20px; margin-bottom: 12px; }
   h2 { font-size: 16px; margin-top: 28px; margin-bottom: 10px; border-bottom: 1px solid #ccc; padding-bottom: 4px; }
   h3 { font-size: 14px; margin-top: 20px; margin-bottom: 8px; }
+  ${ESTILOS_SECOES_PDF}
   p { margin-bottom: 8px; }
   p:not(table p):not(figure p) { text-align: justify; }
   table { border-collapse: collapse; width: 100%; margin: 12px 0; }
@@ -347,7 +357,7 @@ export const registerTemplateHandlers = (): void => {
   .campo-reservado { background-color: rgba(255,193,7,0.2); color: #b45309; border-bottom: 2px dotted #f59e0b; border-radius: 4px; padding: 2px 6px; font-weight: 500; }
 </style>
 </head>
-<body>${html}</body>
+<body>${removerEspacadoresEntreSecoes(html)}</body>
 </html>`;
 
       const printOptions = criarOpcoesPdf(margins, headerTemplate);

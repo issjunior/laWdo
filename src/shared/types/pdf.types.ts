@@ -1,3 +1,5 @@
+import type { CodigoFalhaImagemImpressao } from './imagem-laudo.types.js';
+
 export type EtapaFalhaPdf = 'carregamento' | 'recursos' | 'impressao';
 export type CodigoFalhaPdf = 'IMAGEM_INDISPONIVEL' | 'FONTE_INDISPONIVEL' | 'CABECALHO_INDISPONIVEL' | 'TEMPO_EXCEDIDO' | 'FALHA_PDF';
 
@@ -7,4 +9,5 @@ export interface FalhaPdf {
   tentarNovamente: boolean;
   posicaoImagem?: number;
   origem?: 'corpo' | 'cabecalho';
+  motivoImagem?: CodigoFalhaImagemImpressao;
 }

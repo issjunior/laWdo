@@ -61,20 +61,13 @@ O diálogo do Header dá destaque à versão atual, disponível e que será inst
 
 ## Indicador da conexão GDL
 
-`Header.tsx` monta `IndicadorConexaoGdl.tsx` no grupo direito, antes do seletor de tema, com chave pela identidade do usuário. O botão mantém o texto GDL e um ícone em largura fixa, sem bloquear ações nem emitir notificações automáticas. Usa wrappers locais de Tooltip, Popover e Button, classes Tailwind, temas claro/escuro, nome acessível e foco visível. Como botão dentro de `barra-titulo-janela`, preserva a regra existente de `no-drag` dos controles da barra de título.
+`Header.tsx` monta `IndicadorConexaoGdl.tsx` antes do seletor de tema. O botão GDL tem largura fixa, nome acessível, foco visível e no-drag da barra de título. Header, Dashboard e API GDL consomem o único `ConexaoGdlProvider` da sessão autenticada. Não duplicar regra visual: `apresentarConexaoGdl()`, em `src/shared/gdl/conexao.ts`, define mensagem, orientação e aparência.
 
-| Aparência | Condição |
-|---|---|
-| Cinza, interrogação | Sem observação de rede, rede desconhecida ou observação com mais de 120 segundos. |
-| Vermelho, conexão interrompida | Evidência recente de rede indisponível. |
-| Verde, confirmação | Rede acessível recente, credenciais validadas e nenhuma atenção web conhecida; a validação pode ser anterior. |
-| Âmbar, alerta | Rede acessível recente com credenciais ausentes, pendentes ou rejeitadas, ou falha web conhecida. |
+Cinza indica ausência de evidência; azul confirma somente alcance de rede; verde exige recuperação autenticada concluída. Âmbar sinaliza cadastro/rejeição ou falha de dados, e vermelho indica indisponibilidade de rede/timeout conforme a precedência compartilhada. Não há expiração visual automática em 120 segundos, e validação antiga de credenciais não torna o ícone verde sozinha.
 
-Cor, formato e descrição do ícone distinguem os estados. A aparência é derivada por `aparenciaConexaoGdl`, em `src/shared/gdl/conexao.ts`; não duplicar essa regra no header. Durante checagem, mantém o estado anterior e mostra andamento no painel.
+O popover apresenta resumo, orientação e último teste de rede com horário/duração; explica que o teste não valida credenciais nem recuperação de dados. **Testar Conexão** fica desabilitado durante a checagem. **Configurar GDL** fecha o popover e navega para `/gdl-config`. Só Homologação mostra badge Ambiente de testes. Usa wrappers locais, Tailwind e temas claro/escuro, sem bloquear consultas nem emitir alertas automáticos. Ciclo, contrato e guardas ficam em [API GDL](../08%20gdl/api_gdl.md#estado-compartilhado-da-conexão).
 
-Ao clicar, abre um painel compacto com ambiente, disponibilidade, credenciais da API, datas da validação/checagem e situação do acesso web. `Verificar agora` fica desabilitado enquanto verifica e checa somente rede; `Abrir API GDL` fecha o painel e navega para `/gdl-config`. O painel explica que validação anterior não garante permissão para toda operação. O serviço, IPC, ciclo de foco e limites estão em `spec/08 gdl/api_gdl.md`.
-
-`conexao-gdl.test.tsx` cobre painel, ações, estados e ciclo do monitor; `header-atualizacao.component.test.tsx` renderiza o header com roteador e API GDL simulada para preservar a cobertura dos controles de atualização.
+`conexao-gdl.test.tsx` cobre painel, ações e monitor compartilhado; `header-atualizacao.component.test.tsx` mantém o header sob provider e API simulada.
 
 ## Preferências visuais de imagens
 
@@ -82,4 +75,10 @@ O menu de configurações inclui **Imagens**, rota /imagens. A página usa cart�
 
 A página Imagens apresenta opções por grupo da maior resolução para a menor, em linhas compactas, com comparação demonstrativa em SVG ao lado e destaque da seleção. Em largura estreita, a comparação fica abaixo e reduzida. Original na IA usa contorno tracejado de tamanho variável. O desenho não estima qualidade ou MB; cada grupo mantém leitura, falha e salvamento próprios.
 
-O popover GDL destaca Produção com badge destructive e Homologação com secondary; rede acessível recente recebe badge verde. Esses badges apresentam o ambiente/estado existente, sem mudar a regra compartilhada de disponibilidade nem executar operação de negócio.
+O indicador GDL segue o resumo compartilhado descrito acima; somente o ambiente de testes tem badge próprio, sem executar operação de negócio.
+
+## Paginação fixa e seletores do documento
+
+`DataTable` aceita `tamanhoPaginaFixo`, inicializa a paginação com esse tamanho e oculta Itens/pág; sem a prop conserva o seletor habitual. `chaveReinicioPagina` leva à primeira página quando o valor externo muda. O Dashboard GDL usa essas props para 20 itens e busca por número, sem alterar o contrato das outras tabelas.
+
+Os seletores das tabelas de laudo usam `SeletorTabelaLaudo` como combobox pesquisável externo ao iframe, com entrada sobre a âncora, lista navegável por setas, Enter e Esc. A apresentação atual é comum a opções de coleta, projétil e estojo; a aplicação e validação ficam nas regras do campo. Fonte, persistência e compatibilidade estão em [B-601](../03%20laudo/b601.md#contrato-dos-quadros-versionados).

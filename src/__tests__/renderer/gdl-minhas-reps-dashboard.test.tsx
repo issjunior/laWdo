@@ -1,4 +1,9 @@
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { IndicadorConexaoGdl } from '@/components/layout/IndicadorConexaoGdl';
+import type { ReactNode } from 'react';
+import type { RenderOptions } from '@testing-library/react';
+import type { EstadoConexaoGdl } from '@shared/gdl/conexao';
+import { ConexaoGdlProvider } from '@/contexts/ConexaoGdlContext';
+import { act, fireEvent, render as renderOriginal, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, useLocation } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AvisosReiteracaoProvider } from '@/contexts/AvisosReiteracaoContext';
@@ -9,6 +14,10 @@ const ipcApiOriginal = window.ipcAPI;
 const obterMinhasRepsCache = vi.fn();
 const atualizarMinhasRepsCache = vi.fn();
 const obterPreferenciaListagem = vi.fn();
+const obterEstadoConexao = vi.fn();
+let notificarConexao: (estado: EstadoConexaoGdl) => void;
+const estadoConexao = { ambiente: 'producao', revisao: 0, versaoEstado: 0, rede: 'desconhecida', redeVerificadaEm: null,
+  credenciais: 'pendentes', credenciaisValidadasEm: null, web: 'desconhecida', verificando: false };
 const snapshot = { atualizadoEm: '2026-10-01T12:00:00.000Z', reps: [
   { idGdl: 8, numero: '123', ano: '2026', status: 'Aberta e Distribuída', naturezaExame: 'EXAME', naturezaExameComCodigo: 'B601 - EXAME', dataDesignacao: '2026-10-01T10:00', quantidadeFotos: 4 },
 ] };
@@ -25,14 +34,92 @@ beforeEach(() => {
   HTMLElement.prototype.hasPointerCapture = () => false;
   HTMLElement.prototype.setPointerCapture = () => undefined;
   HTMLElement.prototype.releasePointerCapture = () => undefined;
+  obterEstadoConexao.mockReset().mockResolvedValue({ success: true, data: estadoConexao });
   obterPreferenciaListagem.mockReset().mockResolvedValue({ success: true, data: { habilitada: true } });
   obterMinhasRepsCache.mockReset().mockResolvedValue({ success: true, data: snapshot });
   atualizarMinhasRepsCache.mockReset().mockResolvedValue({ success: true, data: snapshot });
-  Object.defineProperty(window, 'ipcAPI', { value: { ...ipcApiOriginal, gdl: { ...ipcApiOriginal.gdl, obterPreferenciaListagem, obterMinhasRepsCache, atualizarMinhasRepsCache, onAvisosAlterados: () => () => undefined } }, writable: true });
+  Object.defineProperty(window, 'ipcAPI', { value: { ...ipcApiOriginal, gdl: { ...ipcApiOriginal.gdl, obterEstadoConexao, onEstadoConexaoAlterado: (callback: (estado: EstadoConexaoGdl) => void) => { notificarConexao = callback; return () => undefined; }, obterPreferenciaListagem, obterMinhasRepsCache, atualizarMinhasRepsCache, onAvisosAlterados: () => () => undefined } }, writable: true });
 });
 afterEach(() => { vi.useRealTimers(); Object.defineProperty(window, 'ipcAPI', { value: ipcApiOriginal, writable: true }); });
 
 describe('REPs do GDL no dashboard', () => {
+  it('propaga o sucesso e a falha da atualização para o header pelo mesmo snapshot', async () => {
+    const sucesso: EstadoConexaoGdl = { ...estadoConexao, ambiente: 'producao', versaoEstado: 1,
+      rede: 'acessivel', redeVerificadaEm: new Date(Date.now()).toISOString(), credenciais: 'pendentes', web: 'disponivel',
+      acessoAutenticado: { origem: 'web', resultado: 'sucesso', realizadaEm: new Date(Date.now()).toISOString(), confirmadoEm: new Date(Date.now()).toISOString(), rejeicaoPendente: false } };
+    atualizarMinhasRepsCache.mockImplementationOnce(async () => {
+      notificarConexao(sucesso); return { success: true, data: snapshot };
+    });
+    render(<MemoryRouter><IndicadorConexaoGdl /><GdlMinhasRepsDashboard /></MemoryRouter>);
+    await screen.findByText('1 REP');
+    fireEvent.click(screen.getByRole('button', { name: 'Atualizar' }));
+    expect(await screen.findByRole('button', { name: 'GDL: Acesso ao GDL confirmado' })).toBeInTheDocument();
+    atualizarMinhasRepsCache.mockImplementationOnce(async () => {
+      notificarConexao({ ...sucesso, versaoEstado: 2, acessoAutenticado: { ...sucesso.acessoAutenticado!, resultado: 'falha', motivo: 'estrutura' } });
+      return { success: false, error: 'Formato inválido', falha: { codigo: 'estrutura', detalhes: 'Formato inválido' } };
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Atualizar' }));
+    expect(await screen.findByRole('button', { name: 'GDL: Não foi possível recuperar dados do GDL' })).toBeInTheDocument();
+    expect(obterEstadoConexao).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['ausentes', 'rejeitadas'])('orienta credenciais %s sem exibir a lista anterior', async credenciais => {
+    obterEstadoConexao.mockResolvedValue({ success: true, data: { ...estadoConexao, credenciais } });
+    render(<MemoryRouter><GdlMinhasRepsDashboard /><RotaAtual /></MemoryRouter>);
+    const aviso = credenciais === 'ausentes' ? /cadastre seu login, sua senha e seu CPF/ : /não aceitou as credenciais/;
+    expect(await screen.findByText(aviso)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '123/2026' })).not.toBeInTheDocument();
+    expect(atualizarMinhasRepsCache).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Abrir API GDL' }));
+    expect(screen.getByTestId('rota-atual')).toHaveTextContent('/gdl-config');
+  });
+
+  it('orienta falha do acesso web sem afirmar que as credenciais foram rejeitadas', async () => {
+    obterEstadoConexao.mockResolvedValue({ success: true, data: { ...estadoConexao, web: 'atencao', acessoAutenticado: { origem: 'web', resultado: 'falha', motivo: 'estrutura', realizadaEm: new Date(Date.now()).toISOString(), confirmadoEm: null, rejeicaoPendente: false } } });
+    obterMinhasRepsCache.mockResolvedValue({ success: true, data: null });
+    render(<MemoryRouter><GdlMinhasRepsDashboard /></MemoryRouter>);
+    expect(await screen.findByText(/confira suas credenciais e execute o Teste de Rede/)).toBeInTheDocument();
+    expect(screen.queryByText(/não aceitou as credenciais/)).not.toBeInTheDocument();
+    expect(atualizarMinhasRepsCache).not.toHaveBeenCalled();
+  });
+
+  it('descarta uma atualização manual que terminou após excluir as credenciais', async () => {
+    let notificar: (reiniciar: boolean) => void = () => undefined;
+    window.ipcAPI.gdl.onAvisosAlterados = callback => { notificar = callback; return () => undefined; };
+    let concluir: ((resposta: unknown) => void) | undefined;
+    atualizarMinhasRepsCache.mockImplementation(() => new Promise(resolve => { concluir = resolve; }));
+    render(<MemoryRouter><GdlMinhasRepsDashboard /></MemoryRouter>);
+    await screen.findByText('1 REP');
+    fireEvent.click(screen.getByRole('button', { name: 'Atualizar' }));
+    obterMinhasRepsCache.mockResolvedValue({ success: true, data: null });
+    obterEstadoConexao.mockResolvedValue({ success: true, data: { ...estadoConexao, revisao: 1, credenciais: 'ausentes' } });
+    await act(async () => { notificar(true); notificarConexao({ ...estadoConexao, ambiente: 'producao', revisao: 1, versaoEstado: 1, rede: 'desconhecida', credenciais: 'ausentes', web: 'desconhecida' }); });
+    await act(async () => { concluir?.({ success: true, data: snapshot }); });
+    expect(screen.getByText(/cadastre seu login, sua senha e seu CPF/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '123/2026' })).not.toBeInTheDocument();
+  });
+
+
+  it('pagina em 20 e pesquisa no snapshot completo, incluindo REPs fora da primeira página', async () => {
+    const reps = Array.from({ length: 25 }, (_, indice) => ({
+      ...snapshot.reps[0], idGdl: indice + 1,
+      numero: indice === 0 ? '999' : String(100 + indice),
+      dataDesignacao: `2026-10-${String(indice + 1).padStart(2, '0')}T10:00`,
+    }));
+    obterMinhasRepsCache.mockResolvedValue({ success: true, data: { ...snapshot, reps } });
+    render(<MemoryRouter><GdlMinhasRepsDashboard /></MemoryRouter>);
+    expect(await screen.findByText('25 REPs')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /^\d+\/2026$/ })).toHaveLength(20);
+    expect(screen.queryByRole('button', { name: '999/2026' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Itens por página' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Próxima página' }));
+    expect(screen.getByRole('button', { name: '999/2026' })).toBeInTheDocument();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Pesquisar REP' }), { target: { value: '999/2026' } });
+    expect(screen.getByRole('button', { name: '999/2026' })).toBeInTheDocument();
+    expect(screen.getByText('Pág 1 de 1')).toBeInTheDocument();
+    expect(screen.getByText('1 registro(s)')).toBeInTheDocument();
+    expect(atualizarMinhasRepsCache).not.toHaveBeenCalled();
+  });
 
   it('apenas lê o cache ao abrir e recebe alterações sem iniciar consultas de rede', async () => {
     vi.useFakeTimers();
@@ -61,6 +148,18 @@ describe('REPs do GDL no dashboard', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Atualizar' }));
     expect(atualizarMinhasRepsCache).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('button', { name: 'Atualizar' })).toBeDisabled();
+  });
+
+  it('permite duas atualizações manuais consecutivas sem aguardar a validade do cache', async () => {
+    render(<MemoryRouter><GdlMinhasRepsDashboard /></MemoryRouter>);
+    await screen.findByText('1 REP');
+    const botao = screen.getByRole('button', { name: 'Atualizar' });
+    fireEvent.click(botao);
+    await waitFor(() => expect(botao).toBeEnabled());
+    fireEvent.click(botao);
+    await waitFor(() => expect(atualizarMinhasRepsCache).toHaveBeenCalledTimes(2));
+    expect(atualizarMinhasRepsCache).toHaveBeenNthCalledWith(1, true);
+    expect(atualizarMinhasRepsCache).toHaveBeenNthCalledWith(2, true);
   });
 
   it('não agenda atualização automática com a listagem desativada', async () => {
@@ -125,17 +224,32 @@ describe('REPs do GDL no dashboard', () => {
     expect(screen.getByRole('button', { name: /123\/2026/ })).toBeEnabled();
   });
 
-  it('mostra só cache recente quando a listagem está desativada e bloqueia atualizar', async () => {
+  it('substitui o cache recente pela orientação quando a listagem está desativada', async () => {
     obterPreferenciaListagem.mockResolvedValue({ success: true, data: { habilitada: false } });
     obterMinhasRepsCache.mockResolvedValue({ success: true, data: { ...snapshot, atualizadoEm: new Date(Date.now() - 29 * 60_000).toISOString() } });
     render(<MemoryRouter><GdlMinhasRepsDashboard /><RotaAtual /></MemoryRouter>);
-    expect(await screen.findByText('1 REP')).toHaveClass('bg-secondary');
-    expect(screen.getByText(/sem nova consulta/)).toBeInTheDocument();
+    expect(await screen.findByText(/Para visualizar suas REPs/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '123/2026' })).not.toBeInTheDocument();
     expect(atualizarMinhasRepsCache).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'Atualizar' }));
-    expect(screen.getByText(/Consulta da lista bloqueada/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Atualizar' })).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: 'Abrir API GDL' }));
     expect(screen.getByTestId('rota-atual')).toHaveTextContent('gdl-config');
+  });
+
+  it('volta à orientação ao receber a desativação e reapresenta o cache ao reativar', async () => {
+    let notificar: (reiniciar: boolean) => void = () => undefined;
+    window.ipcAPI.gdl.onAvisosAlterados = callback => { notificar = callback; return () => undefined; };
+    render(<MemoryRouter><GdlMinhasRepsDashboard /></MemoryRouter>);
+    expect(await screen.findByRole('button', { name: '123/2026' })).toBeEnabled();
+    obterPreferenciaListagem.mockResolvedValue({ success: true, data: { habilitada: false } });
+    await act(async () => { notificar(true); });
+    expect(screen.getByText(/Para visualizar suas REPs/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '123/2026' })).not.toBeInTheDocument();
+    expect(atualizarMinhasRepsCache).not.toHaveBeenCalled();
+    obterPreferenciaListagem.mockResolvedValue({ success: true, data: { habilitada: true } });
+    await act(async () => { notificar(true); });
+    expect(screen.getByRole('button', { name: '123/2026' })).toBeEnabled();
+    expect(screen.queryByText(/Para visualizar suas REPs/)).not.toBeInTheDocument();
   });
 
   it('oculta cache de 30 minutos com a listagem desativada', async () => {
@@ -283,3 +397,5 @@ describe('REPs do GDL no dashboard', () => {
   });
 
 });
+
+const render = (ui: ReactNode, opcoes?: RenderOptions) => renderOriginal(<ConexaoGdlProvider>{ui}</ConexaoGdlProvider>, opcoes);

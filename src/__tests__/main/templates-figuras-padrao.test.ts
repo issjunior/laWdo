@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { URL_FIGURA_DUMMY } from '../../shared/figura/html';
 import { catalogoTemplatesIntegrados } from '../../main/templates/integrados/catalogo';
 import { laudoPadraoB601V2 } from '../../main/templates/integrados/b601/laudo-padrao-b601.v2';
-import { laudoPadraoB601LocalNecropsiaV3 } from '../../main/templates/integrados/b601/laudo-padrao-b601-local-necropsia.v3';
+import { laudoPadraoB601LocalNecropsiaV4 } from '../../main/templates/integrados/b601/laudo-padrao-b601-local-necropsia.v4';
 import { laudoPadraoB602V11 } from '../../main/templates/integrados/b602/laudo-padrao-b602.v11';
 import { padronizarFigurasTemplate } from '../../main/templates/integrados/padronizar-figuras';
 import { validarTemplateIntegrado } from '../../main/templates/integrados/validar-template-integrado';
@@ -22,7 +22,6 @@ describe('padrão das figuras nos novos templates', () => {
 
   it.each([
     { anterior: laudoPadraoB601V2, versao: 3 },
-    { anterior: laudoPadraoB601LocalNecropsiaV3, versao: 4 },
     { anterior: laudoPadraoB602V11, versao: 12 },
   ])('publica $anterior.chave v$versao preservando a versão anterior', ({ anterior, versao }) => {
     const original = JSON.stringify(anterior);
@@ -54,6 +53,27 @@ describe('padrão das figuras nos novos templates', () => {
     });
     expect(quantidade).toBeGreaterThan(0);
     expect(JSON.stringify(anterior)).toBe(original);
+  });
+
+  it('remove a moldura vazia da primeira figura apenas na versão 5 Local com Necropsia', () => {
+    const anterior = JSON.stringify(laudoPadraoB601LocalNecropsiaV4);
+    const atual = catalogoTemplatesIntegrados.find(template => template.chave === laudoPadraoB601LocalNecropsiaV4.chave)!;
+    expect(atual.versao).toBe(5);
+    expect(() => validarTemplateIntegrado(atual)).not.toThrow();
+    expect(JSON.stringify(laudoPadraoB601LocalNecropsiaV4)).toBe(anterior);
+    const secaoAnterior = laudoPadraoB601LocalNecropsiaV4.secoes.find(secao => secao.chave === 'material-apresentado')!;
+    const secaoAtual = atual.secoes.find(secao => secao.chave === 'material-apresentado')!;
+    const previa = new DOMParser().parseFromString(secaoAnterior.conteudo, 'text/html');
+    const documento = new DOMParser().parseFromString(secaoAtual.conteudo, 'text/html');
+    expect(previa.querySelectorAll('figure.laudo-figure')).toHaveLength(3);
+    expect(documento.querySelectorAll('figure.laudo-figure')).toHaveLength(2);
+    expect(documento.querySelector('[data-image-id="dummy-b601-local-necropsia-material-apresentado-1"]')).toBeNull();
+    expect(documento.querySelectorAll('figure.laudo-figure > img')).toHaveLength(2);
+    expect(documento.querySelectorAll('figure.laudo-figure > figcaption')).toHaveLength(2);
+    expect(documento.body.textContent?.replace(/\s+/g, ' ').trim())
+      .toBe(previa.body.textContent?.replace(/\s+/g, ' ').trim());
+    expect(atual.secoes.filter(secao => secao.chave !== 'material-apresentado'))
+      .toEqual(laudoPadraoB601LocalNecropsiaV4.secoes.filter(secao => secao.chave !== 'material-apresentado'));
   });
 
   it('respeita borda zero na saída e mantém bordas explícitas por célula', () => {

@@ -8,12 +8,45 @@ const registro = (numeroRep: string, numeroCaso: number, naturezaExame = 'M110 -
 const pagina = (itens: ReturnType<typeof registro>[], total = itens.length) => interpretarGdlListaRepsInvestigacaoJson(JSON.stringify({ dadosREPs: itens, quantRegistros: total }));
 
 describe('REPs de coleta do mesmo caso', () => {
+  it('resolve as referências de local M112 e necropsia do caso da REP 37.615/2023', async () => {
+    const rep37615 = validarGdlRep({ codRep: 895738, numero: 37615, ano: 2023 });
+    const carregar = vi.fn()
+      .mockResolvedValueOnce(pagina([registro('37.615/2023', 42, 'B601')]))
+      .mockResolvedValueOnce(pagina([
+        registro('37.358/2023', 42, 'M112 - EXAME EM LOCAL DE MORTE - HOMICIDIO'),
+        registro('37.363/2023', 42, 'T002 - EXAME DE NECROPSIA'),
+        registro('37.615/2023', 42, 'B601'),
+      ]));
+    const resultado = await consultarReferenciasMesmoCasoGdl(rep37615, 'producao', [{ numeroOrigem: '10', anoOrigem: 2023 }], carregar);
+    expect(resultado.reps).toEqual([
+      { numero: '37358', ano: '2023', codigoNatureza: 'M112', categoriaColeta: 'local' },
+      { numero: '37363', ano: '2023', codigoNatureza: 'T002', categoriaColeta: 'necropsia' },
+    ]);
+  });
+
   it('identifica o caso da REP principal e exclui outros casos com origem compartilhada', async () => {
     const carregar = vi.fn().mockResolvedValueOnce(pagina([registro('100/2026', 42, 'B601'), registro('2/2026', 99)]))
-      .mockResolvedValueOnce(pagina([registro('20/2026', 42), registro('21/2026', 42, 'T002 - NECROPSIA'), registro('2/2026', 99), registro('30/2026', 42, 'B602')]));
+      .mockResolvedValueOnce(pagina([registro('20/2026', 42, 'M112 - LOCAL DE MORTE'), registro('21/2026', 42, 'T006 - NECROPSIA FETAL'), registro('2/2026', 99), registro('30/2026', 42, 'B602')]));
     const resultado = await consultarReferenciasMesmoCasoGdl(principal, 'producao', filtro, carregar);
     expect(carregar).toHaveBeenLastCalledWith({ numeroCaso: 42 }, 1);
-    expect(resultado.reps).toEqual([{ numero: '20', ano: '2026', codigoNatureza: 'M110' }, { numero: '21', ano: '2026', codigoNatureza: 'T002' }]);
+    expect(resultado.reps).toEqual([
+      { numero: '20', ano: '2026', codigoNatureza: 'M112', categoriaColeta: 'local' },
+      { numero: '21', ano: '2026', codigoNatureza: 'T006', categoriaColeta: 'necropsia' },
+    ]);
+  });
+
+  it('aceita famílias Mxxx e Txxx e ignora códigos de outras famílias ou inválidos', async () => {
+    const carregar = vi.fn().mockResolvedValueOnce(pagina([registro('100/2026', 42, 'B601')]))
+      .mockResolvedValueOnce(pagina([
+        registro('20/2026', 42, 'M195 - REPRODUÇÃO SIMULADA'),
+        registro('21/2026', 42, 'T003 - EXAME CADAVÉRICO'),
+        registro('22/2026', 42, 'B602'),
+        registro('23/2026', 42, 'M12 - CÓDIGO INVÁLIDO'),
+      ]));
+    const resultado = await consultarReferenciasMesmoCasoGdl(principal, 'producao', filtro, carregar);
+    expect(resultado.reps.map(rep => [rep.codigoNatureza, rep.categoriaColeta])).toEqual([
+      ['M195', 'local'], ['T003', 'necropsia'],
+    ]);
   });
 
   it('percorre páginas posteriores mesmo após achar a REP e deduplica exames', async () => {

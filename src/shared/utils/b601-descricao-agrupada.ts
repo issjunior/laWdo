@@ -1,17 +1,12 @@
+import { CAMPOS_PROJETEIS_B601, CAMPOS_ESTOJOS_B601, VERSAO_CAMPOS_TABELA_B601, type CampoTabelaB601 } from '../catalogos/b601-tabelas.catalogo.js'
 import { projetarB601ParaLaudo } from './b601-pecas-projecao.js'
 import type { PecaBalistica } from '../types/pecas-balistica.types.js'
 import { criarHtmlCampoReservado } from './campo-reservado.js'
 import { obterTipoProjetilB601 } from '../catalogos/b601.catalogo.js'
-import { codigoColetaPorOrigem } from '../gdl/reps-mesmo-caso.js'
+import { categoriaColetaPorOrigem } from '../gdl/reps-mesmo-caso.js'
 import { criarHtmlFigura, URL_FIGURA_DUMMY } from '../figura/html.js'
 
 export type TipoDescricaoB601 = '105' | '101'
-
-const CARACTERISTICAS_PROJETEIS_B601 = [
-  'Origem', 'Tipo', 'Constituição e formato', 'Massa (g)', 'Diâmetro médio (mm)',
-  'Altura (mm)', 'Calibre nominal (provável)', 'Cavados e Ressaltos',
-  'Raiamento e Orientação', 'Deformações Acidentais', 'Aderências',
-] as const
 
 function escaparDescricaoB601(valor: string): string {
   return valor.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
@@ -64,7 +59,7 @@ export function gerarDescricaoAgrupadaB601(dados: unknown, tipo: TipoDescricaoB6
   const blocosManuais = gerarBlocosManuaisB601(dados, tipo, dono)
   const tiposItem = new Map(projecao.pecas.map(peca => [peca.idLocal, obterTipoProjetilB601(peca.campos.tipo)]))
   const calibres = new Map(projecao.pecas.map(peca => [peca.idLocal, peca.campos.calibre_nominal_provavel || '']))
-  return [montarDescricao(itensDescricao(dados, tipo), tipo, dono, tiposItem, undefined, new Map(), calibres), blocosManuais].filter(Boolean).join('\n')
+  return [montarDescricao(itensDescricao(dados, tipo), tipo, dono, tiposItem, undefined, new Map(projecao.pecas.map(peca => [peca.idLocal, peca.campos.tipo_raiamento || ''])), calibres), blocosManuais].filter(Boolean).join('\n')
 }
 
 export function gerarPreviaDescricaoB601(tipo: TipoDescricaoB601, coleta = false, fotosPorOrigem: ReadonlyMap<string, string> = new Map()): string {
@@ -72,7 +67,7 @@ export function gerarPreviaDescricaoB601(tipo: TipoDescricaoB601, coleta = false
     const grupos = (tipo === '105' ? ['LOCAL', 'NECRÓPSIA'] : ['ESTOJOS']).map((origem, indice) =>
       montarDescricao([{ id: `previa-${indice}`, item: indice + 1, quantidade: 5, origem }], tipo, 'previa', new Map(), { origem, inicio: indice * 5 })
       + criarFotosColetaB601(`previa-${indice}`, origem, fotosPorOrigem)).join('\n')
-    return `<div data-b601-grupo="${tipo}" data-b601-modelo-coleta="true">${grupos}</div>`
+    return `<div data-b601-grupo="${tipo}" data-b601-campos-versao="${VERSAO_CAMPOS_TABELA_B601}" data-b601-modelo-coleta="true">${grupos}</div>`
   }
   return montarDescricao([{ id: 'previa', item: 1, quantidade: 5, origem: '' }], tipo, 'previa')
 }
@@ -84,6 +79,15 @@ function montarDescricao(itens: ReturnType<typeof itensDescricao>, tipo: TipoDes
   const singular = unidades.length === 1
   const nome = projetil ? (singular ? 'projétil' : 'projéteis') : (singular ? 'estojo' : 'estojos')
   const introducao = `Trata-se de ${nome} ${singular ? 'proveniente' : 'provenientes'} de munição própria para uso em armas de fogo, integralmente ${singular ? 'descrito' : 'descritos'} no ${projetil && unidades.length > 5 ? 'conjunto de quadros' : 'quadro'} a seguir:`
+  const montarCampo = (campo: CampoTabelaB601, item: typeof unidades[number], identificador: string): string => {
+    const valor = campo.chave === 'origem' ? item.origem : campo.chave === 'tipo' ? tiposItem.get(item.id)
+      : campo.chave === 'tipo_raiamento' ? raiamentos.get(item.id)
+      : campo.chave === 'calibre_nominal_provavel' ? calibres.get(item.id) : ''
+    const conteudo = valor ? escaparDescricaoB601(valor) : campo.chave === 'origem' ? reservarOrigem(item.item) : reservarManual(campo.rotulo, identificador)
+    if (!campo.fonte) return conteudo
+    const atributo = projetil ? 'data-b601-campo-projetil' : 'data-b601-campo-estojo'
+    return `<span data-b601-campo="${campo.chave}" ${atributo}="${campo.chave}"${projetil && campo.chave === 'origem' ? ' data-b601-origem-projetil="true"' : ''} data-b601-peca-id="${escaparDescricaoB601(item.id)}" data-b601-unidade="${item.unidade}" ${projetil ? 'data-b601-pq' : 'data-b601-identificador'}="${identificador}">${conteudo}</span>`
+  }
   const tabelas: string[] = []
   if (projetil) {
     for (let inicio = 0; inicio < unidades.length; inicio += 5) {
@@ -91,35 +95,20 @@ function montarDescricao(itens: ReturnType<typeof itensDescricao>, tipo: TipoDes
       const deslocamento = coleta?.inicio ?? 0
       const numeroPq = (indice: number) => String(deslocamento + inicio + indice + 1).padStart(2, '0')
       const cabecalho = celula('Características', true) + lote.map((_, indice) => celula(`PQ${numeroPq(indice)}`, true)).join('')
-      const caracteristicas = coleta ? [...CARACTERISTICAS_PROJETEIS_B601.slice(0, 9), 'Tipo de Raiamento', ...CARACTERISTICAS_PROJETEIS_B601.slice(9)] : CARACTERISTICAS_PROJETEIS_B601
-      const linhas = caracteristicas.map(caracteristica => `<tr>${celula(caracteristica, true)}${lote.map((item, indice) => celula(caracteristica === 'Origem'
-        ? `<span data-b601-origem-projetil="true" data-b601-peca-id="${escaparDescricaoB601(item.id)}" data-b601-unidade="${item.unidade}" data-b601-pq="PQ${numeroPq(indice)}">${escaparDescricaoB601(item.origem) || reservarOrigem(item.item)}</span>`
-        : caracteristica === 'Calibre nominal (provável)'
-          ? `<span data-b601-campo-projetil="calibre_nominal_provavel" data-b601-peca-id="${escaparDescricaoB601(item.id)}" data-b601-unidade="${item.unidade}" data-b601-pq="PQ${numeroPq(indice)}">${escaparDescricaoB601(calibres.get(item.id) || '') || reservarManual(caracteristica, `PQ${numeroPq(indice)}`)}</span>`
-        : caracteristica === 'Tipo de Raiamento'
-          ? `<span data-b601-campo-projetil="tipo_raiamento" data-b601-peca-id="${escaparDescricaoB601(item.id)}" data-b601-unidade="${item.unidade}" data-b601-pq="PQ${numeroPq(indice)}">${escaparDescricaoB601(raiamentos.get(item.id) || '') || reservarManual(caracteristica, `PQ${numeroPq(indice)}`)}</span>`
-        : ['Tipo', 'Constituição e formato'].includes(caracteristica)
-          ? `<span data-b601-campo-projetil="${caracteristica === 'Tipo' ? 'tipo' : 'constituicao_formato'}" data-b601-peca-id="${escaparDescricaoB601(item.id)}" data-b601-unidade="${item.unidade}" data-b601-pq="PQ${numeroPq(indice)}">${caracteristica === 'Tipo' && tiposItem.get(item.id) ? escaparDescricaoB601(tiposItem.get(item.id) || '') : reservarManual(caracteristica, `PQ${numeroPq(indice)}`)}</span>`
-        : reservarManual(caracteristica, `PQ${numeroPq(indice)}`))).join('')}</tr>`).join('')
+      const linhas = CAMPOS_PROJETEIS_B601.map(campo => `<tr>${celula(campo.rotulo, true)}${lote.map((item, indice) =>
+        celula(montarCampo(campo, item, `PQ${numeroPq(indice)}`))).join('')}</tr>`).join('')
       tabelas.push(`<table data-tabela-laudo="balistica" border="1" cellpadding="4" width="100%" style="${estiloTabela}"><thead><tr><th colspan="${lote.length + 1}" style="${estiloTitulo}">TABELA 1 – DESCRIÇÃO DOS PROJÉTEIS${coleta ? ` (${escaparDescricaoB601(coleta.origem)})` : ''}${inicio ? ' — continuação' : ''}</th></tr><tr>${cabecalho}</tr></thead><tbody>${linhas}</tbody></table>`)
     }
   } else {
-    const titulos = coleta ? ['ID', 'Origem', 'Marca', 'Procedência', 'Composição', 'Espoleta', 'Calibre Nominal', 'Observações'] : ['ID', 'Marca', 'Procedência', 'Calibre Nominal', 'Composição do Estojo', 'Espoleta', 'Observações']
-    const camposEstojos: Record<string, string> = { Marca: 'marca', 'Calibre Nominal': 'calibre_nominal', Composição: 'composicao', 'Composição do Estojo': 'composicao', Espoleta: 'espoleta' }
+    const titulos = ['ID', ...CAMPOS_ESTOJOS_B601.map(campo => campo.rotulo)]
     const linhas = unidades.map((item, indice) => {
       const identificador = `Estojo ${String(indice + 1).padStart(2, '0')}`
-      const campoManual = (titulo: string): string => {
-        const campo = camposEstojos[titulo]
-        const valor = reservarManual(titulo, identificador)
-        return celula(campo ? `<span data-b601-campo-estojo="${campo}" data-b601-peca-id="${escaparDescricaoB601(item.id)}" data-b601-unidade="${item.unidade}" data-b601-identificador="${identificador}">${valor}</span>` : valor)
-      }
-      if (coleta) return `<tr>${celula(String(indice + 1).padStart(2, '0'))}${celula(escaparDescricaoB601(item.origem) || reservarOrigem(item.item))}${titulos.slice(2).map(campoManual).join('')}</tr>`
-      return `<tr>${celula(String(indice + 1).padStart(2, '0'))}${campoManual('Marca')}${celula(escaparDescricaoB601(item.origem) || reservarOrigem(item.item))}${titulos.slice(3).map(campoManual).join('')}</tr>`
+      return `<tr>${celula(String(indice + 1).padStart(2, '0'))}${CAMPOS_ESTOJOS_B601.map(campo => celula(montarCampo(campo, item, identificador))).join('')}</tr>`
     }).join('')
     tabelas.push(`<table data-tabela-laudo="balistica" border="1" cellpadding="4" width="100%" style="${estiloTabela}"><thead><tr><th colspan="${titulos.length}" style="${estiloTitulo}">TABELA 1 – DESCRIÇÃO DOS ESTOJOS</th></tr><tr>${titulos.map(titulo => celula(titulo, true)).join('')}</tr></thead><tbody>${linhas}</tbody></table>`)
   }
   const conteudo = `<p style="text-indent: 35.43pt;">${introducao}</p>${tabelas.join('\n')}`
-  return coleta ? conteudo : `<div data-b601-grupo="${tipo}" data-repeat-owner="${escaparDescricaoB601(dono)}" data-b601-assinatura="${escaparDescricaoB601(JSON.stringify(itens))}">${conteudo}</div>`
+  return coleta ? conteudo : `<div data-b601-grupo="${tipo}" data-b601-campos-versao="${VERSAO_CAMPOS_TABELA_B601}" data-repeat-owner="${escaparDescricaoB601(dono)}" data-b601-assinatura="${escaparDescricaoB601(JSON.stringify(itens))}">${conteudo}</div>`
 }
 
 export function gerarDescricaoColetaB601(dados: unknown, tipo: TipoDescricaoB601, dono: string, fotosPorOrigem: ReadonlyMap<string, string> = new Map()): string {
@@ -129,19 +118,19 @@ export function gerarDescricaoColetaB601(dados: unknown, tipo: TipoDescricaoB601
   const raiamentos = new Map(projecao.pecas.map(peca => [peca.idLocal, peca.campos.tipo_raiamento || '']))
   const calibres = new Map(projecao.pecas.map(peca => [peca.idLocal, peca.campos.calibre_nominal_provavel || '']))
   const origens = [...new Set(itens.map(item => item.origem))].sort((a, b) => {
-    const prioridade = (origem: string) => codigoColetaPorOrigem(origem) === 'M110' ? 0 : codigoColetaPorOrigem(origem) === 'T002' ? 1 : 2
+    const prioridade = (origem: string) => categoriaColetaPorOrigem(origem) === 'local' ? 0 : categoriaColetaPorOrigem(origem) === 'necropsia' ? 1 : 2
     return prioridade(a) - prioridade(b)
   })
   let inicio = 0
   const grupos = tipo === '105' ? origens.map(origem => {
     const grupo = itens.filter(item => item.origem === origem)
-    const titulo = codigoColetaPorOrigem(origem) === 'M110' ? 'LOCAL' : codigoColetaPorOrigem(origem) === 'T002' ? 'NECRÓPSIA' : origem || 'XXX'
+    const titulo = categoriaColetaPorOrigem(origem) === 'local' ? 'LOCAL' : categoriaColetaPorOrigem(origem) === 'necropsia' ? 'NECRÓPSIA' : origem || 'XXX'
     const html = montarDescricao(grupo, tipo, dono, tipos, { origem: titulo, inicio }, raiamentos, calibres) + criarFotosColetaB601(`${dono}-${inicio}`, titulo, fotosPorOrigem)
     inicio += grupo.reduce((total, item) => total + item.quantidade, 0)
     return html
   }).join('\n') : itens.length ? montarDescricao(itens, tipo, dono, tipos, { origem: '', inicio: 0 }) + criarFotosColetaB601(dono, 'ESTOJOS', fotosPorOrigem) : ''
   const manuais = gerarBlocosManuaisB601(dados, tipo, dono)
-  return grupos || manuais ? `<div data-b601-grupo="${tipo}" data-b601-modelo-coleta="true" data-repeat-owner="${escaparDescricaoB601(dono)}" data-b601-assinatura="${escaparDescricaoB601(assinaturaDescricaoB601(dados, tipo))}">${grupos}${manuais}</div>` : ''
+  return grupos || manuais ? `<div data-b601-grupo="${tipo}" data-b601-campos-versao="${VERSAO_CAMPOS_TABELA_B601}" data-b601-modelo-coleta="true" data-repeat-owner="${escaparDescricaoB601(dono)}" data-b601-assinatura="${escaparDescricaoB601(assinaturaDescricaoB601(dados, tipo))}">${grupos}${manuais}</div>` : ''
 }
 
 function criarFotosColetaB601(id: string, origem: string, fotosPorOrigem: ReadonlyMap<string, string>): string {

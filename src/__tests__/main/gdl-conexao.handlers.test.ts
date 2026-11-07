@@ -5,12 +5,13 @@ import { beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import { esquemaEstadoConexaoGdl, type EstadoConexaoGdl } from '../../shared/gdl/conexao';
 
 type Remetente = { id: number; isDestroyed: () => boolean; send: ReturnType<typeof vi.fn>; once: ReturnType<typeof vi.fn> };
-type Tratador = (evento: { sender: Remetente }) => Promise<unknown>;
+type Tratador = (evento: { sender: Remetente }, ambiente?: unknown) => Promise<unknown>;
 const handlers = new Map<string, Tratador>();
 const exigir = vi.fn();
 const obter = vi.fn();
 const verificar = vi.fn();
 const observar = vi.fn();
+const excluirCredenciais = vi.fn();
 let notificar: () => void;
 let estado: EstadoConexaoGdl;
 beforeAll(async () => {
@@ -21,6 +22,7 @@ beforeAll(async () => {
     if (modulo === 'electron') return { ipcMain: { handle: (canal: string, handler: Tratador) => handlers.set(canal, handler) } };
     if (modulo.endsWith('/auth-sessao.service.js')) return { authSessaoService: { exigir } };
     if (modulo.endsWith('/gdl-conexao.service.js')) return { conexaoGdlService: { obterEstado: obter, verificar, observar } };
+    if (modulo.endsWith('/configuracao.service.js')) return { configuracaoService: { excluirCredenciaisGdl: excluirCredenciais } };
     if (modulo.endsWith('/conexao.js')) return { esquemaEstadoConexaoGdl };
     return {};
   } });
@@ -28,12 +30,13 @@ beforeAll(async () => {
   exportacoes.registerGdlHandlers();
 });
 beforeEach(() => {
-  estado = { ambiente: 'producao', revisao: 0, rede: 'desconhecida', redeVerificadaEm: null,
+  estado = { ambiente: 'producao', revisao: 0, versaoEstado: 0, rede: 'desconhecida', redeVerificadaEm: null,
     credenciais: 'pendentes', credenciaisValidadasEm: null, web: 'desconhecida', verificando: false };
+  excluirCredenciais.mockReset().mockResolvedValue(undefined);
   exigir.mockReset().mockReturnValue('usuario-a');
   obter.mockReset().mockImplementation(async () => estado);
   verificar.mockReset().mockImplementation(async () => estado);
-  observar.mockImplementation((ouvinte: () => void) => { notificar = ouvinte; return () => undefined; });
+  observar.mockImplementation((ouvinte: (estado: EstadoConexaoGdl) => void) => { notificar = () => ouvinte(estado); return () => undefined; });
 });
 let proximoId = 0;
 const remetente = (): Remetente => ({ id: ++proximoId, isDestroyed: () => false, send: vi.fn(), once: vi.fn() });
@@ -56,13 +59,24 @@ it('descarta resposta quando o usuário muda durante a operação', async () => 
   expect(await handlers.get('gdl:verificar-conexao')?.({ sender: remetente() })).toMatchObject({ success: false });
 });
 
-it('envia apenas notificação de mudança e deixa de enviar para sessão encerrada', async () => {
+it('envia o snapshot tipado da mudança e deixa de enviar para sessão encerrada', async () => {
   const janela = remetente();
   await handlers.get('gdl:obter-estado-conexao')?.({ sender: janela });
   notificar();
-  expect(janela.send).toHaveBeenCalledWith('gdl:estado-conexao-alterado');
+  expect(janela.send).toHaveBeenCalledWith('gdl:estado-conexao-alterado', estado);
   janela.send.mockClear();
   exigir.mockImplementation(() => { throw new Error('Sessão encerrada'); });
   notificar();
   expect(janela.send).not.toHaveBeenCalled();
+});
+
+it('exige sessão e ambiente válido para excluir as credenciais locais', async () => {
+  const evento = { sender: remetente() };
+  expect(await handlers.get('gdl:excluir-credenciais')?.(evento, 'producao')).toEqual({ success: true });
+  expect(excluirCredenciais).toHaveBeenCalledWith('producao');
+  excluirCredenciais.mockClear();
+  expect(await handlers.get('gdl:excluir-credenciais')?.(evento, '../outro')).toMatchObject({ success: false });
+  exigir.mockImplementationOnce(() => { throw new Error('Sessão ausente'); });
+  expect(await handlers.get('gdl:excluir-credenciais')?.(evento, 'homologacao')).toMatchObject({ success: false });
+  expect(excluirCredenciais).not.toHaveBeenCalled();
 });

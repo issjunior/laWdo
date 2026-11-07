@@ -323,7 +323,7 @@ const emptyForm = (): REPFormData => ({
   ...Object.fromEntries(Array.from({ length: 10 }, (_, indice) => [
     ['b601_envolvidos_' + indice, ''], ['b601_envolvidos_qualificacao_' + indice, ''],
   ]).flat()),
-  b601_data_ocorrencia: '', b601_local_bairro: '', b601_local_cidade: '', b601_local_uf: '',
+  b601_data_ocorrencia: '', b601_local_bairro: '', b601_local_cidade: '', b601_local_uf: 'PR',
   b601_numero_bo: '', b601_numero_ip: '', b601_solicitante_nome: '', b601_estado_pecas: '',
   numero: '', solicitante_id: '', tipo_exame_id: '', template_id: '', data_requisicao: new Date().toISOString().split('T')[0],
   tipo_solicitacao: 'Ofício', numero_documento: '', data_documento: '',
@@ -959,6 +959,7 @@ export const REPsPage: React.FC = () => {
   }, [tipoExameSelecionado]);
 
   const solicitanteId = form.watch('solicitante_id');
+  const b601LocalUf = form.watch('b601_local_uf');
   const b602LocalUf = form.watch('b602_local_uf');
   useEffect(() => {
     if (tipoExameSelecionado?.codigo !== 'B-602') return;
@@ -981,10 +982,14 @@ export const REPsPage: React.FC = () => {
   }, [form, metadadosIntegracaoGdl, solicitanteId, solicitantes, tipoExameSelecionado?.codigo]);
 
   useEffect(() => {
-    if (tipoExameSelecionado?.codigo !== 'B-602') return;
-    if (b602LocalUf?.trim()) return;
-    form.setValue('b602_local_uf', 'PR', { shouldValidate: true, shouldDirty: false });
-  }, [b602LocalUf, form, tipoExameSelecionado?.codigo]);
+    const prefixo = tipoExameSelecionado?.codigo === 'B-601' ? 'b601' : tipoExameSelecionado?.codigo === 'B-602' ? 'b602' : null;
+    if (!prefixo) return;
+
+    const ufAtual = prefixo === 'b601' ? b601LocalUf : b602LocalUf;
+    if (ufAtual?.trim()) return;
+
+    form.setValue(`${prefixo}_local_uf`, 'PR', { shouldValidate: true, shouldDirty: false });
+  }, [b601LocalUf, b602LocalUf, form, tipoExameSelecionado?.codigo]);
 
   const handleNovo = useCallback(() => {
     setEditingRep(null);

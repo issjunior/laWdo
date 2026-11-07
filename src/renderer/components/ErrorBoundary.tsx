@@ -77,17 +77,12 @@ export class ErrorBoundary extends Component<Props, State> {
 
   private handleGoToHome = (): void => {
     window.location.hash = '#/';
+    window.location.reload();
   };
 
   private handleReportError = (): void => {
     try {
-      const { error, errorInfo } = this.state;
       const errorDetails = {
-        message: error?.message,
-        stack: error?.stack,
-        componentStack: errorInfo?.componentStack,
-        url: window.location.href,
-        userAgent: navigator.userAgent,
         timestamp: new Date().toISOString(),
       };
 
@@ -103,7 +98,7 @@ export class ErrorBoundary extends Component<Props, State> {
   };
 
   render(): ReactNode {
-    const { hasError, error, errorInfo } = this.state;
+    const { hasError } = this.state;
     const { children, fallback } = this.props;
 
     if (hasError) {
@@ -137,28 +132,14 @@ export class ErrorBoundary extends Component<Props, State> {
                   Ocorreu um erro inesperado no aplicativo. Por favor, tente uma das opções abaixo.
                 </p>
 
-                {/* Detalhes do erro (expandível) */}
                 <details className="w-full mb-8">
                   <summary className="cursor-pointer text-blue-600 hover:text-blue-800 font-medium mb-2">
                     Ver detalhes técnicos do erro
                   </summary>
                   <div className="mt-3 p-4 bg-gray-50 rounded-lg text-left">
                     <p className="font-mono text-sm text-gray-800 break-words mb-2">
-                      <strong>Mensagem:</strong> {error?.message || 'Erro desconhecido'}
+                      Consulte os logs locais para obter os detalhes técnicos desta falha.
                     </p>
-                    {error?.stack && (
-                      <pre className="text-xs text-gray-600 overflow-auto max-h-40 p-3 bg-gray-800 text-gray-100 rounded">
-                        {error.stack}
-                      </pre>
-                    )}
-                    {errorInfo?.componentStack && (
-                      <div className="mt-3">
-                        <p className="text-sm font-medium text-gray-700 mb-1">Componente:</p>
-                        <pre className="text-xs text-gray-600 overflow-auto max-h-32 p-3 bg-gray-200 rounded">
-                          {errorInfo.componentStack}
-                        </pre>
-                      </div>
-                    )}
                   </div>
                 </details>
 
@@ -206,7 +187,7 @@ export class ErrorBoundary extends Component<Props, State> {
                         d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
                       />
                     </svg>
-                    Limpar Cache
+                    Restaurar preferências locais
                   </button>
 
                   <button

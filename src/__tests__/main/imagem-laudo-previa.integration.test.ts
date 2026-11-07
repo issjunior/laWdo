@@ -5,7 +5,7 @@ vi.mock('../../main/services/processador-imagens.service.js', async () => {
     return simulado.processarImagem(entrada);
   } };
 });
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -76,6 +76,18 @@ function estagiar(id: string, mimeType: string) {
 }
 
 describe('prévia do editor e arquivo original', () => {
+  it('distingue registro, arquivo e integridade ausentes na preparação do PDF', async () => {
+    await expect(imagens.obterImagemImpressaoLaudo('laudo', 'foto-inexistente', 800)).rejects.toMatchObject({ codigo: 'REGISTRO_AUSENTE' });
+    await estagiar('foto-diagnostico', 'image/jpeg');
+    await imagens.prepararImagemEditorLaudo('laudo', 'foto-diagnostico', 400, 300, 1);
+    const [registro] = await sqlite.executeQuery<{ caminho_relativo: string }>('SELECT caminho_relativo FROM imagens_laudo WHERE id = ?', ['foto-diagnostico']);
+    const caminho = path.join(ambiente.diretorio, registro.caminho_relativo);
+    await writeFile(caminho, 'arquivo alterado');
+    await expect(imagens.obterImagemImpressaoLaudo('laudo', 'foto-diagnostico', 800)).rejects.toMatchObject({ codigo: 'INTEGRIDADE_FALHOU' });
+    await rm(caminho);
+    await expect(imagens.obterImagemImpressaoLaudo('laudo', 'foto-diagnostico', 800)).rejects.toMatchObject({ codigo: 'ARQUIVO_AUSENTE' });
+  });
+
   it('limita a cópia do PDF e conserva apenas a figura tratada após a conclusão', async () => {
     await sqlite.executeNonQuery('INSERT INTO configuracoes VALUES (?, ?, ?)', ['perfil_figura_laudo', 'maxima_economia', 'string']);
     const original = Buffer.alloc(50_000, 1);

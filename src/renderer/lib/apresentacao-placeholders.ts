@@ -1,5 +1,6 @@
 import type { Editor as TinyMceEditorInstance } from 'tinymce';
 import { normalizarHtmlCampo } from '@/lib/campos-reservados';
+import { edicaoDiretaLaudoAtiva } from './politica-edicao-conteudo';
 
 export type ModoVisualizacaoPlaceholders = 'dados' | 'chaves';
 
@@ -132,13 +133,16 @@ function adicionarAcaoTabela(
 
 function configurarTabelaPersonalizada(tabela: HTMLElement, contadores?: ContadoresTabelas): void {
   tabela.classList.add('placeholder-tabela-personalizada');
-  prepararTabelas(tabela, true, contadores);
+  prepararTabelas(tabela, !edicaoDiretaLaudoAtiva(tabela) || tabela.ownerDocument.body.getAttribute('contenteditable') !== 'false', contadores);
   adicionarAcaoTabela(tabela, 'restaurar');
 }
 
 function configurarPreviaTabela(tabela: HTMLElement, contadores?: ContadoresTabelas): boolean {
-  const possuiTabela = prepararTabelas(tabela, false, contadores);
-  if (possuiTabela) adicionarAcaoTabela(tabela, 'personalizar');
+  const direta = edicaoDiretaLaudoAtiva(tabela);
+  const editavel = direta && tabela.ownerDocument.body.getAttribute('contenteditable') !== 'false';
+  const possuiTabela = prepararTabelas(tabela, editavel, contadores);
+  if (direta) tabela.setAttribute('contenteditable', String(editavel));
+  if (possuiTabela && !direta) adicionarAcaoTabela(tabela, 'personalizar');
   return possuiTabela;
 }
 
@@ -159,10 +163,12 @@ export function personalizarTabelaPlaceholder(
     previa.removeAttribute('data-placeholder-preview');
     previa.removeAttribute('data-placeholder-preview-for');
     previa.removeAttribute('data-placeholder-preview-tabela');
+    previa.removeAttribute('data-placeholder-preview-id');
     previa.removeAttribute('contenteditable');
     previa.setAttribute('data-placeholder-tabela-personalizada', 'true');
     previa.setAttribute('data-placeholder-tabela-personalizada-id', identificador);
     ancora.setAttribute('data-placeholder-tabela-personalizada-id', identificador);
+    ancora.removeAttribute('data-placeholder-preview-id');
     ancora.style.display = 'none';
     configurarTabelaPersonalizada(previa);
   });

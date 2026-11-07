@@ -39,6 +39,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Slider } from '@/components/ui/slider';
+import { Switch } from '@/components/ui/switch';
 import {
   Tooltip,
   TooltipContent,
@@ -54,12 +56,21 @@ import "yet-another-react-lightbox/plugins/captions.css";
 import "yet-another-react-lightbox/plugins/counter.css";
 import { toast } from 'sonner';
 import { Lens } from '@/components/ui/lens';
+import {
+  AJUSTE_VISUAL_MAXIMO_ALTURA_PAR,
+  AJUSTE_VISUAL_MINIMO_ALTURA_PAR,
+  ajusteVisualPorAlturaPar,
+  alturaParPorAjusteVisual,
+  PASSO_AJUSTE_VISUAL_ALTURA_PAR,
+  type AjusteVisualParFiguras,
+} from '@shared/figura/enquadramento';
 import { GdlImagensRepModal } from '@/components/laudo/GdlImagensRepModal';
 import { SeletorFiguraDialog } from '@/components/laudo/SeletorFiguraDialog';
 import { EditorFiguraDialog, type AjustesFigura } from '@/components/laudo/EditorFiguraDialog';
 import { PreencherDummiesDialog } from '@/components/laudo/PreencherDummiesDialog';
 import type { ImagemRepGdlAdicionadaAoLaudo } from '@shared/types/gdl-arquivos.types';
 import type { ImagemLaudoResumo, ResultadoAtualizacaoFiguras } from '@shared/types/imagem-laudo.types';
+import { ajustesFiguraValidos } from '@shared/types/imagem-laudo.types';
 
 const MINIATURAS_POR_LOTE = 30;
 const MINIATURA_PENDENTE = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
@@ -90,6 +101,8 @@ export interface ImagemLaudo {
   sha256?: string;
   nomeArquivo?: string;
   imagemOrigemId?: string;
+  alturaParPercentual?: number;
+  ajusteVisualPar?: AjusteVisualParFiguras;
 }
 
 function sugerirLegenda(nomeArquivo: string): string {
@@ -100,7 +113,7 @@ interface IlustracoesPanelProps {
   laudoId: string;
   onInsertImage: (imageUrl: string, imageId: string, legenda: string) => Promise<boolean> | boolean;
   onInsertAll?: (imagens: ImagemLaudo[]) => Promise<string[]> | string[];
-  onDeleteImage?: (imageId: string) => void;
+  onDeleteImage?: (imageId: string, indice?: number) => void;
   onReorder?: (imagens: ImagemLaudo[]) => void;
   onRefreshHtml: (restaurarLegendas?: boolean) => Promise<ResultadoAtualizacaoFiguras>;
   /** Lista de figuras já existentes no editor (extraídas do HTML pelo LaudosPage) */
@@ -116,6 +129,10 @@ interface IlustracoesPanelProps {
   onFechar?: () => void;
   onReplaceImage?: (imageId: string, imagem: ImagemLaudo, indice?: number) => Promise<boolean> | boolean;
   onEditImage?: (indice: number, imagem: ImagemLaudo, imagemOrigemId: string, imagemAnteriorId: string) => Promise<void> | void;
+  onPrevisualizarAlturaPar?: (indice: number, alturaPercentual: number) => void;
+  onConfirmarAlturaPar?: (indice: number, alturaPercentual: number) => void;
+  onCancelarAlturaPar?: (indice: number) => void;
+  onDefinirAjusteVisualPar?: (indice: number, ajusteVisual: AjusteVisualParFiguras) => void;
   onGerarLegenda?: (imageId: string) => Promise<string | null>;
   figuraSubstituicaoSolicitada?: string | null;
   onFiguraSubstituicaoSolicitadaConsumida?: () => void;
@@ -253,13 +270,17 @@ interface FiguraEditorItemProps {
   imagem: ImagemLaudo;
   index: number;
   ativo?: boolean;
-  onDelete: (id: string) => void;
+  onDelete: (id: string, indice: number) => void;
   onUpdateLegenda: (id: string, legenda: string) => void;
   onPreview: () => void;
   onScrollToFigure?: (id: string) => void;
   onReplaceImage?: (id: string) => void;
   onEditImage?: () => void;
   onGerarLegenda?: (id: string) => Promise<string | null>;
+  onPrevisualizarAlturaPar?: (alturaPercentual: number) => void;
+  onConfirmarAlturaPar?: (alturaPercentual: number) => void;
+  onCancelarAlturaPar?: () => void;
+  onDefinirAjusteVisualPar?: (ajusteVisual: AjusteVisualParFiguras) => void;
 }
 
 const FiguraEditorItem: React.FC<FiguraEditorItemProps> = ({
@@ -273,6 +294,10 @@ const FiguraEditorItem: React.FC<FiguraEditorItemProps> = ({
   onReplaceImage,
   onEditImage,
   onGerarLegenda,
+  onPrevisualizarAlturaPar,
+  onConfirmarAlturaPar,
+  onCancelarAlturaPar,
+  onDefinirAjusteVisualPar,
 }) => {
   const [legenda, setLegenda] = useState(imagem.legenda);
   const [gerandoLegenda, setGerandoLegenda] = useState(false);
@@ -283,6 +308,28 @@ const FiguraEditorItem: React.FC<FiguraEditorItemProps> = ({
   }, [imagem.legenda]);
   onUpdateLegendaRef.current = onUpdateLegenda;
   const itemRef = useRef<HTMLDivElement>(null);
+  const [ajusteAltura, setAjusteAltura] = useState(
+    imagem.alturaParPercentual === undefined ? undefined : ajusteVisualPorAlturaPar(imagem.alturaParPercentual),
+  );
+  const previsualizacaoAlturaAtivaRef = useRef(false);
+  const onCancelarAlturaParRef = useRef(onCancelarAlturaPar);
+  onCancelarAlturaParRef.current = onCancelarAlturaPar;
+
+  useEffect(() => {
+    if (!previsualizacaoAlturaAtivaRef.current) {
+      setAjusteAltura(imagem.alturaParPercentual === undefined ? undefined : ajusteVisualPorAlturaPar(imagem.alturaParPercentual));
+    }
+  }, [imagem.alturaParPercentual]);
+
+  useEffect(() => {
+    if (ativo) return;
+    if (previsualizacaoAlturaAtivaRef.current) onCancelarAlturaParRef.current?.();
+    previsualizacaoAlturaAtivaRef.current = false;
+  }, [ativo]);
+
+  useEffect(() => () => {
+    if (previsualizacaoAlturaAtivaRef.current) onCancelarAlturaParRef.current?.();
+  }, []);
 
   useEffect(() => {
     if (ativo && itemRef.current) {
@@ -317,7 +364,7 @@ const FiguraEditorItem: React.FC<FiguraEditorItemProps> = ({
   return (
     <div
       ref={itemRef}
-      className={`flex items-center gap-2 bg-muted/30 rounded-lg p-2 border transition-all ${
+      className={`flex flex-wrap items-center gap-2 bg-muted/30 rounded-lg p-2 border transition-all ${
         ativo ? 'ring-2 ring-primary border-primary/50 bg-primary/5' : 'border-border/50'
       }`}
     >
@@ -341,7 +388,7 @@ const FiguraEditorItem: React.FC<FiguraEditorItemProps> = ({
           {`Fig. ${index + 1}`}
         </Badge>
       </div>
-      <div className="flex-1 min-w-0">
+      <div className="flex h-12 min-w-0 flex-1 flex-col justify-between">
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -358,62 +405,99 @@ const FiguraEditorItem: React.FC<FiguraEditorItemProps> = ({
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
+        <div className="flex h-5 items-center gap-1">
+          {!imagem.dummy && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-5 w-5 shrink-0 text-muted-foreground hover:text-foreground"
+              onClick={onPreview}
+              title="Ampliar"
+            >
+              <Maximize2 size={13} />
+            </Button>
+          )}
+          {onGerarLegenda && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-5 w-5 shrink-0 text-primary hover:text-primary"
+              onClick={() => void (async () => {
+                setGerandoLegenda(true);
+                try {
+                  const novaLegenda = await onGerarLegenda(imagem.id);
+                  if (novaLegenda) setLegenda(novaLegenda);
+                } finally {
+                  setGerandoLegenda(false);
+                }
+              })()}
+              disabled={gerandoLegenda}
+              title="Gerar legenda com IA"
+            >
+              <Sparkles size={13} className={gerandoLegenda ? 'animate-pulse' : undefined} />
+            </Button>
+          )}
+          {onReplaceImage && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-5 w-5 shrink-0 text-primary hover:text-primary"
+              onClick={() => onReplaceImage(imagem.id)}
+              title="Substituir figura"
+            >
+              <RefreshCw size={13} />
+            </Button>
+          )}
+          {onEditImage && !imagem.dummy && <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0 text-primary" onClick={onEditImage} title="Editar imagem" aria-label={`Editar figura ${index + 1}`}><Crop size={13} /></Button>}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-5 w-5 shrink-0 text-muted-foreground hover:text-destructive"
+            onClick={() => {
+              if (confirm('Deseja remover esta figura do laudo?')) {
+                onDelete(imagem.id, index);
+              }
+            }}
+          >
+            <Trash2 size={13} />
+          </Button>
+        </div>
       </div>
-      {!imagem.dummy && (
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
-          onClick={onPreview}
-          title="Ampliar"
-        >
-          <Maximize2 size={14} />
-        </Button>
+      {ativo && ajusteAltura !== undefined && onPrevisualizarAlturaPar && onConfirmarAlturaPar && (
+        <div className="basis-full space-y-1 pt-1">
+          {onDefinirAjusteVisualPar && (
+            <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+              <span>Preencher quadro</span>
+              <Switch
+                aria-label="Preencher quadro"
+                checked={imagem.ajusteVisualPar === 'preencher'}
+                onCheckedChange={preencher => onDefinirAjusteVisualPar(preencher ? 'preencher' : 'conter')}
+              />
+            </div>
+          )}
+          <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+            <span>Ajuste da altura</span>
+            <span className="font-medium text-foreground">{ajusteAltura}%</span>
+          </div>
+          <Slider
+            aria-label="Ajuste da altura"
+            min={AJUSTE_VISUAL_MINIMO_ALTURA_PAR}
+            max={AJUSTE_VISUAL_MAXIMO_ALTURA_PAR}
+            step={PASSO_AJUSTE_VISUAL_ALTURA_PAR}
+            value={[ajusteAltura]}
+            onValueChange={([valor]) => {
+              setAjusteAltura(valor);
+              previsualizacaoAlturaAtivaRef.current = true;
+              onPrevisualizarAlturaPar(alturaParPorAjusteVisual(valor));
+            }}
+            onValueCommit={([valor]) => {
+              setAjusteAltura(valor);
+              previsualizacaoAlturaAtivaRef.current = false;
+              onConfirmarAlturaPar(alturaParPorAjusteVisual(valor));
+            }}
+          />
+        </div>
       )}
-      {onGerarLegenda && (
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7 shrink-0 text-primary hover:text-primary"
-          onClick={() => void (async () => {
-            setGerandoLegenda(true);
-            try {
-              const novaLegenda = await onGerarLegenda(imagem.id);
-              if (novaLegenda) setLegenda(novaLegenda);
-            } finally {
-              setGerandoLegenda(false);
-            }
-          })()}
-          disabled={gerandoLegenda}
-          title="Gerar legenda com IA"
-        >
-          <Sparkles size={14} className={gerandoLegenda ? 'animate-pulse' : undefined} />
-        </Button>
-      )}
-      {onReplaceImage && (
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7 shrink-0 text-primary hover:text-primary"
-          onClick={() => onReplaceImage(imagem.id)}
-          title="Substituir figura"
-        >
-          <RefreshCw size={14} />
-        </Button>
-      )}
-      {onEditImage && !imagem.dummy && <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-primary" onClick={onEditImage} title="Editar imagem" aria-label={`Editar figura ${index + 1}`}><Crop size={14} /></Button>}
-      <Button
-        variant="ghost"
-        size="icon"
-        className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
-        onClick={() => {
-          if (confirm('Deseja remover esta figura do laudo?')) {
-            onDelete(imagem.id);
-          }
-        }}
-      >
-        <Trash2 size={14} />
-      </Button>
     </div>
   );
 };
@@ -436,6 +520,10 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
   onFechar,
   onReplaceImage,
   onEditImage,
+  onPrevisualizarAlturaPar,
+  onConfirmarAlturaPar,
+  onCancelarAlturaPar,
+  onDefinirAjusteVisualPar,
   onGerarLegenda,
   figuraSubstituicaoSolicitada,
   onFiguraSubstituicaoSolicitadaConsumida,
@@ -456,23 +544,38 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
   const [indiceEdicao, setIndiceEdicao] = useState<number | null>(null);
   const [origemEdicao, setOrigemEdicao] = useState('');
   const [imagemBaseEdicaoId, setImagemBaseEdicaoId] = useState('');
+  const [ajustesIniciaisEdicao, setAjustesIniciaisEdicao] = useState<AjustesFigura>();
 
   const abrirEdicao = async (indice: number, figura: ImagemLaudo) => {
-    const baseId = figura.imagemOrigemId || figura.id;
     try {
-      const resposta = await window.ipcAPI.ilustracoes.obterImagem(laudoId, baseId);
-      if (!resposta.success || !resposta.data?.dataUri) {
-        if (figura.imagemOrigemId) throw new Error('A imagem original desta figura não está mais disponível.');
+      const respostaAtual = await window.ipcAPI.ilustracoes.obterImagem(laudoId, figura.id);
+      let imagemAtual = respostaAtual.success ? respostaAtual.data?.dataUri : undefined;
+      if (!imagemAtual) {
+        if (figura.imagemOrigemId) throw new Error('A figura editada não está disponível para edição.');
         if (!/^data:image\/(?:jpeg|png|gif|bmp|webp);base64,/i.test(figura.url)) throw new Error('A imagem original não está disponível para edição.');
         const salva = await window.ipcAPI.ilustracoes.salvarImagem(laudoId, {
-          id: baseId, nomeArquivo: `figura-original-${indice + 1}`, dataUri: figura.url,
+          id: figura.id, nomeArquivo: `figura-original-${indice + 1}`, dataUri: figura.url,
           legenda: figura.legenda, origem: 'local', sequencia: indice + 1,
         });
         if (!salva.success) throw new Error(salva.error || 'Não foi possível preservar a imagem original.');
-        await window.ipcAPI.ilustracoes.arquivarImagem(laudoId, baseId);
+        await window.ipcAPI.ilustracoes.arquivarImagem(laudoId, figura.id);
+        imagemAtual = figura.url;
       }
-      setOrigemEdicao(resposta.success && resposta.data?.dataUri ? resposta.data.dataUri : figura.url);
+      const origemId = respostaAtual.data?.imagemOrigemId || figura.imagemOrigemId;
+      const ajustesRecebidos: unknown = respostaAtual.data?.ajustesFigura;
+      const ajustes = ajustesFiguraValidos(ajustesRecebidos) ? ajustesRecebidos : undefined;
+      let baseId = figura.id;
+      let origem = imagemAtual;
+      if (origemId && ajustes) {
+        const respostaOrigem = await window.ipcAPI.ilustracoes.obterImagem(laudoId, origemId);
+        if (respostaOrigem.success && respostaOrigem.data?.dataUri) {
+          baseId = origemId;
+          origem = respostaOrigem.data.dataUri;
+        }
+      }
+      setOrigemEdicao(origem);
       setImagemBaseEdicaoId(baseId);
+      setAjustesIniciaisEdicao(baseId === origemId ? ajustes : undefined);
       setIndiceEdicao(indice);
     } catch { toast.error('Não foi possível carregar a imagem para edição.'); }
   };
@@ -652,20 +755,18 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
     }
   };
 
-  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files) return;
+  const carregarArquivosLocais = async (arquivos: File[]): Promise<ImagemLaudo[]> => {
     const inicio = performance.now();
 
     let proximaSequencia = imagens.length + 1;
     const novasImagens: ImagemLaudo[] = [];
-    for (const file of Array.from(files)) {
+    for (const arquivo of arquivos) {
       try {
-        const dataUri = await readFileAsDataUri(file);
+        const dataUri = await readFileAsDataUri(arquivo);
         const id = crypto.randomUUID();
         const resultado = await window.ipcAPI.ilustracoes.estagiarImagem(laudoId, {
           id,
-          nomeArquivo: file.name,
+          nomeArquivo: arquivo.name,
           dataUri,
           legenda: '',
           origem: 'local',
@@ -673,14 +774,21 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
         });
         if (!resultado.success || !resultado.data) throw new Error(resultado.error || 'Não foi possível preparar a imagem.');
         novasImagens.push({ id, url: '', thumbnailUrl: resultado.data.thumbnailDataUri, legenda: '',
-          numero_figura: proximaSequencia, sequencia: proximaSequencia, created_at: new Date().toISOString(), nomeArquivo: file.name });
+          numero_figura: proximaSequencia, sequencia: proximaSequencia, created_at: new Date().toISOString(), nomeArquivo: arquivo.name });
         proximaSequencia += 1;
       } catch (error) {
-        toast.error(error instanceof Error ? `${file.name}: ${error.message}` : `Erro ao carregar ${file.name}`);
+        toast.error(error instanceof Error ? `${arquivo.name}: ${error.message}` : `Erro ao carregar ${arquivo.name}`);
       }
     }
     if (novasImagens.length > 0) setImagens(prev => [...prev, ...novasImagens]);
-    registrarDesempenhoIlustracao('upload_imagens', inicio, { imagens: novasImagens.length, tentativas: files.length });
+    registrarDesempenhoIlustracao('upload_imagens', inicio, { imagens: novasImagens.length, tentativas: arquivos.length });
+    return novasImagens;
+  };
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const arquivos = Array.from(e.target.files || []);
+    if (arquivos.length === 0) return;
+    await carregarArquivosLocais(arquivos);
     e.target.value = '';
   };
 
@@ -745,13 +853,14 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
     if (falha) toast.error(falha.error || 'Não foi possível arquivar as imagens inseridas.');
   };
 
-  const handleDeleteFiguraEditor = (id: string) => {
-    const figura = figurasNoEditor?.find(item => item.id === id);
+  const handleDeleteFiguraEditor = (id: string, indice: number) => {
+    const figura = figurasNoEditor?.[indice];
+    if (!figura || figura.id !== id) return;
     if (figura?.dummy) {
-      onDeleteImage?.(id);
+      onDeleteImage?.(id, indice);
       return;
     }
-    onDeleteImage?.(id);
+    onDeleteImage?.(id, indice);
   };
 
   const handleInsertAll = async () => {
@@ -866,12 +975,12 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
 
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button className="h-14 min-w-0 flex-col gap-1 px-2" variant="outline" onClick={() => setModalGdlAberto(true)} aria-label="Buscar imagens da REP">
+                <Button className="h-14 min-w-0 flex-col gap-1 px-2" variant="outline" onClick={() => setModalGdlAberto(true)} aria-label="Buscar imagens no GDL">
                   <ImageDown size={16} className="shrink-0" />
-                  <span className="whitespace-nowrap text-xs font-medium">Buscar REP</span>
+                  <span className="whitespace-nowrap text-xs font-medium">Buscar no GDL</span>
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Buscar imagens da REP</TooltipContent>
+              <TooltipContent>Buscar imagens no GDL</TooltipContent>
             </Tooltip>
 
             {filteredImagens.length > 0 ? (
@@ -1003,6 +1112,10 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
                   setSeletorSubstituicaoAberto(true);
                 }}
                 onEditImage={onEditImage ? () => { void abrirEdicao(idx, fig); } : undefined}
+                onPrevisualizarAlturaPar={onPrevisualizarAlturaPar ? altura => onPrevisualizarAlturaPar(idx, altura) : undefined}
+                onConfirmarAlturaPar={onConfirmarAlturaPar ? altura => onConfirmarAlturaPar(idx, altura) : undefined}
+                onCancelarAlturaPar={onCancelarAlturaPar ? () => onCancelarAlturaPar(idx) : undefined}
+                onDefinirAjusteVisualPar={onDefinirAjusteVisualPar ? ajuste => onDefinirAjusteVisualPar(idx, ajuste) : undefined}
                 onGerarLegenda={onGerarLegenda}
               />
             ))}
@@ -1048,6 +1161,7 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
       <EditorFiguraDialog
         aberto={indiceEdicao !== null}
         origem={origemEdicao}
+        ajustesIniciais={ajustesIniciaisEdicao}
         onAbertoChange={aberto => { if (!aberto) setIndiceEdicao(null); }}
         onAplicar={aplicarEdicao}
       />
@@ -1064,20 +1178,8 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
         onBuscarGdl={() => { setSeletorInsercaoAberto(false); setModalGdlAberto(true); }}
         onGerarLegenda={onGerarLegenda}
         onCarregarArquivo={async arquivo => {
-          try {
-            const dataUri = await readFileAsDataUri(arquivo);
-            const id = crypto.randomUUID();
-            const resposta = await window.ipcAPI.ilustracoes.estagiarImagem(laudoId, {
-              id, nomeArquivo: arquivo.name, dataUri, legenda: '', origem: 'local', sequencia: imagens.length + 1,
-            });
-            if (!resposta.success || !resposta.data) throw new Error(resposta.error || 'Não foi possível preparar a imagem.');
-            const imagem: ImagemLaudo = { id, url: '', thumbnailUrl: resposta.data.thumbnailDataUri, legenda: '',
-              numero_figura: imagens.length + 1, sequencia: imagens.length + 1, created_at: new Date().toISOString(), nomeArquivo: arquivo.name };
-            setImagens(atuais => [...atuais, imagem]);
-            setImagemSubstituicaoId(imagem.id);
-          } catch (erro: unknown) {
-            toast.error(erro instanceof Error ? erro.message : 'Não foi possível carregar a imagem.');
-          }
+          const [imagem] = await carregarArquivosLocais([arquivo]);
+          if (imagem) setImagemSubstituicaoId(imagem.id);
         }}
         onConfirmar={(legenda, imagemEditada) => {
           if (insercaoNoCursorEmAndamentoRef.current) return;
@@ -1127,6 +1229,10 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
         onSelecionar={setImagemSubstituicaoId}
         onBuscarGdl={() => { setSeletorSubstituicaoAberto(false); setModalGdlAberto(true); }}
         onGerarLegenda={onGerarLegenda}
+        onCarregarArquivo={async arquivo => {
+          const [imagem] = await carregarArquivosLocais([arquivo]);
+          if (imagem) setImagemSubstituicaoId(imagem.id);
+        }}
         onConfirmar={(legenda, imagemEditada) => {
           const imagem = filteredImagens.find(item => item.id === imagemSubstituicaoId);
           if (!figuraSubstituicaoId || !imagem) return;

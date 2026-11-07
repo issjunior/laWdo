@@ -1,6 +1,6 @@
 import { CANAIS_COM_INTERACAO_USUARIO } from '../shared/diagnostico/canais.js';
 import { iniciarAtualizacaoAutomaticaGdl, encerrarAtualizacaoAutomaticaGdl } from './services/gdl-atualizacao-automatica.service.js';
-import { normalizarFalhaDiagnosticoGdl } from './services/diagnostico-eventos.service.js';
+import { normalizarFalhaDiagnosticoGdl, normalizarFalhaDiagnosticoImagem } from './services/diagnostico-eventos.service.js';
 import { conectarDiagnosticoGpu, diagnosticoGpu, encerrarDiagnosticoGpu, preparacaoGpu } from './diagnostico-gpu.js';
 import { schemaConsultarGpuEntrada } from '../shared/diagnostico/contratos.js';
 import { configurarObservadorGdl } from './services/gdl-diagnostico.service.js';
@@ -15,6 +15,7 @@ import { CURRENT_SCHEMA_VERSION, setupDatabase } from './database/index.js';
 import { closeDatabase, executeQuery } from './database/sqlite.js';
 import { getLogger, logDebug, setupLogging } from './utils/logger.js';
 import { registerIpcHandlers } from './ipc/index.js';
+import { prepararCorretor, registrarContextoCorretor } from './services/corretor.service.js';
 import { atualizacaoService } from './services/atualizacao.service.js';
 import { carregarEstadoJanelaPrincipal, observarEstadoJanelaPrincipal } from './utils/estado-janela-principal.js';
 import { DiagnosticoSessaoService } from './services/diagnostico-sessao.service.js';
@@ -28,6 +29,7 @@ import { authSessaoService } from './services/auth-sessao.service.js';
 import { concluirRestauracaoPendente, reverterRestauracaoPendente } from './services/backup.service.js';
 import { desempenhoService } from './services/desempenho.service.js';
 import { capturaLogsService } from './services/captura-logs.service.js';
+import { EncerramentoAplicativoService } from './services/encerramento-aplicativo.service.js';
 import { definirAtivadorInstancia } from './utils/instancia-unica.js';
 import { carregarConteudoJanela } from './utils/carregamento-janela.js';
 import { schemaCapturarTelaEntrada, schemaCriarSnapshotEntrada, schemaExecutarAcaoEntrada, schemaInspecionarInterfaceEntrada, schemaObterEventosEntrada, schemaIniciarCapturaEntrada, schemaStatusCapturaEntrada, schemaFinalizarCapturaEntrada, schemaConsultarCapturaEntrada } from '../shared/diagnostico/contratos.js';
@@ -61,7 +63,8 @@ let sessaoDiagnostico: DiagnosticoSessaoService | null = null;
 let pipeDiagnostico: DiagnosticoPipeService | null = null;
 let capturaDiagnostico: DiagnosticoCapturaService | null = null;
 let sourceMapsDiagnostico: DiagnosticoSourceMapService | null = null;
-let encerramentoAplicativoEmAndamento = false;
+let temporizadorVerificacaoAtualizacao: NodeJS.Timeout | null = null;
+let verificacaoAtualizacaoEmAndamento: Promise<void> | null = null;
 let temporizadorAtrasoEventLoopDiagnostico: NodeJS.Timeout | null = null;
 let atrasoEventLoopDiagnostico: number | null = null;
 let ativacaoPendente = false;
@@ -437,6 +440,8 @@ async function iniciarDiagnosticoAssistido(): Promise<void> {
     const resultadoFuncional = entrada.resultadoFuncional === 'sucesso' || entrada.resultadoFuncional === 'falha' || entrada.resultadoFuncional === 'indeterminado' || entrada.resultadoFuncional === 'cancelado' || entrada.resultadoFuncional === 'indisponivel'
       ? entrada.resultadoFuncional : undefined;
     const falha = canal.startsWith('gdl:') && (resultadoFuncional === 'falha' || resultadoFuncional === 'indisponivel') ? normalizarFalhaDiagnosticoGdl(entrada.falha) : undefined;
+    const falhaImagem = canal === 'ilustracoes:obter-imagem-impressao' && resultadoFuncional === 'falha'
+      ? normalizarFalhaDiagnosticoImagem(entrada.falhaImagem) : undefined;
     const tipoFalha = entrada.tipoFalha === 'transporte' ? 'transporte' : undefined;
     const categoria = entrada.categoria === 'acao' ? 'acao' : 'ipc';
     const nivel = entrada.nivel === 'debug' || entrada.nivel === 'warn' || entrada.nivel === 'error' ? entrada.nivel : 'info';
@@ -449,7 +454,7 @@ async function iniciarDiagnosticoAssistido(): Promise<void> {
       correlacaoId,
       dados: categoria === 'acao'
         ? entrada
-        : { fase, canal, duracaoMs, resultadoFuncional, tipoFalha, interacaoUsuario: CANAIS_COM_INTERACAO_USUARIO.some(item => item === canal), ...(falha ? { falha } : {}), erro: typeof entrada.erro === 'string' ? entrada.erro : undefined },
+        : { fase, canal, duracaoMs, resultadoFuncional, tipoFalha, interacaoUsuario: CANAIS_COM_INTERACAO_USUARIO.some(item => item === canal), ...(falha ? { falha } : {}), ...(falhaImagem ? { falhaImagem } : {}), erro: typeof entrada.erro === 'string' ? entrada.erro : undefined },
     });
   });
   ipcMain.on('diagnostico:erro-fatal-renderer', (evento, erro: unknown) => {
@@ -500,6 +505,7 @@ const createWindow = async (): Promise<void> => {
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
+      spellcheck: true,
     },
     icon: caminhoIcone,
     title: 'laWdo',
@@ -517,6 +523,8 @@ const createWindow = async (): Promise<void> => {
       : {}),
   });
   mainWindow.removeMenu();
+  await prepararCorretor(mainWindow.webContents.session);
+  registrarContextoCorretor(mainWindow.webContents);
   if (estado.maximizada) mainWindow.maximize();
   if (ativacaoPendente) {
     mainWindow.focus();
@@ -717,8 +725,9 @@ app.whenReady().then(async () => {
 
     if (process.env.LAWDO_SMOKE_JANELA !== '1') {
       const atrasoVerificacaoAtualizacao = 5_000 + Math.floor(Math.random() * 25_000);
-      setTimeout(() => {
-        void atualizacaoService.verificar().catch(() => undefined);
+      temporizadorVerificacaoAtualizacao = setTimeout(() => {
+        temporizadorVerificacaoAtualizacao = null;
+        verificacaoAtualizacaoEmAndamento = atualizacaoService.verificar().then(() => undefined).catch(() => undefined);
       }, atrasoVerificacaoAtualizacao);
     }
 
@@ -804,19 +813,29 @@ app.on('window-all-closed', () => {
   }
 });
 
-app.on('will-quit', evento => {
-  if (encerramentoAplicativoEmAndamento) return;
-  evento.preventDefault();
-  encerramentoAplicativoEmAndamento = true;
-  encerrarAtualizacaoAutomaticaGdl();
-  void Promise.all([
-    encerrarDiagnosticoAssistido(),
-    import('./services/processador-imagens.service.js').then(modulo => modulo.encerrarProcessadorImagens()),
-    Promise.resolve(desempenhoService.encerrar()),
-    Promise.resolve(capturaLogsService.encerrar()),
-    closeDatabase().catch(error => log.error('Erro ao fechar banco de dados no encerramento', error)),
-  ]).finally(() => app.exit(0));
+const encerramentoAplicativo = new EncerramentoAplicativoService({
+  grupos: [
+    [
+      { nome: 'verificação agendada de atualização', executar: async () => {
+        if (temporizadorVerificacaoAtualizacao) clearTimeout(temporizadorVerificacaoAtualizacao);
+        temporizadorVerificacaoAtualizacao = null;
+        await verificacaoAtualizacaoEmAndamento;
+      } },
+      { nome: 'atualização automática GDL', executar: encerrarAtualizacaoAutomaticaGdl },
+      { nome: 'processador de imagens', executar: () => import('./services/processador-imagens.service.js').then(modulo => modulo.encerrarProcessadorImagens()) },
+    ],
+    [{ nome: 'diagnóstico assistido', executar: encerrarDiagnosticoAssistido }],
+    [{ nome: 'desempenho', executar: () => desempenhoService.encerrar() }],
+    [{ nome: 'captura de logs', executar: () => capturaLogsService.encerrar() }],
+  ],
+  fecharBanco: closeDatabase,
+  registrarFalha: (etapa, erro) => log.error('Erro no encerramento do aplicativo', {
+    etapa, erro: erro instanceof Error ? erro.message : 'Erro inesperado',
+  }),
+  sair: () => app.quit(),
 });
+
+app.on('will-quit', evento => encerramentoAplicativo.solicitar(evento));
 
 app.on('activate', () => {
   // No macOS, recriar uma janela no app quando

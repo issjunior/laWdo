@@ -57,6 +57,8 @@ interface DataTableProps<TData extends RowData> {
   fixarPrimeiraColuna?: boolean
   /** Elemento externo onde o controle de colunas deve aparecer */
   destinoControleColunas?: HTMLElement | null
+  tamanhoPaginaFixo?: number
+  chaveReinicioPagina?: string
 }
 
 export function DataTable<TData extends RowData>({
@@ -73,6 +75,8 @@ export function DataTable<TData extends RowData>({
   preencherAltura = false,
   fixarPrimeiraColuna = false,
   destinoControleColunas = null,
+  tamanhoPaginaFixo,
+  chaveReinicioPagina,
 }: DataTableProps<TData>) {
   const [preferencias] = React.useState(() => {
     if (!chavePreferencias) return null
@@ -103,6 +107,7 @@ export function DataTable<TData extends RowData>({
   const [columnVisibility, setColumnVisibility] = React.useState<ColumnVisibilityState>(preferencias?.visibilidade ?? initialColumnVisibility)
   const [globalFilter, setGlobalFilter] = React.useState("")
   const [rowPinning, setRowPinning] = React.useState<RowPinningState>({ top: [], bottom: [] })
+  const chaveReinicioAnterior = React.useRef(chaveReinicioPagina)
 
   React.useEffect(() => {
     if (!chavePreferencias) return
@@ -117,6 +122,7 @@ export function DataTable<TData extends RowData>({
     features: recursosTabela,
     data,
     columns,
+    initialState: tamanhoPaginaFixo ? { pagination: { pageIndex: 0, pageSize: tamanhoPaginaFixo } } : undefined,
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     onColumnVisibilityChange: setColumnVisibility,
@@ -136,6 +142,13 @@ export function DataTable<TData extends RowData>({
       rowPinning,
     },
   })
+
+  React.useEffect(() => {
+    if (chaveReinicioPagina !== undefined && chaveReinicioAnterior.current !== chaveReinicioPagina) {
+      chaveReinicioAnterior.current = chaveReinicioPagina
+      table.setPageIndex(0)
+    }
+  }, [chaveReinicioPagina, table])
 
   const controleColunas = (
     <DropdownMenu>
@@ -330,7 +343,7 @@ export function DataTable<TData extends RowData>({
       </div>
 
       {/* Paginação */}
-      <DataTablePagination table={table} />
+      <DataTablePagination table={table} tamanhoPaginaFixo={tamanhoPaginaFixo !== undefined} />
     </div>
   )
 }

@@ -1,3 +1,4 @@
+import { PAISES } from '@shared/catalogos/paises.catalogo';
 import React, { useState, useEffect } from 'react';
 import { FormField, FormItem, FormControl, FormMessage } from '@/components/forms/form';
 import { Input } from '@/components/ui/input';
@@ -29,12 +30,7 @@ const NATUREZA_OPTS = ['Arma', 'Munição', 'Acessório', 'Cartucho', 'Estojo'] 
 const TIPO_OPTS = ['Artesanal', 'Carabina', 'Cartucho', 'Espingarda', 'Garrucha', 'Pistola', 'Revólver'] as const;
 const CALIBRE_OPTS = ['.380 AUTO', '9 mm Luger', '.38 SPL'] as const;
 const MARCA_OPTS = ['Aguila', 'Blazer', 'CBC', 'R-P (Remington)', 'Speer'] as const;
-const PAISES = [
-  'Brasil', 'Argentina', 'Bolívia', 'Chile', 'Colômbia', 'Equador',
-  'Paraguai', 'Peru', 'Uruguai', 'Venezuela', 'EUA', 'China', 'Rússia',
-  'Alemanha', 'Itália', 'Espanha', 'Portugal', 'França', 'Reino Unido',
-  'Japão', 'Coreia do Sul', 'Índia', 'África do Sul', 'Austrália',
-] as const;
+
 const ESPOLETA_OPTS = ['Latonada', 'Niquelada'] as const;
 const ESTOJO_OPTS = ['Latonada', 'Niquelada'] as const;
 const PROJETIL_OPTS = [

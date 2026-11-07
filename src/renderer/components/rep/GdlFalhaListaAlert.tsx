@@ -47,7 +47,7 @@ const orientacoes: Record<CodigoFalhaListaRepsGdl, string> = {
   desativada: 'Ative a listagem na página API GDL para ver suas REPs.',
   credenciais: 'Informe seu usuário e sua senha na página API GDL.',
   autenticacao: 'Confira o usuário e a senha cadastrados na página API GDL.',
-  rede: 'Verifique a conexão e conecte a VPN, se necessária, antes de tentar novamente.',
+  rede: 'Verifique o alcance da rede institucional antes de tentar novamente.',
   tempo_esgotado: 'O GDL não respondeu a tempo. Aguarde um pouco e tente novamente.',
   limite_gdl: 'Aguarde alguns minutos antes de consultar novamente.',
   servidor: 'O serviço do GDL está indisponível no momento. Tente mais tarde.',
@@ -100,7 +100,7 @@ export function GdlFalhaListaAlert({ falha, listaSalva, onTentarNovamente, onCon
           </div>
         </div>
         {detalhesAbertos && <div className="max-w-full overflow-x-auto whitespace-nowrap rounded-md border bg-background p-2 text-xs text-muted-foreground">
-          <span>{esperada ? MENSAGEM_ACESSO_REDE_GDL : orientacoes[falha.codigo]}</span><span> Código: {falha.codigo}{falha.codigoSistema ? ` (${falha.codigoSistema})` : ''}. {falha.referencia ? `Referência: ${falha.referencia}` : ''}</span>
+          <span>{esperada ? MENSAGEM_ACESSO_REDE_GDL : orientacoes[falha.codigo]}<span> Código: {falha.codigo}{falha.codigoSistema ? ` (${falha.codigoSistema})` : ''}. {falha.referencia ? `Referência: ${falha.referencia}` : ''}</span></span>
         </div>}
       </AlertDescription>
     </Alert>

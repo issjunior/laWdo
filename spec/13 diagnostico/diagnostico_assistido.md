@@ -217,3 +217,9 @@ As suítes `diagnostico-gpu-bootstrap.test.ts`, `diagnostico-gpu.service.test.ts
 ## Exercício automatizado manual do editor
 
 `npm run test:carga` usa Electron real com dados fictícios isolados e capturas de desempenho em segmentos de 30 segundos. Essa ferramenta de desenvolvimento não amplia o contrato MCP nem habilita diagnóstico no aplicativo comum ou empacotado. Somente seus unitários são executados no CI. Comandos, isolamento, evidências e limites estão em [Testes de carga do editor](testes_carga_editor.md).
+
+## Evidência de falhas e lentidão na captura de desempenho
+
+Além de sessão/janela, a captura de desempenho retém eventos de erro, níveis error/warn e IPCs sem interação de usuário com duração de pelo menos 250 ms, excluindo resultados cancelado/indisponível nesse último critério. O resumo é calculado sobre todos os eventos do intervalo, não só os retidos no recorte; as métricas de IPC também consideram o conjunto anterior ao filtro. Portanto, um resumo pode contabilizar eventos que não aparecem individualmente na timeline reduzida. Essa retenção não habilita as sondas detalhadas de editor/tela/interface da captura de problema.
+
+Falhas de `ilustracoes:obter-imagem-impressao` incluem apenas `falhaImagem.codigo` validado pela allowlist compartilhada. O preload normaliza o envelope e o main repete o narrowing antes de registrar; caminhos, bytes e conteúdo do documento não são transportados nesses dados. A ausência de imagem para PDF fica distinguível de falha de comunicação ou resposta inválida. `diagnostico-ipc.test.ts`, `diagnostico-eventos.service.test.ts` e `diagnostico-captura.service.test.ts` cobrem códigos e inclusão de erros/IPCs lentos na captura de desempenho.

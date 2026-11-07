@@ -16,6 +16,7 @@ export class AgendadorGdlService {
   private controlador = new AbortController();
   private ativo = false;
   private executando = false;
+  private execucaoEmAndamento: Promise<void> = Promise.resolve();
   private revisaoPendente = false;
   private tentarApos = new Map<string, number>();
   private naoAntesDe = 0;
@@ -27,10 +28,11 @@ export class AgendadorGdlService {
     this.contextoAlterado();
   }
 
-  encerrar(): void {
+  encerrar(): Promise<void> {
     this.ativo = false;
     this.controlador.abort();
     clearTimeout(this.temporizador);
+    return this.execucaoEmAndamento;
   }
 
   contextoAlterado(): void {
@@ -50,7 +52,7 @@ export class AgendadorGdlService {
 
   private agendar(atraso: number): void {
     clearTimeout(this.temporizador);
-    if (this.ativo) this.temporizador = setTimeout(() => { void this.verificar(); }, Math.min(2_147_483_647, Math.max(0, atraso)));
+    if (this.ativo) this.temporizador = setTimeout(() => { this.execucaoEmAndamento = this.verificar(); }, Math.min(2_147_483_647, Math.max(0, atraso)));
   }
 
   private async verificar(): Promise<void> {

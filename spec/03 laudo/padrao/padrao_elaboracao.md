@@ -15,9 +15,9 @@ Os caminhos abaixo são relativos à raiz do repositório.
 | Orquestração da sessão, documento único/por seções, diálogos e operações | src/renderer/pages/LaudosPage.tsx |
 | Configuração, prontidão e comandos comuns do editor | src/renderer/components/editor/TinyMceEditor.tsx |
 | Cabeçalho, modos, rodapé e indicação de salvamento | src/renderer/components/laudo/editor/ControlesEditorLaudo.tsx |
-| Superfície Editar/Concluir, Restaurar e Excluir | src/renderer/lib/conteudo-interativo.ts |
+| Superfície de conteúdo, Restaurar e Excluir | src/renderer/lib/conteudo-interativo.ts |
 | Capacidades e operações por categoria de conteúdo | src/renderer/lib/adaptadores-conteudo-laudo.ts |
-| Permissão de edição de campos e proteção de ancestrais | src/renderer/lib/politica-edicao-conteudo.ts |
+| Permissão de edição direta e compatibilidade dos demais editores | src/renderer/lib/politica-edicao-conteudo.ts |
 | Confirmação assíncrona integrada à página | src/renderer/components/editor/ConfirmacaoConteudo.tsx |
 | Preparação coordenada e limpeza transitória | src/renderer/lib/preparacao-conteudo-editor.ts e conteudo-interativo-limpeza.ts |
 | Conteúdo atualizado e comparação de pendências | src/renderer/lib/sincronizacao-editor-laudo.ts e conteudo-comparavel-laudo.ts |
@@ -25,6 +25,9 @@ Os caminhos abaixo são relativos à raiz do repositório.
 | Dock, trilho e apresentação compartilhada | src/renderer/components/laudo/PainelLateralRedimensionavel.tsx e src/renderer/styles/globals.css |
 | Acionadores no iframe e menus externos dos seletores | src/renderer/lib/seletores-tabela-laudo.ts e src/renderer/components/editor/SeletorTabelaLaudo.tsx |
 | HTML comum das figuras e imagem dummy | src/shared/figura/html.ts |
+| Materialização de tabelas editadas no laudo | src/renderer/lib/edicao-direta-laudo.ts |
+| Campos e opções dos quadros B-601 | src/shared/catalogos/b601-tabelas.catalogo.ts |
+| Corretor e menu de sugestões | src/main/services/corretor.service.ts e src/renderer/lib/corretor-editor.ts |
 | Resolução do conteúdo destinado à saída | src/renderer/lib/exportacao-placeholders.ts |
 | Tabelas de impressão, margens e preparação PDF | src/main/services/pdf-tabelas.ts, pdf-layout.ts e pdf-prontidao.service.ts |
 
@@ -44,20 +47,22 @@ O editor não representa uma página impressa: largura disponível, fontes, marg
 
 ## Semântica das ações e proteção
 
-**Editar/Concluir** controla a liberação local do conteúdo. Concluir essa edição não salva o laudo nem muda seu status. **Salvar** persiste o rascunho pela página. **Restaurar dados da REP** recompõe conteúdo a partir da REP local e descarta as personalizações indicadas na confirmação. **Excluir** tem efeito específico por categoria.
+Na página Laudos, `laudoId` ativa a edição direta no TinyMCE: tabelas de dados, condicionais e grupos descritivos permitem editar os campos elegíveis, inclusive em blocos aninhados, sem os botões **Editar/Concluir**. A superfície conserva cores de origem, **Restaurar dados da REP** e **Excluir** conforme as capacidades de cada adaptador. Nos consumidores sem `laudoId`, continua existindo a liberação local **Editar/Concluir**; Concluir não salva nem altera status. Não propagar a edição direta automaticamente a templates ou cabeçalhos.
 
-| Conteúdo | Edição e personalização | Restauração | Exclusão pela superfície comum |
+| Conteúdo | Edição e personalização no laudo | Restauração | Exclusão pela superfície comum |
 |---|---|---|---|
-| Tabela resolvida da REP | Editar materializa uma tabela personalizada; Concluir volta a protegê-la | Disponível após personalização | Remove tabela e vínculo técnico correspondente |
-| Tabela personalizada | Libera células elegíveis | Retorna aos dados da REP | Remove tabela e vínculo correspondente |
-| Bloco condicional | Libera o texto sob a política comum | Não possui restauração vinculada à REP | Suprime com data-cond-suprimido; não equivale a remover todo o wrapper |
-| Grupo descritivo B-601 | Liberação do grupo, preservando elementos protegidos | Recria pela REP vinculada, preservando complementos reconhecidos | Indisponível |
-| Placeholder textual | Personalização da ocorrência pelo fluxo próprio | Restaurar valor da REP pelo fluxo próprio | Não recebe automaticamente a superfície de exclusão de blocos |
-| Campo reservado XXX | Preenchimento pelo diálogo próprio | Segue o contrato do campo reservado | Não recebe automaticamente a superfície de exclusão de blocos |
+| Tabela resolvida da REP | Digitação elegível materializa cópia local quando o conteúdo realmente muda | Disponível após personalização | Remove tabela e âncora vinculada |
+| Tabela personalizada | Células elegíveis continuam editáveis | Retorna à tabela resolvida da REP | Remove tabela e vínculo correspondente |
+| Bloco condicional | Texto elegível diretamente editável | Recompõe pelo modelo e REP locais somente com vínculo `data-cond-origem` | Suprime com `data-cond-suprimido`; conserva o wrapper |
+| Grupo descritivo B-601 | Texto direto e seletores por campo/unidade | Recria pela REP local, preservando complementos reconhecidos | Indisponível |
+| Placeholder textual | Personalização da ocorrência pelo diálogo próprio | Restaurar valor da REP pelo fluxo próprio | Sem superfície genérica de exclusão |
+| Campo reservado XXX | Preenchimento pelo diálogo próprio | Segue o contrato do campo reservado | Sem superfície genérica de exclusão |
 
-Cabeçalhos de tabela, células fixas, controles e âncoras técnicas permanecem protegidos. Campos comuns exigem que todos os blocos protegidos ancestrais estejam em edição. A política admite preenchimentos reservados/personalizados e seleções pontuais reconhecidas sem liberar todo o bloco; isso não supera o modo somente leitura nem as travas de cabeçalhos e células fixas. Não reproduzir essas decisões em handlers independentes.
+Somente leitura, cabeçalhos, células fixas, controles e âncoras técnicas continuam protegidos. A edição direta dispensa liberação dos ancestrais para os campos comuns dos blocos reconhecidos; os seletores mantêm sua interação própria. Fora desse modo, `politica-edicao-conteudo.ts` mantém a exigência de ancestrais liberados e as exceções de preenchimento reservado/pontual. Não duplicar decisões de permissão em handlers independentes.
 
-Restaurar e Excluir usam confirmação assíncrona com AlertDialog. Cancelar, desmontar a confirmação ou substituí-la resolve a operação como cancelada. A superfície serializa ações por instância e revalida presença, identidade, modo e conteúdo antes e depois da preparação assíncrona. Alvo obsoleto ou alterado interrompe a operação e gera feedback, sem escolher outro destino. Alterações de conteúdo são agrupadas no undo; a preparação visual usa undoManager.ignore.
+`registrarEdicaoDiretaLaudo()` observa prévias de tabela. O evento `LaudoPreparado`, emitido após o callback assíncrono inicial, estabelece as referências para distinguir preparação de edição real. A alteração materializa a tabela antes de ler/salvar e integra vínculo e conteúdo no mesmo nível de undo. Excluir toda a prévia também remove sua âncora para impedir recriação ao reabrir. A troca de apresentação e o undo recompõem referências por identidade; controles, atributos transitórios e numeração visual não devem produzir personalização sozinhos.
+
+Restaurar e Excluir usam confirmação assíncrona com AlertDialog. Cancelar, desmontar a confirmação ou substituí-la resolve como cancelamento. A superfície serializa ações por instância e revalida presença, identidade, modo e conteúdo antes e depois de consultas assíncronas. Alvo obsoleto interrompe a operação sem escolher outro destino. Alterações de conteúdo usam undo; preparação visual usa `undoManager.ignore`.
 
 As diferenças de restauração, supressão e persistência estão em [Editor](../editor_texto.md), [Condicionais](../bloco_condicional.md), [B-601](../b601.md), [Ciclo de placeholders](../../05%20placeholder/ciclo_placeholder.md) e [Campo reservado](../../05%20placeholder/campo_reservado_xxx.md).
 
@@ -73,7 +78,7 @@ Consulte [Ferramenta de projéteis](../../16%20ferramentas/identificacao_projete
 
 ## Menus e seletores nas tabelas
 
-O menu de contexto pode variar conforme o alvo reconhecido. Na página Laudos, campos compatíveis dos quadros descritivos B-601 usam o menu de preenchimento; demais locais e editores de templates/cabeçalhos conservam o menu de placeholders. Essa especialização não se aplica automaticamente a todas as tabelas ou exames. As opções e os atalhos ficam em [Menu de contexto](../menu_contexto.md), com elegibilidade em [B-601](../b601.md).
+O menu de contexto pode variar conforme o alvo reconhecido. Na página Laudos, o contexto válido de correção ortográfica tem precedência; sem ele, campos compatíveis dos quadros descritivos B-601 usam o menu de preenchimento e os demais locais conservam o menu de placeholders. Templates/cabeçalhos conservam o menu de placeholders. Essa especialização não se aplica automaticamente a todas as tabelas ou exames. As opções e os atalhos ficam em [Menu de contexto](../menu_contexto.md), com elegibilidade em [B-601](../b601.md).
 
 Menu e atalho compartilham a operação, revalidam os alvos e a política de edição e agrupam o preenchimento em uma transação de undo. A política mantém suas exceções para campos reservados e seleções pontuais; abrir o menu não concede permissão adicional. Os atalhos de preenchimento usam Ctrl + Shift + letra (P para Prejudicado, A para Ausente), preservando Ctrl + A para selecionar tudo e Ctrl + P para imprimir. O clique simples identifica a célula para o atalho sem exigir seleção de texto, com referência transitória por instância. O menu devolve o foco uma vez, ao fechar, usando foco sem rolagem automática; o atalho restaura o foco após aplicar. Preservar o alvo e a seleção ao atravessar iframe e interface externa.
 
@@ -113,7 +118,7 @@ Os arquivos abaixo ficam em src/__tests__/renderer/; esta tabela identifica cobe
 
 | Cenário | Testes existentes |
 |---|---|
-| Proteções, liberação, cancelamento, concorrência e supressão | conteudo-protegido.test.ts e conteudo-interativo.test.ts |
+| Proteções, edição direta, cancelamento, concorrência e supressão | conteudo-protegido.test.ts, conteudo-interativo.test.ts e edicao-direta-laudo.test.ts |
 | Preparação agrupada e sessões independentes | preparacao-conteudo-editor.test.ts |
 | Abertura sem editar, edição real e preparação tardia | inicializacao-saida-laudo.component.test.tsx e conteudo-comparavel-laudo.test.ts |
 | Sincronização, undo/redo e leitura antes do temporizador | sincronizacao-editor-laudo.test.ts |
@@ -123,3 +128,11 @@ Os arquivos abaixo ficam em src/__tests__/renderer/; esta tabela identifica cobe
 O DOM simulado não comprova seleção, aparência, foco entre iframe/janela ou histórico real do TinyMCE no Electron. Mudanças nesses contratos exigem smoke proporcional: abrir e sair sem editar; editar, desfazer/refazer, salvar e reabrir; alternar organização; abrir/fechar ferramentas; conferir temas e saída sem controles transitórios.
 
 Quando o layout do documento mudar, conferir também prévia e PDF exportado com as mesmas margens e conteúdo: textos longos, tabela que atravesse uma página, cabeçalhos repetidos e figuras novas/substituídas conforme o recurso afetado. Verificar preservação das bordas escolhidas, legendas e numeração, além da independência da impressão em relação ao tema claro/escuro. Usar os três modelos integrados como amostras quando a mudança atingir o padrão comum; diferenças de capacidade permanecem regidas pelas specs de cada exame. Resultados de uma execução pertencem ao relatório da tarefa, não a esta documentação de estado atual.
+
+## Padrão comum e templates embarcados
+
+Os três modelos ativos compartilham editor, confirmação, preparação, limpeza, figuras e saída; a versão do catálogo não concede capacidades adicionais ao editor. Os templates hardcoded ficam em `src/main/templates/integrados/catalogo.ts`: B-602 v12, B-601 v3 e B-601 Local com Necropsia v5. Não replicar opções, HTML de figuras ou regras de impressão dentro de cada versão: os geradores e catálogos compartilhados são as fontes desses contratos. A separação entre modelo versionado, projeção dos dados locais e HTML próprio do laudo está em [Templates integrados](../templates_integrados.md).
+
+O corretor é ferramenta do trilho e atua no editor principal e no diálogo de personalização. Abertura, configuração e consulta do dicionário não alteram o documento; aplicar uma sugestão válida é edição local com undo. O contrato específico está em [Editor](../editor_texto.md#corretor-ortográfico-local).
+
+As regras de figuras isoladas, correção do wrapper legado Local com Necropsia e anotações sobre imagens estão em [Ilustrações](../fluxo_ilustracao.md). O espaçamento de seções do PDF pertence a `pdf-secoes.ts`, compartilhado por prévia e exportação; não deve ser compensado com parágrafos vazios nos modelos.

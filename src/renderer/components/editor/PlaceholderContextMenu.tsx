@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { obterContextoCorrecao, type ContextoCorrecao } from '@/lib/corretor-editor';
+import { ItensMenuCorretor } from './ItensMenuCorretor';
 import { obterContextoPreenchimentoB601, type ContextoPreenchimentoB601 } from '@/lib/menu-preenchimento-b601';
 import { SearchX, Tag, TriangleAlert } from 'lucide-react';
 import {
@@ -68,6 +70,7 @@ export const PlaceholderContextMenu: React.FC<{
   children,
 }) => {
   const [preenchimento, definirPreenchimento] = useState<ContextoPreenchimentoB601 | null>(null);
+  const [correcao, definirCorrecao] = useState<ContextoCorrecao | null>(null);
   const categoriasCompletas = [...categorias, ...CATEGORIAS_PLACEHOLDERS_COMUNS.filter(comum => !categorias.some(cat => cat.id === comum.id))];
   const chavesComuns = new Set(PLACEHOLDERS_COMUNS.map(item => item.chave));
   const placeholdersCompletos = [
@@ -84,13 +87,18 @@ export const PlaceholderContextMenu: React.FC<{
 
   return (
     <ContextMenu>
-      <ContextMenuTrigger asChild onContextMenuCapture={evento => definirPreenchimento(obterContextoPreenchimentoB601(evento.target))}>
+      <ContextMenuTrigger asChild onContextMenuCapture={evento => {
+        definirPreenchimento(obterContextoPreenchimentoB601(evento.target));
+        definirCorrecao(obterContextoCorrecao(editorId));
+      }}>
         {children}
       </ContextMenuTrigger>
       <ContextMenuContent className={preenchimento ? 'w-72' : 'w-64'} onCloseAutoFocus={evento => {
-        if (preenchimento) { evento.preventDefault(); preenchimento.restaurarFoco(); }
+        if (correcao) { evento.preventDefault(); correcao.restaurarFoco(); }
+        else if (preenchimento) { evento.preventDefault(); preenchimento.restaurarFoco(); }
       }}>
-        {preenchimento ? <>
+        {correcao && <ItensMenuCorretor correcao={correcao} />}
+        {!correcao && (preenchimento ? <>
           <ContextMenuLabel className="flex items-center justify-between gap-3 px-2 py-2 text-xs font-medium text-muted-foreground">
             <span>Preencher célula{preenchimento.quantidade > 1 ? 's' : ''}</span>
             <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] tabular-nums">{preenchimento.quantidade} selecionada{preenchimento.quantidade > 1 ? 's' : ''}</span>
@@ -174,7 +182,7 @@ export const PlaceholderContextMenu: React.FC<{
               </ContextMenuSub>
             );
           })}
-        </>}
+        </>)}
       </ContextMenuContent>
     </ContextMenu>
   );

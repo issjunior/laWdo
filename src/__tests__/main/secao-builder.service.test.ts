@@ -5,9 +5,43 @@ import {
   filtrarSecoesAtivas,
   processarBlocosCondicionais,
 } from '../../main/services/secao-builder.service';
-import { laudoService } from '../../main/services/laudo.service';
+import { laudoService, preservarBlocosCondicionaisLegados } from '../../main/services/laudo.service';
 
 describe('secao-builder.service', () => {
+  it('vincula cada ocorrência do modelo apenas na geração solicitada', () => {
+    const secoes = [{ id: 'secao', template_id: 'modelo', nome: 'Seção', ordem: 1,
+      conteudo: '<div class="cond-bloco" data-cond-bloco="b602_teste_toggle"><p>Um</p></div><div class="cond-bloco" data-cond-bloco="b602_teste_toggle"><p>Dois</p></div>',
+      created_at: '', updated_at: '' }];
+    const dados = { b602: { teste_toggle: 'on' } };
+    const gerado = new DOMParser().parseFromString(buildHtml(secoes, new Map(), dados, true), 'text/html');
+    const blocos = Array.from(gerado.querySelectorAll('[data-cond-origem]'));
+    expect(blocos).toHaveLength(2);
+    expect(blocos[0].getAttribute('data-cond-origem')).not.toBe(blocos[1].getAttribute('data-cond-origem'));
+    expect(buildHtml(secoes, new Map(), dados)).not.toContain('data-cond-origem');
+  });
+  it('não vincula bloco antigo e vincula bloco ativado posteriormente', () => {
+    const secao = { id: 'secao', template_id: 'modelo', nome: 'Seção', ordem: 1,
+      conteudo: '<div class="cond-bloco" data-cond-bloco="b602_antigo_toggle"><p>Antigo</p></div><div class="cond-bloco" data-cond-bloco="b602_novo_toggle"><p>Novo</p></div>',
+      created_at: '', updated_at: '' };
+    const anterior = buildHtml([secao], new Map(), { b602: { antigo_toggle: 'on' } });
+    const novo = buildHtml([secao], new Map(), { b602: { antigo_toggle: 'on', novo_toggle: 'on' } }, true);
+    const conciliado = preservarBlocosCondicionaisLegados(novo, anterior);
+    const blocos = new DOMParser().parseFromString(conciliado, 'text/html').querySelectorAll('.cond-bloco');
+    expect(blocos[0].hasAttribute('data-cond-origem')).toBe(false);
+    expect(blocos[1].hasAttribute('data-cond-origem')).toBe(true);
+  });
+  it('distingue blocos repetidos pela identidade da arma', () => {
+    const pai = { id: 'exames', template_id: 'modelo', nome: 'Exames', ordem: 1, conteudo: '<p>Exames</p>', created_at: '', updated_at: '' };
+    const secao = { id: 'armas', parent_id: 'exames', template_id: 'modelo', nome: 'Armas', ordem: 2, repetir_para: 'armas', conteudo: '', created_at: '', updated_at: '' };
+    const bloco = '<div class="cond-bloco" data-cond-bloco="b602_teste_toggle"><p>Texto</p></div>';
+    const expansoes = new Map([['armas', `<div data-repeat-group="armas"><h4 data-repeat-item="arma" data-arma-chave="arma-a">A</h4>${bloco}<h4 data-repeat-item="arma" data-arma-chave="arma-b">B</h4>${bloco}</div>`]]);
+    const html = buildHtml([pai, secao], expansoes, { b602: {} }, true);
+    const origens = Array.from(new DOMParser().parseFromString(html, 'text/html').querySelectorAll('.cond-bloco'))
+      .map(elemento => elemento.getAttribute('data-cond-origem'));
+    expect(origens).toHaveLength(2);
+    expect(origens[0]).not.toBe(origens[1]);
+    expect(origens.map(origem => JSON.parse(Buffer.from(origem || '', 'base64url').toString('utf8'))[1])).toEqual(['arma-a', 'arma-b']);
+  });
   it('recompõe a numeração usando as preferências do laudo salvo', () => {
     const servico = laudoService as unknown as {
       _reconciliarComBase: (atual: string, base: string, campos: Record<string, unknown>) => string;

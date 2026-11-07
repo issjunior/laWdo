@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import {
   Bar,
@@ -16,6 +16,7 @@ import {
   AlertTriangle,
   BarChart3,
   CalendarSearch,
+  ChevronDown,
   ArrowLeft,
   Clock3,
   ExternalLink,
@@ -57,6 +58,7 @@ type TipoGrafico = 'barras' | 'rosca' | 'empilhado';
 type ModalDashboard = 'situacao' | 'cronologia' | 'producao';
 const VALIDADE_PRODUCAO_MS = 10 * 60 * 1000;
 const CHAVE_GRAFICO = 'dashboard_tipo_grafico';
+const CHAVE_REPS_GDL_EXPANDIDAS = 'dashboard_gdl_expandido';
 const titulosModais: Record<ModalDashboard, string> = {
   situacao: 'Situação atual',
   cronologia: 'Consulta cronológica',
@@ -321,6 +323,17 @@ function GraficoStatus({
   );
 }
 export function DashboardPage() {
+  const idConteudoReps = useId();
+  const [repsExpandidas, setRepsExpandidas] = useState(() => {
+    try { return window.localStorage.getItem(CHAVE_REPS_GDL_EXPANDIDAS) !== 'false'; }
+    catch { return true; }
+  });
+  const alternarReps = () => {
+    const expandir = !repsExpandidas;
+    setRepsExpandidas(expandir);
+    try { window.localStorage.setItem(CHAVE_REPS_GDL_EXPANDIDAS, String(expandir)); }
+    catch { /* Mantém o controle disponível se o armazenamento local falhar. */ }
+  };
   const navegar = useNavigate();
   const [resumo, setResumo] = useState<DashboardResumo | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -555,11 +568,18 @@ export function DashboardPage() {
           </div>
         )}
       </section>
-      <Card className="flex min-h-96 min-w-0 flex-1 flex-col has-[[role=alert]]:min-h-[32rem]">
-        <CardHeader className="shrink-0 px-4 pb-2 pt-4">
-          <CardTitle>REPs disponíveis no GDL</CardTitle>
+      <Card className={`flex min-w-0 flex-col ${repsExpandidas ? 'min-h-96 flex-1 has-[[role=alert]]:min-h-[32rem]' : 'shrink-0'}`}>
+        <CardHeader className={`shrink-0 px-4 pt-4 ${repsExpandidas ? 'pb-2' : 'pb-4'}`}>
+          <CardTitle>
+            <button type="button" aria-expanded={repsExpandidas} aria-controls={idConteudoReps}
+              aria-label={`${repsExpandidas ? 'Recolher' : 'Expandir'} REPs disponíveis no GDL`}
+              onClick={alternarReps} className="flex w-full items-center justify-between gap-3 rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <span>REPs disponíveis no GDL</span>
+              <ChevronDown aria-hidden="true" className={`h-4 w-4 shrink-0 transition-transform ${repsExpandidas ? 'rotate-180' : ''}`} />
+            </button>
+          </CardTitle>
         </CardHeader>
-        <CardContent className="flex min-h-0 min-w-0 flex-1 flex-col px-4 pb-3">
+        <CardContent id={idConteudoReps} hidden={!repsExpandidas} className={repsExpandidas ? 'flex min-h-0 min-w-0 flex-1 flex-col px-4 pb-3' : 'hidden'}>
           <GdlMinhasRepsDashboard />
         </CardContent>
       </Card>

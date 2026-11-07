@@ -908,7 +908,7 @@ async function listarMinhasRepsInterna(pagina: number): Promise<PaginaMinhasReps
 }
 
 export const listarMinhasReps: typeof listarMinhasRepsInterna = (...argumentos) =>
-  atividadeGdlService.consultar(() => listarMinhasRepsInterna(...argumentos));
+  atividadeGdlService.consultar(() => conexaoGdlService.executarOperacao('web', () => listarMinhasRepsInterna(...argumentos)));
 
 export async function obterIdentidadeMinhasReps(): Promise<string> {
   const ambiente = await obterAmbienteEfetivo();
@@ -952,7 +952,7 @@ async function consultarRepInterna(numero: string, ano: string): Promise<GdlCons
       let repsMesmoCaso: RepsMesmoCasoGdl | undefined;
       if (naturezaExame && extrairCodigoNaturezaExame(naturezaExame) === 'B-601') {
         try { repsMesmoCaso = await consultarReferenciasColeta(parsed, creds, ambiente); }
-        catch (erro) { const falha = classificarFalhaListaRepsGdl(erro); log[falha.condicaoEsperada ? 'info' : 'warn']('Não foi possível consultar as REPs do mesmo caso. A importação B-601 foi preservada.', { codigo: falha.codigo, condicaoEsperada: falha.condicaoEsperada }); }
+        catch (erro) { conexaoGdlService.registrarFalhaRecuperacao(erro); const falha = classificarFalhaListaRepsGdl(erro); log[falha.condicaoEsperada ? 'info' : 'warn']('Não foi possível consultar as REPs do mesmo caso. A importação B-601 foi preservada.', { codigo: falha.codigo, condicaoEsperada: falha.condicaoEsperada }); }
       }
       const erroNaturezaExame = naturezaExame ? undefined
         : `Natureza de exame não identificada pela API: ${dadosComplementares.motivoNatureza}. Selecione o tipo localmente.`;
@@ -1020,7 +1020,7 @@ async function consultarRepInterna(numero: string, ano: string): Promise<GdlCons
 }
 
 export const consultarRep: typeof consultarRepInterna = (...argumentos) =>
-  atividadeGdlService.consultar(() => consultarRepInterna(...argumentos));
+  atividadeGdlService.consultar(() => conexaoGdlService.executarOperacao('api', () => consultarRepInterna(...argumentos)));
 
 async function credenciaisConfirmadasPorRepValidada(
   ambiente: AmbienteGdl,
@@ -1091,7 +1091,10 @@ async function consultarReferenciasColeta(rep: GdlRepValidada, credenciais: GdlC
   });
 }
 
-export async function consultarRepsMesmoCaso(numero: string, ano: string): Promise<RepsMesmoCasoGdl> {
+export const consultarRepsMesmoCaso: typeof consultarRepsMesmoCasoInterna = (...argumentos) =>
+  conexaoGdlService.executarOperacao('api', () => consultarRepsMesmoCasoInterna(...argumentos));
+
+async function consultarRepsMesmoCasoInterna(numero: string, ano: string): Promise<RepsMesmoCasoGdl> {
   return atividadeGdlService.consultar(async () => {
     const { rep, credenciais, ambiente } = await consultarIdentificacaoDaRep(numero, ano);
     if (String(rep.numero) !== numero || String(rep.ano) !== ano) throw new Error('A identificação retornada pelo GDL diverge da REP do laudo.');
@@ -1181,7 +1184,7 @@ async function listarImagensRepGdlInterna(numero: string, ano: string): Promise<
 }
 
 export const listarImagensRepGdl: typeof listarImagensRepGdlInterna = (...argumentos) =>
-  atividadeGdlService.consultar(() => listarImagensRepGdlInterna(...argumentos));
+  atividadeGdlService.consultar(() => conexaoGdlService.executarOperacao('api', () => listarImagensRepGdlInterna(...argumentos)));
 
 function limparSessoesFotosExpiradas(): void {
   const agora = Date.now()
@@ -1291,7 +1294,7 @@ async function abrirSessaoImagensRepGdlInterna(
 }
 
 export const abrirSessaoImagensRepGdl: typeof abrirSessaoImagensRepGdlInterna = (...argumentos) =>
-  atividadeGdlService.consultar(() => abrirSessaoImagensRepGdlInterna(...argumentos));
+  atividadeGdlService.consultar(() => conexaoGdlService.executarOperacao('api', () => abrirSessaoImagensRepGdlInterna(...argumentos)));
 
 export function fecharSessaoImagensRepGdl(laudoId: string, sessaoId: string): void {
   const sessao = sessoesFotosGdl.get(sessaoId)
@@ -1407,7 +1410,7 @@ async function capturarImagensRepGdlInterna(
 }
 
 export const capturarImagensRepGdl: typeof capturarImagensRepGdlInterna = (...argumentos) =>
-  atividadeGdlService.consultar(() => capturarImagensRepGdlInterna(...argumentos));
+  atividadeGdlService.consultar(() => conexaoGdlService.executarOperacao('api', () => capturarImagensRepGdlInterna(...argumentos)));
 
 async function capturarImagensDaSessaoGdlParaLaudoInterna(
   laudoId: string,
@@ -1459,7 +1462,7 @@ async function capturarImagensDaSessaoGdlParaLaudoInterna(
 }
 
 export const capturarImagensDaSessaoGdlParaLaudo: typeof capturarImagensDaSessaoGdlParaLaudoInterna = (...argumentos) =>
-  atividadeGdlService.consultar(() => capturarImagensDaSessaoGdlParaLaudoInterna(...argumentos));
+  atividadeGdlService.consultar(() => conexaoGdlService.executarOperacao('api', () => capturarImagensDaSessaoGdlParaLaudoInterna(...argumentos)));
 
 async function validarCredenciaisInterna(
   ambiente: string,
@@ -1527,7 +1530,7 @@ async function validarCredenciaisInterna(
 }
 
 export const validarCredenciais: typeof validarCredenciaisInterna = (...argumentos) =>
-  atividadeGdlService.consultar(() => validarCredenciaisInterna(...argumentos));
+  atividadeGdlService.consultar(() => conexaoGdlService.executarOperacao('api', () => validarCredenciaisInterna(...argumentos)));
 
 
 async function consultarDetalhesRepAutorizadaInterna(id: number, numero: string, ano: string, validarContexto: () => Promise<void>, sinal: AbortSignal) {
@@ -1536,9 +1539,10 @@ async function consultarDetalhesRepAutorizadaInterna(id: number, numero: string,
 }
 
 export const consultarDetalhesRepAutorizada: typeof consultarDetalhesRepAutorizadaInterna = (...argumentos) =>
-  atividadeGdlService.consultar(() => consultarDetalhesRepAutorizadaInterna(...argumentos));
+  atividadeGdlService.consultar(() => conexaoGdlService.executarOperacao('web', () => consultarDetalhesRepAutorizadaInterna(...argumentos)));
 
 conexaoGdlService.configurar({
+  registrarMudanca: dados => log.info('Estado da conexão com o GDL alterado.', { ...dados }),
   obterContexto: async () => {
     const ambiente = await obterAmbienteEfetivo();
     const credenciais = await carregarCredenciais(ambiente);

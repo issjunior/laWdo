@@ -46,6 +46,7 @@ import type { AplicarAtualizacaoRepGdlEntrada } from '../../../shared/types/atua
 import { esquemaRepsMesmoCasoGdl, type RepsMesmoCasoGdl } from '../../../shared/gdl/reps-mesmo-caso.js';
 import { esquemaEstadoConexaoGdl } from '../../../shared/gdl/conexao.js';
 import { conexaoGdlService } from '../../services/gdl-conexao.service.js';
+import { configuracaoService } from '../../services/configuracao.service.js';
 
 const remetentesConsultaGdl = new WeakSet<object>();
 const remetentesConexaoGdl = new Map<number, WebContents>();
@@ -54,12 +55,12 @@ let observandoConexaoGdl = false;
 function observarEstadoConexaoGdl(remetente: WebContents): void {
   if (!observandoConexaoGdl) {
     observandoConexaoGdl = true;
-    conexaoGdlService.observar(() => {
+    conexaoGdlService.observar(estado => {
       for (const [id, janela] of remetentesConexaoGdl) {
         try {
           if (janela.isDestroyed()) { remetentesConexaoGdl.delete(id); continue; }
           authSessaoService.exigir(id);
-          janela.send('gdl:estado-conexao-alterado');
+          janela.send('gdl:estado-conexao-alterado', esquemaEstadoConexaoGdl.parse(estado));
         } catch { remetentesConexaoGdl.delete(id); }
       }
     });
@@ -107,6 +108,16 @@ async function resolverRepDoLaudo(laudoId: unknown): Promise<{ numero: string; a
 }
 
 export const registerGdlHandlers = (): void => {
+  ipcMain.handle('gdl:excluir-credenciais', async (event, ambiente: unknown) => {
+    try {
+      authSessaoService.exigir(event.sender.id);
+      if (ambiente !== 'producao' && ambiente !== 'homologacao') throw new Error('Ambiente GDL inválido.');
+      await configuracaoService.excluirCredenciaisGdl(ambiente);
+      return { success: true };
+    } catch (erro: unknown) {
+      return { success: false, error: erro instanceof Error ? erro.message : 'Não foi possível excluir as credenciais do GDL.' };
+    }
+  });
   for (const canal of ['gdl:obter-estado-conexao', 'gdl:verificar-conexao']) {
     ipcMain.handle(canal, async event => {
       try {

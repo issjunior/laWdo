@@ -25,16 +25,20 @@ const imagemDisponivel = {
 };
 
 describe('SeletorFiguraDialog', () => {
-  it.each([{ imagens: [] }, { imagens: [imagemDisponivel] }])('oferece Buscar REP na substituição com $imagens.length imagens', ({ imagens }) => {
+  it.each([{ imagens: [] }, { imagens: [imagemDisponivel] }])('oferece buscas no GDL e local na substituição com $imagens.length imagens', ({ imagens }) => {
     const aoBuscar = vi.fn();
+    const aoCarregarArquivo = vi.fn().mockResolvedValue(undefined);
     const aoConfirmar = vi.fn();
     render(<SeletorFiguraDialog laudoId="laudo-teste" aberto figuraAlvo={figuraOriginal}
       imagens={imagens} imagemSelecionadaId={null} onAbertoChange={vi.fn()}
-      onSelecionar={vi.fn()} onConfirmar={aoConfirmar} onBuscarGdl={aoBuscar} />);
-    fireEvent.click(screen.getByRole('button', { name: /^Buscar REP$/ }));
+      onSelecionar={vi.fn()} onConfirmar={aoConfirmar} onBuscarGdl={aoBuscar} onCarregarArquivo={aoCarregarArquivo} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Buscar no GDL' }));
     expect(aoBuscar).toHaveBeenCalledTimes(1);
     expect(aoConfirmar).not.toHaveBeenCalled();
-    expect(screen.queryByRole('button', { name: 'Buscar na REP' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Buscar localmente' })).toBeInTheDocument();
+    const arquivo = new File(['imagem'], 'figura-local.png', { type: 'image/png' });
+    fireEvent.change(document.querySelector('input[type="file"]')!, { target: { files: [arquivo] } });
+    expect(aoCarregarArquivo).toHaveBeenCalledWith(arquivo);
   });
 
   it('oferece prévia e legenda da imagem na inserção, sem confirmar ao cancelar', () => {

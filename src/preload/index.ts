@@ -6,8 +6,11 @@ import type { RepsMesmoCasoGdl } from './types.js';
 import type { EstadoConexaoGdl } from './types.js';
 import type { SalvarTemplateCompletoInput, CriarSecaoTemplateInput, AtualizarSecaoTemplateInput } from '../shared/types/template.types.js';
 import { contextBridge, ipcRenderer } from 'electron';
+import type { SugestoesCorretor } from '../shared/types/corretor.types.js';
+import type { ApiCorretor } from './types.js';
 import type { ProjetilPersonalizadoEntrada, ProjetilReferencia } from '../shared/types/projetil.types.js';
 import type { FalhaPdf } from '../shared/types/pdf.types.js';
+import type { FalhaImagemImpressao } from '../shared/types/imagem-laudo.types.js';
 import type {
   AtualizacaoPainelIa,
   ContextoIa,
@@ -25,6 +28,7 @@ import type {
   ProgressoConsultaIa,
 } from '../shared/types/ia.types.js';
 import type {
+  ApiCredenciaisGdl,
   DashboardResponse,
   ImportarArquivoResponse,
   SalvarTemplateCompletoResponse,
@@ -154,6 +158,7 @@ type ExportacaoLaudoParams = {
 
 // Tipos para a API exposta
 export interface IpcAPI {
+  corretor: ApiCorretor;
   projetil: {
     listarPersonalizados: () => Promise<{ success: boolean; data?: ProjetilReferencia[]; error?: string }>;
     salvarPersonalizado: (dados: ProjetilPersonalizadoEntrada, id?: string) => Promise<{ success: boolean; data?: ProjetilReferencia; error?: string }>;
@@ -260,10 +265,10 @@ export interface IpcAPI {
   };
 
   // GDL
-  gdl: {
+  gdl: ApiCredenciaisGdl & {
     obterEstadoConexao: () => Promise<RespostaGdl<EstadoConexaoGdl>>;
     verificarConexao: () => Promise<RespostaGdl<EstadoConexaoGdl>>;
-    onEstadoConexaoAlterado: (callback: () => void) => () => void;
+    onEstadoConexaoAlterado: (callback: (estado: EstadoConexaoGdl) => void) => () => void;
     consultarRepsMesmoCaso: (laudoId: string) => Promise<RespostaGdl<RepsMesmoCasoGdl>>;
     copiarEmailSuporte: () => Promise<RespostaGdl<{ email: string }>>;
     obterPreferenciaListagem: () => Promise<RespostaGdl<{ habilitada: boolean }>>;
@@ -337,6 +342,7 @@ export interface IpcAPI {
 
   // Laudos
   laudo: ApiBkpLaudo & {
+    obterBlocoCondicionalOriginal: (laudoId: string, origem: string) => Promise<UserResponse<string>>;
     contextoWizard: (laudoId: string) => Promise<UserResponse<ContextoWizardLaudo | null>>;
     calcularPecasWizard: (laudoId: string, respostas: RespostasIncorporadas, wizardId?: string) => Promise<UserResponse<PecaIncorporadaCalculada[]>>;
     findAll: () => Promise<UserResponse<LaudoResumoLista[]>>;
@@ -493,7 +499,7 @@ export interface IpcAPI {
     listarImagens: (laudoId: string) => Promise<{ success: boolean; data?: ImagemLaudoResumo[]; error?: string }>;
     obterImagem: (laudoId: string, imagemId: string) => Promise<{ success: boolean; data?: ImagemLaudoPersistida; error?: string }>;
     obterImagemEstagio: (laudoId: string, imagemId: string) => Promise<{ success: boolean; data?: { id: string; dataUri: string }; error?: string }>;
-    obterImagemImpressao: (laudoId: string, imagemId: string, larguraMaxima: number) => Promise<{ success: boolean; data?: { id: string; dataUri: string }; error?: string }>;
+    obterImagemImpressao: (laudoId: string, imagemId: string, larguraMaxima: number) => Promise<{ success: boolean; data?: { id: string; dataUri: string }; error?: string; falhaImagem?: FalhaImagemImpressao }>;
     obterMiniaturas: (laudoId: string, ids: string[]) => Promise<{ success: boolean; data?: MiniaturaImagemLaudo[]; error?: string }>;
     salvarImagem: (laudoId: string, imagem: SalvarImagemLaudoEntrada) => Promise<{ success: boolean; data?: ImagemLaudoPersistida; error?: string }>;
     estagiarImagem: (laudoId: string, imagem: SalvarImagemLaudoEntrada) => Promise<{ success: boolean; data?: ImagemEstagiadaLaudo; error?: string }>;
@@ -517,7 +523,30 @@ export interface IpcAPI {
 }
 
 // Validar canais IPC permitidos
+function ehEstadoConexaoGdl(valor: unknown): valor is EstadoConexaoGdl {
+  const registro = (dado: unknown): dado is Record<string, unknown> => Boolean(dado && typeof dado === 'object');
+  const data = (dado: unknown) => dado === null || (typeof dado === 'string' && Number.isFinite(Date.parse(dado)));
+  if (!registro(valor) || !['producao', 'homologacao'].includes(String(valor.ambiente))
+    || !Number.isSafeInteger(valor.revisao) || typeof valor.revisao !== 'number' || valor.revisao < 0
+    || !Number.isSafeInteger(valor.versaoEstado) || typeof valor.versaoEstado !== 'number' || valor.versaoEstado < 0
+    || !['desconhecida', 'acessivel', 'indisponivel'].includes(String(valor.rede))
+    || !data(valor.redeVerificadaEm) || !data(valor.credenciaisValidadasEm)
+    || !['ausentes', 'pendentes', 'validadas', 'rejeitadas'].includes(String(valor.credenciais))
+    || !['desconhecida', 'disponivel', 'atencao'].includes(String(valor.web)) || typeof valor.verificando !== 'boolean') return false;
+  const teste = valor.ultimoTesteRede;
+  if (teste !== undefined && teste !== null && (!registro(teste) || typeof teste.sucesso !== 'boolean'
+    || typeof teste.verificadoEm !== 'string' || !data(teste.verificadoEm)
+    || typeof teste.duracaoMs !== 'number' || !Number.isFinite(teste.duracaoMs) || teste.duracaoMs < 0)) return false;
+  const acesso = valor.acessoAutenticado;
+  return acesso === undefined || acesso === null || (registro(acesso)
+    && ['api', 'web'].includes(String(acesso.origem)) && ['sucesso', 'rejeitada', 'falha'].includes(String(acesso.resultado))
+    && typeof acesso.realizadaEm === 'string' && data(acesso.realizadaEm) && data(acesso.confirmadoEm)
+    && typeof acesso.rejeicaoPendente === 'boolean' && (acesso.motivo === undefined || typeof acesso.motivo === 'string')
+    && (acesso.condicaoEsperada === undefined || acesso.condicaoEsperada === 'acesso_rede_institucional'));
+}
+
 const ALLOWED_CHANNELS = new Set([
+  'corretor:obter', 'corretor:configurar', 'corretor:adicionar', 'corretor:remover',
   'projetil:listarPersonalizados',
   'projetil:salvarPersonalizado',
   'projetil:excluirPersonalizado',
@@ -586,6 +615,7 @@ const ALLOWED_CHANNELS = new Set([
   'configuracao:salvar',
 
   // GDL
+  'gdl:excluir-credenciais',
   'gdl:obter-preferencia-listagem',
   'gdl:obter-estado-conexao',
   'gdl:verificar-conexao',
@@ -664,6 +694,7 @@ const ALLOWED_CHANNELS = new Set([
 
   // Laudos
   'laudo:findById',
+  'laudo:obterBlocoCondicionalOriginal',
   'laudo:findByRepId',
   'laudo:findAllByRepId',
   'laudo:findAll',
@@ -913,6 +944,15 @@ function normalizarFalhaDiagnosticoGdl(valor: unknown) {
     && ['rede', 'tempo_esgotado'].includes(codigo) && codigoSistema && statusHttp === undefined
     && !/^(?:EACCES|EPERM|ENOSPC|EROFS|EMFILE|ERR_CERT_|ERR_SSL_)/.test(codigoSistema) ? 'acesso_rede_institucional' as const : undefined;
   return { codigo, etapa, codigoSistema, statusHttp, referencia, bloqueioTemporario, tentarNovamenteEmSegundos, condicaoEsperada };
+}
+
+function normalizarFalhaDiagnosticoImagem(valor: unknown) {
+  if (!valor || typeof valor !== 'object' || !('codigo' in valor)) return undefined;
+  const codigos = ['ENTRADA_INVALIDA', 'CONSULTA_FALHOU', 'REGISTRO_AUSENTE', 'ARQUIVO_AUSENTE',
+    'LEITURA_FALHOU', 'INTEGRIDADE_FALHOU', 'PROCESSAMENTO_FALHOU', 'COMUNICACAO_FALHOU',
+    'RESPOSTA_INVALIDA', 'INDETERMINADA'] as const;
+  const codigo = codigos.find(item => item === valor.codigo);
+  return codigo ? { codigo } : undefined;
 }
 
 function classificarResultadoFuncionalIpc(canal: string, resposta: unknown): ResultadoFuncionalIpc {
@@ -1179,7 +1219,11 @@ const invocarComDiagnostico = <T = IpcResult>(channel: string, ...args: IpcParam
         const fase = resultadoFuncional === 'sucesso' ? 'sucesso' : resultadoFuncional === 'falha' ? 'falha_funcional' : resultadoFuncional === 'cancelado' || resultadoFuncional === 'indisponivel' ? resultadoFuncional : 'resposta_indeterminada';
         const falha = (resultadoFuncional === 'falha' || resultadoFuncional === 'indisponivel') && channel.startsWith('gdl:') && resposta && typeof resposta === 'object' && 'falha' in resposta
           ? normalizarFalhaDiagnosticoGdl(resposta.falha) : undefined;
-        registrarEventoIpcDiagnostico({ fase, resultadoFuncional, canal: channel, correlacaoId, duracaoMs, ...(falha ? { falha } : {}) });
+        const falhaImagem = resultadoFuncional === 'falha' && channel === 'ilustracoes:obter-imagem-impressao'
+          && resposta && typeof resposta === 'object' && 'falhaImagem' in resposta
+          ? normalizarFalhaDiagnosticoImagem(resposta.falhaImagem) : undefined;
+        registrarEventoIpcDiagnostico({ fase, resultadoFuncional, canal: channel, correlacaoId, duracaoMs,
+          ...(falha ? { falha } : {}), ...(falhaImagem ? { falhaImagem } : {}) });
         registrarIpcDesempenho(channel, duracaoMs, resultadoFuncional, args, resposta);
       }
       return resposta;
@@ -1222,6 +1266,24 @@ const sendSeguro = (channel: string, ...args: IpcParams): void => {
 
 // Expor API segura para o renderer
 contextBridge.exposeInMainWorld('ipcAPI', {
+  corretor: {
+    obter: () => invocarComDiagnostico('corretor:obter'),
+    configurar: ativo => invocarComDiagnostico('corretor:configurar', ativo),
+    adicionar: palavra => invocarComDiagnostico('corretor:adicionar', palavra),
+    remover: palavra => invocarComDiagnostico('corretor:remover', palavra),
+    onSugestoes: callback => {
+      const listener = (_evento: Electron.IpcRendererEvent, dados: unknown) => {
+        if (!dados || typeof dados !== 'object') return;
+        const valor = dados as Record<string, unknown>;
+        if (typeof valor.palavra !== 'string' || valor.palavra.length > 100 || !Array.isArray(valor.sugestoes)) return;
+        const sugestoes = valor.sugestoes.filter((item): item is string => typeof item === 'string' && item.length <= 100).slice(0, 5);
+        const resposta: SugestoesCorretor = { palavra: valor.palavra, sugestoes };
+        callback(resposta);
+      };
+      ipcRenderer.on('corretor:sugestoes', listener);
+      return () => ipcRenderer.removeListener('corretor:sugestoes', listener);
+    },
+  },
   projetil: {
     listarPersonalizados: () => invocarComDiagnostico('projetil:listarPersonalizados'),
     salvarPersonalizado: (dados: ProjetilPersonalizadoEntrada, id?: string) => invocarComDiagnostico('projetil:salvarPersonalizado', dados, id),
@@ -1535,10 +1597,13 @@ contextBridge.exposeInMainWorld('ipcAPI', {
   },
 
   gdl: {
+    excluirCredenciais: (ambiente: 'producao' | 'homologacao'): Promise<UserResponse> => invocarComDiagnostico('gdl:excluir-credenciais', ambiente),
     obterEstadoConexao: (): Promise<UserResponse<EstadoConexaoGdl>> => invocarComDiagnostico('gdl:obter-estado-conexao'),
     verificarConexao: (): Promise<UserResponse<EstadoConexaoGdl>> => invocarComDiagnostico('gdl:verificar-conexao'),
-    onEstadoConexaoAlterado: (callback: () => void) => {
-      const ouvinte = () => callback();
+    onEstadoConexaoAlterado: (callback: (estado: EstadoConexaoGdl) => void) => {
+      const ouvinte = (_evento: Electron.IpcRendererEvent, estado: unknown) => {
+        if (ehEstadoConexaoGdl(estado)) callback(estado);
+      };
       ipcRenderer.on('gdl:estado-conexao-alterado', ouvinte);
       return () => ipcRenderer.removeListener('gdl:estado-conexao-alterado', ouvinte);
     },
@@ -1687,6 +1752,7 @@ contextBridge.exposeInMainWorld('ipcAPI', {
   },
 
   laudo: {
+    obterBlocoCondicionalOriginal: (laudoId: string, origem: string) => invocarComDiagnostico('laudo:obterBlocoCondicionalOriginal', laudoId, origem),
     exportarBkp: laudoId => invocarComDiagnostico('laudo:exportarBkp', laudoId),
     selecionarBkp: () => invocarComDiagnostico('laudo:selecionarBkp'),
     analisarBkp: selecaoId => invocarComDiagnostico('laudo:analisarBkp', selecaoId),

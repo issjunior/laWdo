@@ -1,6 +1,7 @@
 import { dialog, nativeImage } from 'electron';
 import path from 'path';
 import fs from 'fs';
+import sharp from 'sharp';
 import { randomUUID } from 'node:crypto';
 import type { DocumentoExportacao, MargensExportacao } from '../../shared/types/exportacao.types.js';
 import { normalizarQuebrasPaginaHtml } from '../../shared/utils/quebra-pagina.js';
@@ -12,8 +13,10 @@ import { getLogger } from '../utils/logger.js';
 import { ErroGeracaoPdf, gerarPdfPreparado } from './pdf-prontidao.service.js';
 import { criarOpcoesPdf } from './pdf-layout.js';
 import { ESTILOS_TABELAS_PLACEHOLDER_PDF } from './pdf-tabelas.js';
+import { ESTILOS_SECOES_PDF, removerEspacadoresEntreSecoes } from './pdf-secoes.js';
 import type { FalhaPdf } from '../../shared/types/pdf.types.js';
 import type { FiguraExportacao } from '../../shared/types/exportacao.types.js';
+import { ajusteVisualParFigurasValido, alturaParFigurasValida, enquadramentoParFigurasValido, proporcaoPorAlturaParFiguras, PROPORCOES_ENQUADRAMENTO_PAR } from '../../shared/figura/enquadramento.js';
 
 const log = getLogger('exportacao');
 
@@ -47,8 +50,12 @@ function documentoValido(valor: unknown): valor is DocumentoExportacao {
     if (!bloco || typeof bloco !== 'object' || !('tipo' in bloco)) return false;
     if (bloco.tipo === 'paragrafo') return Array.isArray(bloco.trechos) && bloco.trechos.every(t => t && typeof t.texto === 'string');
     if (bloco.tipo === 'lista') return typeof bloco.ordenada === 'boolean' && Number.isInteger(bloco.nivel) && Array.isArray(bloco.itens) && bloco.itens.every(item => Array.isArray(item.trechos));
-    if (bloco.tipo === 'tabela') return Array.isArray(bloco.linhas) && bloco.linhas.every(linha => Array.isArray(linha) && linha.every(celula => Array.isArray(celula.paragrafos)));
-    if (bloco.tipo === 'figura') return typeof bloco.base64 === 'string' && typeof bloco.formato === 'string';
+    if (bloco.tipo === 'tabela') return Array.isArray(bloco.linhas) && bloco.linhas.every(linha => Array.isArray(linha) && linha.every(celula => Array.isArray(celula.paragrafos)
+      && (celula.margemInternaPx === undefined || (Number.isFinite(celula.margemInternaPx) && celula.margemInternaPx >= 0 && celula.margemInternaPx <= 50))));
+    if (bloco.tipo === 'figura') return typeof bloco.base64 === 'string' && typeof bloco.formato === 'string'
+      && (bloco.alturaParPercentual === undefined || alturaParFigurasValida(bloco.alturaParPercentual))
+      && (bloco.enquadramento === undefined || enquadramentoParFigurasValido(bloco.enquadramento))
+      && (bloco.ajusteVisualPar === undefined || ajusteVisualParFigurasValido(bloco.ajusteVisualPar));
     if (bloco.tipo === 'quebra-pagina') return true;
     return bloco.tipo === 'linha-horizontal';
   }));
@@ -85,6 +92,7 @@ async function gerarPDF(html: string, margens?: ExportarParams['margens'], heade
   h1 { font-size: 20px; margin-bottom: 12px; }
   h2 { font-size: 16px; margin-top: 28px; margin-bottom: 10px; border-bottom: 1px solid #ccc; padding-bottom: 4px; }
   h3 { font-size: 14px; margin-top: 20px; margin-bottom: 8px; }
+  ${ESTILOS_SECOES_PDF}
   p { margin-bottom: 8px; }
   p:not(table p):not(figure p) { text-align: justify; }
   table { border-collapse: collapse; width: 100% !important; max-width: 100% !important; margin: 12px 0; }
@@ -96,12 +104,15 @@ async function gerarPDF(html: string, margens?: ExportarParams['margens'], heade
   ul, ol { margin: 8px 0; padding-left: 24px; }
   li { margin-bottom: 4px; }
   img { max-width: 100%; height: auto; display: block; margin: 10px auto; }
+  img[data-quadro-figura] { margin: 0; }
   .laudo-figure { text-align: center; margin: 12px auto; page-break-inside: avoid; }
+  table[data-layout-pares-figuras="true"] tr[data-altura-par-figuras] > :is(td, th) { padding: 2px; }
+  tr[data-altura-par-figuras] > :is(td, th) > .laudo-figure[data-altura-par-figuras] { margin: 0; }
   figcaption { font-size: 12px; color: #444; font-weight: bold; margin-top: 4px; }
   [data-quebra-pagina="true"] { break-after: page; page-break-after: always; height: 0; }
 </style>
 </head>
-<body>${normalizarQuebrasPaginaHtml(html)}</body>
+<body>${removerEspacadoresEntreSecoes(normalizarQuebrasPaginaHtml(html))}</body>
 </html>`;
 
     const printOptions = criarOpcoesPdf(margens, headerTemplate);
@@ -181,7 +192,7 @@ export async function gerarDOCXCanonico(documento: DocumentoExportacao, cabecalh
   const d = await import('docx');
   const { Document, Packer, Paragraph, TextRun, ExternalHyperlink, Table, TableRow, TableCell, ImageRun, Header, PageBreak, AlignmentType, UnderlineType, HeadingLevel, WidthType, BorderStyle } = d;
   const larguraPaginaPx = Math.round((21 - (margens?.left ?? 3) - (margens?.right ?? 2)) / 2.54 * 96);
-  const criarImagemDocx = (bloco: FiguraExportacao, larguraPadrao: number) => {
+  const criarImagemDocx = async (bloco: FiguraExportacao, larguraPadrao: number) => {
     const tipo = normalizarTipoImagemDocx(bloco.formato);
     if (!tipo) throw new Error('Formato da figura não suportado na exportação DOCX.');
     const dados = Buffer.from(bloco.base64, 'base64');
@@ -189,13 +200,26 @@ export async function gerarDOCXCanonico(documento: DocumentoExportacao, cabecalh
     if (imagem.isEmpty()) throw new Error('Figura inválida na exportação DOCX.');
     const dimensoes = imagem.getSize();
     if (!dimensoes.width || !dimensoes.height) throw new Error('Dimensões da figura inválidas na exportação DOCX.');
-    const proporcao = dimensoes.width / dimensoes.height;
-    const larguraSolicitada = bloco.larguraPx || (bloco.alturaPx ? bloco.alturaPx * proporcao : larguraPadrao);
+    const proporcaoFonte = dimensoes.width / dimensoes.height;
+    const proporcaoSaida = bloco.alturaParPercentual !== undefined
+      ? proporcaoPorAlturaParFiguras(bloco.alturaParPercentual)
+      : bloco.enquadramento ? PROPORCOES_ENQUADRAMENTO_PAR[bloco.enquadramento] : proporcaoFonte;
+    const larguraSolicitada = bloco.larguraPx || (bloco.alturaPx ? bloco.alturaPx * proporcaoSaida : larguraPadrao);
     const largura = Math.max(1, Math.min(Math.round(larguraSolicitada), larguraPaginaPx));
-    const altura = Math.max(1, Math.round(largura / proporcao));
+    const altura = Math.max(1, Math.round(largura / proporcaoSaida));
     const larguraFonte = Math.ceil(largura * 300 / 96);
+    if (bloco.alturaParPercentual !== undefined || bloco.enquadramento) {
+      const alturaFonte = Math.max(1, Math.round(larguraFonte / proporcaoSaida));
+      const bytes = await sharp(dados, { limitInputPixels: 100_000_000, animated: false, failOn: 'warning' })
+        .rotate()
+        .resize({ width: larguraFonte, height: alturaFonte, fit: bloco.ajusteVisualPar === 'preencher' ? 'cover' : 'contain', position: 'centre', background: '#ffffff', withoutEnlargement: bloco.ajusteVisualPar !== 'preencher' })
+        .flatten({ background: '#ffffff' })
+        .png()
+        .toBuffer();
+      return new ImageRun({ type: 'png', data: bytes, transformation: { width: largura, height: altura } });
+    }
     if (dimensoes.width <= larguraFonte) return new ImageRun({ type: tipo, data: dados, transformation: { width: largura, height: altura } });
-    const reduzida = imagem.resize({ width: larguraFonte, height: Math.max(1, Math.round(larguraFonte / proporcao)), quality: 'best' });
+    const reduzida = imagem.resize({ width: larguraFonte, height: Math.max(1, Math.round(larguraFonte / proporcaoFonte)), quality: 'best' });
     const tipoSaida = tipo === 'jpg' ? 'jpg' : 'png';
     const bytes = tipoSaida === 'jpg' ? reduzida.toJPEG(90) : reduzida.toPNG();
     return new ImageRun({ type: tipoSaida, data: bytes, transformation: { width: largura, height: altura } });
@@ -222,20 +246,42 @@ export async function gerarDOCXCanonico(documento: DocumentoExportacao, cabecalh
       else if (bloco.tipo === 'quebra-pagina') filhos.push(new Paragraph({ children: [new PageBreak()] }));
       else if (bloco.tipo === 'linha-horizontal') filhos.push(new Paragraph({ border: { bottom: { style: BorderStyle.SINGLE, size: 8, color: '808080' } } }));
       else if (bloco.tipo === 'tabela') {
-        const rows = bloco.linhas.map(linha => new TableRow({ cantSplit: true, children: linha.map(celula => new TableCell({
-          children: (celula.blocos?.flatMap(bloco => {
-            if (bloco.tipo === 'paragrafo') return [para(bloco)];
-            if (bloco.tipo === 'figura') { const figura = [new Paragraph({ alignment: alinhar(bloco.alinhamento), children: [criarImagemDocx(bloco, 180)] })]; return bloco.legenda ? [...figura, para(bloco.legenda, { alignment: AlignmentType.CENTER })] : figura; }
-            if (bloco.tipo === 'linha-horizontal') return [new Paragraph({ border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: '808080' } } })];
-            if (bloco.tipo === 'lista') return bloco.itens.map(item => para(item, bloco.ordenada ? { numbering: { reference: 'numerada', level: bloco.nivel } } : { bullet: { level: bloco.nivel } }));
-            return [];
-          }) || celula.paragrafos.map(p => para(p))), columnSpan: celula.colspan, rowSpan: celula.rowspan,
-          shading: celula.corFundo ? { fill: celula.corFundo } : undefined,
-          borders: { top: { style: BorderStyle.SINGLE, size: 4, color: '808080' }, bottom: { style: BorderStyle.SINGLE, size: 4, color: '808080' }, left: { style: BorderStyle.SINGLE, size: 4, color: '808080' }, right: { style: BorderStyle.SINGLE, size: 4, color: '808080' } },
-        })) }));
+        const rows: InstanceType<typeof TableRow>[] = [];
+        for (const linha of bloco.linhas) {
+          const celulas: InstanceType<typeof TableCell>[] = [];
+          for (const celula of linha) {
+            const conteudoCelula: InstanceType<typeof Paragraph>[] = [];
+            if (celula.blocos) {
+              for (const blocoCelula of celula.blocos) {
+                if (blocoCelula.tipo === 'paragrafo') conteudoCelula.push(para(blocoCelula));
+                else if (blocoCelula.tipo === 'figura') {
+                  conteudoCelula.push(new Paragraph({ alignment: alinhar(blocoCelula.alinhamento), children: [await criarImagemDocx(blocoCelula, 180)] }));
+                  if (blocoCelula.legenda) conteudoCelula.push(para(blocoCelula.legenda, { alignment: AlignmentType.CENTER }));
+                } else if (blocoCelula.tipo === 'linha-horizontal') {
+                  conteudoCelula.push(new Paragraph({ border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: '808080' } } }));
+                } else if (blocoCelula.tipo === 'lista') {
+                  conteudoCelula.push(...blocoCelula.itens.map(item => para(item, blocoCelula.ordenada
+                    ? { numbering: { reference: 'numerada', level: blocoCelula.nivel } } : { bullet: { level: blocoCelula.nivel } })));
+                }
+              }
+            } else conteudoCelula.push(...celula.paragrafos.map(p => para(p)));
+            celulas.push(new TableCell({
+              children: conteudoCelula, columnSpan: celula.colspan, rowSpan: celula.rowspan,
+              margins: celula.margemInternaPx === undefined ? undefined : {
+                top: Math.round(celula.margemInternaPx * 15),
+                bottom: Math.round(celula.margemInternaPx * 15),
+                left: Math.round(celula.margemInternaPx * 15),
+                right: Math.round(celula.margemInternaPx * 15),
+              },
+              shading: celula.corFundo ? { fill: celula.corFundo } : undefined,
+              borders: { top: { style: BorderStyle.SINGLE, size: 4, color: '808080' }, bottom: { style: BorderStyle.SINGLE, size: 4, color: '808080' }, left: { style: BorderStyle.SINGLE, size: 4, color: '808080' }, right: { style: BorderStyle.SINGLE, size: 4, color: '808080' } },
+            }));
+          }
+          rows.push(new TableRow({ cantSplit: true, children: celulas }));
+        }
         filhos.push(new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows }));
       }
-      else { filhos.push(new Paragraph({ alignment: alinhar(bloco.alinhamento), keepNext: Boolean(bloco.legenda), children: [criarImagemDocx(bloco, 500)] })); if (bloco.legenda) filhos.push(para(bloco.legenda, { alignment: AlignmentType.CENTER })); }
+      else { filhos.push(new Paragraph({ alignment: alinhar(bloco.alinhamento), keepNext: Boolean(bloco.legenda), children: [await criarImagemDocx(bloco, 500)] })); if (bloco.legenda) filhos.push(para(bloco.legenda, { alignment: AlignmentType.CENTER })); }
     }
     if (secao.fechamento) {
       const conteudo = filhos.splice(inicioFilhos);

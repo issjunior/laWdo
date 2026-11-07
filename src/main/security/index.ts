@@ -29,13 +29,13 @@ export const setupSecurity = (): void => {
 
 const contentSecurityPolicy = `
     default-src 'self';
-    script-src 'self' 'unsafe-inline' blob:;
+    script-src 'self' blob:;
     style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
     font-src 'self' data: https://fonts.gstatic.com;
     img-src 'self' data: blob:;
     connect-src 'self' blob:;
-    frame-src 'self' data: blob: chrome-extension://mhjfbmdgcfjbbpaeojofohoefgiehjai;
-    object-src 'self' data: blob:;
+    frame-src 'self' blob: chrome-extension://mhjfbmdgcfjbbpaeojofohoefgiehjai;
+    object-src 'none';
     base-uri 'self';
     form-action 'self';
   `

@@ -38,7 +38,7 @@ const agendador = new AgendadorGdlService({
 let removerObservadores: (() => void)[] = [];
 
 export function iniciarAtualizacaoAutomaticaGdl(): void {
-  encerrarAtualizacaoAutomaticaGdl();
+  void encerrarAtualizacaoAutomaticaGdl();
   removerObservadores = [
     observarContextoGdl(() => agendador.contextoAlterado()),
     observarListaGdl((usuarioId, identidade) => agendador.listaAlterada(usuarioId, identidade)),
@@ -46,8 +46,8 @@ export function iniciarAtualizacaoAutomaticaGdl(): void {
   agendador.iniciar();
 }
 
-export function encerrarAtualizacaoAutomaticaGdl(): void {
+export function encerrarAtualizacaoAutomaticaGdl(): Promise<void> {
   for (const remover of removerObservadores) remover();
   removerObservadores = [];
-  agendador.encerrar();
+  return agendador.encerrar();
 }

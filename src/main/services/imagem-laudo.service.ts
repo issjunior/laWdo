@@ -1,4 +1,3 @@
-import fs from 'fs'
 import path from 'path'
 import { readFile, mkdir, access, writeFile, rename, rm } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
@@ -9,7 +8,8 @@ import { DomUtils, parseDocument } from 'htmlparser2'
 import { executeNonQuery, executeQuery, withTransaction } from '../database/sqlite.js'
 import { getLogger } from '../utils/logger.js'
 import { configuracaoService } from './configuracao.service.js'
-import { LIMITES_PREVIA_EDITOR, PERFIL_PREVIA_EDITOR_PADRAO, perfilPreviaEditorValido, LIMITES_FIGURA_LAUDO, PERFIL_FIGURA_LAUDO_PADRAO, perfilFiguraLaudoValido } from '../../shared/types/imagem-laudo.types.js'
+import type { CodigoFalhaImagemImpressao } from '../../shared/types/imagem-laudo.types.js'
+import { LIMITES_PREVIA_EDITOR, PERFIL_PREVIA_EDITOR_PADRAO, perfilPreviaEditorValido, LIMITES_FIGURA_LAUDO, PERFIL_FIGURA_LAUDO_PADRAO, perfilFiguraLaudoValido, ajustesFiguraValidos } from '../../shared/types/imagem-laudo.types.js'
 import type {
   AtualizarOrdemImagemLaudoEntrada,
   ImagemLaudoPersistida,
@@ -24,6 +24,12 @@ import type {
 } from '../../shared/types/imagem-laudo.types.js'
 
 const log = getLogger('database')
+
+export class ErroImagemImpressao extends Error {
+  constructor(readonly codigo: CodigoFalhaImagemImpressao) {
+    super(codigo)
+  }
+}
 const DIRETORIO_IMAGENS = path.join(app.getPath('userData'), 'imagens', 'laudos')
 
 interface ImagemLaudoRow {
@@ -171,6 +177,7 @@ export async function reconciliarImagensLaudo(
   )
   const idsOriginais = new Set(registros.map(registro => registro.imagem_origem_id).filter((id): id is string => Boolean(id)))
   const idsConhecidos = new Set(registros.map(registro => registro.id))
+  const caminhos = registros.map(registro => caminhoAbsoluto(registro.caminho_relativo))
   let recuperadasParaPainel = 0
   let arquivadasComoInseridas = 0
   let arquivosAusentes = 0
@@ -183,9 +190,11 @@ export async function reconciliarImagensLaudo(
         if (deveFicarNoPainel) recuperadasParaPainel += 1
         else arquivadasComoInseridas += 1
       }
-      if (!fs.existsSync(caminhoAbsoluto(registro.caminho_relativo))) arquivosAusentes += 1
     }
   })
+  for (const caminho of caminhos) {
+    try { await access(caminho) } catch { arquivosAusentes += 1 }
+  }
   const referenciasSemImagem = [...idsInseridos].filter(id => !idsConhecidos.has(id)).length
   if (recuperadasParaPainel || arquivadasComoInseridas || referenciasSemImagem || arquivosAusentes) {
     log.warn('Reconciliação de imagens do laudo encontrou divergências', {
@@ -483,10 +492,15 @@ export async function obterImagemLaudoPorId(laudoIdEntrada: string, imagemIdEntr
   }
   try {
     const bytes = await readFile(caminhoAbsoluto(registro.caminho_relativo))
+    let ajustesFigura: unknown
+    if (registro.ajustes_json) {
+      try { ajustesFigura = JSON.parse(registro.ajustes_json) } catch { ajustesFigura = undefined }
+    }
     return {
       ...criarResumoImagem(registro),
       tamanho: bytes.length,
       dataUri: `data:${registro.mime_type};base64,${bytes.toString('base64')}`,
+      ...(ajustesFiguraValidos(ajustesFigura) ? { ajustesFigura } : {}),
     }
   } catch (error) {
     log.warn('Imagem selecionada para IA ausente ou ilegível', { laudoId, imagemId, error })
@@ -497,19 +511,40 @@ export async function obterImagemLaudoPorId(laudoIdEntrada: string, imagemIdEntr
 export async function obterImagemImpressaoLaudo(
   laudoIdEntrada: string, imagemIdEntrada: string, larguraMaxima: number,
 ): Promise<{ id: string; dataUri: string }> {
-  const laudoId = validarIdentificador(laudoIdEntrada, 'Laudo')
-  const imagemId = validarIdentificador(imagemIdEntrada, 'Imagem')
-  if (!Number.isInteger(larguraMaxima) || larguraMaxima < 1 || larguraMaxima > 3000) throw new Error('Resolução de impressão inválida.')
-  const registro = (await executeQuery<ImagemLaudoRow>(
-    'SELECT * FROM imagens_laudo WHERE id = ? AND laudo_id = ?', [imagemId, laudoId],
-  ))[0]
-  if (!registro) throw new Error('Arquivo local da figura não encontrado para impressão.')
-  const bytesOriginais = await readFile(caminhoAbsoluto(registro.caminho_relativo))
-  if (createHash('sha256').update(bytesOriginais).digest('hex') !== registro.sha256) throw new Error('Arquivo local da figura não passou na verificação de integridade.')
-  const limite = await obterPerfilFiguraLaudo()
-  const tratada = await tratarFigura(bytesOriginais, registro.mime_type, limite)
-  const resultado = await processarImagem({ bytes: tratada.bytes, mimeOriginal: tratada.mimeType, finalidade: 'figura',
-    largura: larguraMaxima, qualidade: limite.qualidadeJpeg, formato: tratada.mimeType === 'image/jpeg' ? 'jpeg' : 'png', preservarSeCouber: true })
+  let laudoId: string
+  let imagemId: string
+  try {
+    laudoId = validarIdentificador(laudoIdEntrada, 'Laudo')
+    imagemId = validarIdentificador(imagemIdEntrada, 'Imagem')
+  } catch {
+    throw new ErroImagemImpressao('ENTRADA_INVALIDA')
+  }
+  if (!Number.isInteger(larguraMaxima) || larguraMaxima < 1 || larguraMaxima > 3000) throw new ErroImagemImpressao('ENTRADA_INVALIDA')
+  let registro: ImagemLaudoRow | undefined
+  try {
+    registro = (await executeQuery<ImagemLaudoRow>(
+      'SELECT * FROM imagens_laudo WHERE id = ? AND laudo_id = ?', [imagemId, laudoId],
+    ))[0]
+  } catch {
+    throw new ErroImagemImpressao('CONSULTA_FALHOU')
+  }
+  if (!registro) throw new ErroImagemImpressao('REGISTRO_AUSENTE')
+  let bytesOriginais: Buffer
+  try {
+    bytesOriginais = await readFile(caminhoAbsoluto(registro.caminho_relativo))
+  } catch (erro) {
+    throw new ErroImagemImpressao(erro instanceof Error && 'code' in erro && erro.code === 'ENOENT' ? 'ARQUIVO_AUSENTE' : 'LEITURA_FALHOU')
+  }
+  if (createHash('sha256').update(bytesOriginais).digest('hex') !== registro.sha256) throw new ErroImagemImpressao('INTEGRIDADE_FALHOU')
+  let resultado: Awaited<ReturnType<typeof processarImagem>>
+  try {
+    const limite = await obterPerfilFiguraLaudo()
+    const tratada = await tratarFigura(bytesOriginais, registro.mime_type, limite)
+    resultado = await processarImagem({ bytes: tratada.bytes, mimeOriginal: tratada.mimeType, finalidade: 'figura',
+      largura: larguraMaxima, qualidade: limite.qualidadeJpeg, formato: tratada.mimeType === 'image/jpeg' ? 'jpeg' : 'png', preservarSeCouber: true })
+  } catch {
+    throw new ErroImagemImpressao('PROCESSAMENTO_FALHOU')
+  }
   return { id: imagemId, dataUri: `data:${resultado.mimeType};base64,${Buffer.from(resultado.bytes).toString('base64')}` }
 }
 
@@ -529,7 +564,7 @@ export async function salvarImagemLaudo(
   if (entrada.ajustesJson) {
     let ajustes: unknown
     try { ajustes = JSON.parse(entrada.ajustesJson) } catch { throw new Error('Ajustes da figura inválidos.') }
-    if (!ajustes || typeof ajustes !== 'object' || Array.isArray(ajustes)) throw new Error('Ajustes da figura inválidos.')
+    if (!ajustesFiguraValidos(ajustes)) throw new Error('Ajustes da figura inválidos.')
   }
   const sha256 = createHash('sha256').update(bytes).digest('hex')
   const extensao = EXTENSAO_POR_MIME[mimeType]

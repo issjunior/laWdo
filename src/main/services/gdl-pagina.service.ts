@@ -256,15 +256,11 @@ async function lerDetalhesRepAutorizadaGdlInterna(
 
 async function observarAcessoWebGdl<T>(credenciais: CredenciaisPaginaGdl, consultar: () => Promise<T>, sinal?: AbortSignal): Promise<T> {
   const autorizacao = `Basic ${Buffer.from(`${credenciais.login}:${credenciais.senha}`).toString('base64')}`;
-  const observacao = await conexaoGdlService.capturarRequisicao(`${credenciais.baseUrl}/`, autorizacao).catch(() => null);
-  try {
-    const resultado = await consultar();
-    conexaoGdlService.registrarWeb(observacao, true);
-    return resultado;
-  } catch (erro) {
-    if (!sinal?.aborted) conexaoGdlService.registrarWeb(observacao, false);
-    throw erro;
-  }
+  return conexaoGdlService.executarOperacao('web', async () => {
+    await conexaoGdlService.capturarRequisicao(`${credenciais.baseUrl}/`, autorizacao).catch(() => null);
+    sinal?.throwIfAborted();
+    return consultar();
+  });
 }
 
 export const listarPaginaMinhasRepsGdl: typeof listarPaginaMinhasRepsGdlInterna = (...argumentos) =>

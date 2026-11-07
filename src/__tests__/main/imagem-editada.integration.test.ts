@@ -24,13 +24,26 @@ describe('imagem editada no laudo', () => {
       });
       const derivada = await imagens.salvarImagemLaudo('laudo', {
         id: 'editada', nomeArquivo: 'editada.png', dataUri: 'data:image/png;base64,AQEB', legenda: 'Foto', origem: 'local', sequencia: 1,
-        imagemOrigemId: base.id, ajustesJson: JSON.stringify({ angulo: 90 }),
+        imagemOrigemId: base.id, ajustesJson: JSON.stringify({ angulo: 90, espelharHorizontal: false, espelharVertical: false,
+          corte: { x: 0, y: 0, largura: 100, altura: 100 },
+          textos: [{ id: 'rotulo', conteudo: 'Amostra\n01', x: 50, y: 40, tamanho: 'medio', cor: 'branco' }] }),
       });
       expect(derivada.imagemOrigemId).toBe(base.id);
-      expect((await imagens.obterImagemLaudoPorId('laudo', derivada.id)).dataUri).toBe('data:image/png;base64,AQEB');
+      const reaberta = await imagens.obterImagemLaudoPorId('laudo', derivada.id);
+      expect(reaberta.dataUri).toBe('data:image/png;base64,AQEB');
+      expect(reaberta.ajustesFigura).toEqual({ angulo: 90, espelharHorizontal: false, espelharVertical: false,
+        corte: { x: 0, y: 0, largura: 100, altura: 100 },
+        textos: [{ id: 'rotulo', conteudo: 'Amostra\n01', x: 50, y: 40, tamanho: 'medio', cor: 'branco' }] });
+      await expect(imagens.salvarImagemLaudo('laudo', {
+        id: 'invalida', nomeArquivo: 'invalida.png', dataUri: 'data:image/png;base64,AAAA', legenda: '', origem: 'local', sequencia: 2,
+        ajustesJson: JSON.stringify({ ...reaberta.ajustesFigura, textos: [{ id: 'x', conteudo: 'Texto', x: 101, y: 0, tamanho: 'medio', cor: 'branco' }] }),
+      })).rejects.toThrow('Ajustes da figura inválidos.');
+      expect(await sqlite.executeQuery('SELECT id FROM imagens_laudo WHERE id = ?', ['invalida'])).toHaveLength(0);
       await expect(imagens.excluirImagemLaudo('laudo', base.id)).rejects.toThrow('base de uma figura editada');
       const [registro] = await sqlite.executeQuery<{ ajustes_json: string }>('SELECT ajustes_json FROM imagens_laudo WHERE id = ?', [derivada.id]);
-      expect(JSON.parse(registro.ajustes_json)).toEqual({ angulo: 90 });
+      expect(JSON.parse(registro.ajustes_json)).toEqual(reaberta.ajustesFigura);
+      await sqlite.executeNonQuery('UPDATE imagens_laudo SET ajustes_json = ? WHERE id = ?', ['{"angulo":90}', derivada.id]);
+      expect((await imagens.obterImagemLaudoPorId('laudo', derivada.id)).ajustesFigura).toBeUndefined();
     } finally {
       await fecharBanco?.();
       await fs.rm(diretorio, { recursive: true, force: true });

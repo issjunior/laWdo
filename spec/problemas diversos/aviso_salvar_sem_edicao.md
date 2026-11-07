@@ -49,3 +49,11 @@ Testes em `src/__tests__/renderer/`:
 Ao alterar esse fluxo, conferir saída sem edição, edição real, desfazer, alternância de modos e salvar seguido de nova edição.
 
 Referências: [editor de texto](<../03 laudo/editor_texto.md>), [ciclo de vida](<../03 laudo/laudo_ciclo_vida.md>) e [diagnóstico assistido](<../13 diagnostico/diagnostico_assistido.md>).
+
+## Referência da edição direta e reparos de abertura
+
+Na edição direta, `edicao-direta-laudo.ts` só habilita a materialização de prévias após `LaudoPreparado`, emitido depois do callback assíncrono inicial. Compara conteúdo normalizado e remove controles da assinatura; reaplicações de placeholders e undo restabelecem referências por identidade. Não usar a simples presença de mutações como prova de edição.
+
+A limpeza remove `data-placeholder-preview-id` tanto da âncora quanto da tabela personalizada, preservando `data-placeholder-tabela-personalizada-id` e o texto editado. A comparação deve considerar equivalentes o HTML legado e a representação canônica sem esse atributo transitório. `conteudo-comparavel-laudo.test.ts` cobre essa compatibilidade; `edicao-direta-laudo.test.ts` cobre materialização real, exclusão da âncora e undo.
+
+`handleEditar()` prepara o HTML com o reparo restrito da moldura vazia Local com Necropsia e a centralização de figuras isoladas antes de montar seções e estabelecer a referência. Essa preparação não grava o banco automaticamente e não deve causar falsa pendência; diferenças reais posteriores continuam protegidas pelo fluxo normal de salvamento.

@@ -1,3 +1,4 @@
+import type { ApiCredenciaisGdl } from '../preload/types';
 import type { ApiBkpLaudo } from '../shared/types/laudo-bkp.types';
 import React from 'react';
 import type { EstadoConexaoGdl } from '@shared/gdl/conexao';
@@ -10,6 +11,7 @@ import type {
   ImagemLaudoResumo,
   ImagemEstagiadaLaudo,
   ImagemPreparadaEditor,
+  FalhaImagemImpressao,
   MiniaturaImagemLaudo,
   ResultadoReconciliacaoImagensLaudo,
   SalvarImagemLaudoEntrada,
@@ -65,7 +67,7 @@ interface IpcIlustracoesLegado {
   listarImagens: (laudoId: string) => Promise<{ success: boolean; data?: ImagemLaudoResumo[]; error?: string }>;
   obterImagem: (laudoId: string, imagemId: string) => Promise<{ success: boolean; data?: ImagemLaudoPersistida; error?: string }>;
   obterImagemEstagio: (laudoId: string, imagemId: string) => Promise<{ success: boolean; data?: { id: string; dataUri: string }; error?: string }>;
-  obterImagemImpressao: (laudoId: string, imagemId: string, larguraMaxima: number) => Promise<{ success: boolean; data?: { id: string; dataUri: string }; error?: string }>;
+  obterImagemImpressao: (laudoId: string, imagemId: string, larguraMaxima: number) => Promise<{ success: boolean; data?: { id: string; dataUri: string }; error?: string; falhaImagem?: FalhaImagemImpressao }>;
   obterMiniaturas: (laudoId: string, ids: string[]) => Promise<{ success: boolean; data?: MiniaturaImagemLaudo[]; error?: string }>;
   salvarImagem: (laudoId: string, imagem: SalvarImagemLaudoEntrada) => Promise<{ success: boolean; data?: ImagemLaudoPersistida; error?: string }>;
   estagiarImagem: (laudoId: string, imagem: SalvarImagemLaudoEntrada) => Promise<{ success: boolean; data?: ImagemEstagiadaLaudo; error?: string }>;
@@ -112,6 +114,7 @@ interface IpcCapturaLogsRenderer {
 }
 
 interface IpcAPIRendererLegada {
+  corretor: import('../shared/types/corretor.types.js').ApiCorretor;
   projetil: import('../shared/types/projetil.types.js').ProjetilIpcRenderer;
   ping: () => Promise<string>;
   getAppInfo: () => Promise<AppInfoLegado>;
@@ -134,14 +137,14 @@ interface IpcAPIRendererLegada {
   rep: IpcGrupoLegado;
   dashboard: IpcGrupoLegado;
   configuracao: IpcGrupoLegado;
-  gdl: IpcGrupoLegado & {
+  gdl: IpcGrupoLegado & ApiCredenciaisGdl & {
     consultarRepsMesmoCaso: (laudoId: string) => Promise<{ success: boolean; data?: import('@shared/gdl/reps-mesmo-caso').RepsMesmoCasoGdl; error?: string }>;
     obterMiniaturasImagensLaudo: (laudoId: string, sessaoId: string, idsSelecao: string[]) => Promise<{ success: boolean; data?: MiniaturaArquivoRepGdl[]; error?: string }>;
     obterAvisosReiteracao: () => Promise<{ success: boolean; data?: import('../shared/gdl/reiteracao').AvisoReiteracaoGdl[]; error?: string }>;
     onAvisosAlterados: (callback: (reiniciar: boolean) => void) => () => void;
     obterEstadoConexao: () => Promise<{ success: boolean; data?: EstadoConexaoGdl; error?: string }>;
     verificarConexao: () => Promise<{ success: boolean; data?: EstadoConexaoGdl; error?: string }>;
-    onEstadoConexaoAlterado: (callback: () => void) => () => void;
+    onEstadoConexaoAlterado: (callback: (estado: EstadoConexaoGdl) => void) => () => void;
     onProgressoImagensLaudo: (callback: (progresso: ProgressoListaFotosGdl) => void) => () => void;
   };
   categoria: IpcGrupoLegado;

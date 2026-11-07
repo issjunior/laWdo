@@ -52,6 +52,7 @@ export class DesempenhoService {
   private fila: AmostraDesempenho[] = [];
   private eventosDescartados = 0;
   private gravacaoEmAndamento: Promise<void> | null = null;
+  private encerrando = false;
 
   async inicializar(): Promise<void> {
     if (this.inicializado) return;
@@ -77,7 +78,9 @@ export class DesempenhoService {
   }
   async marcarProblema(): Promise<void> { await this.registrar({ origem: 'renderer', categoria: 'marcador', evento: 'problema_aconteceu_agora' }); }
   async registrar(entrada: EventoDesempenhoEntrada): Promise<void> {
+    if (this.encerrando) return;
     await this.inicializar();
+    if (this.encerrando) return;
     const perfilAtivo = this.sessao?.ativa ? 'detalhado' : this.perfil;
     const severidade = severidadePara(entrada);
     if (perfilAtivo === 'critico' && severidade !== 'critico') return;
@@ -104,10 +107,12 @@ export class DesempenhoService {
     return `${cabecalho.join(',')}\n${linhas.join('\n')}\n`;
   }
   async encerrar(): Promise<void> {
+    this.encerrando = true;
     if (this.temporizadorAmostragem) clearInterval(this.temporizadorAmostragem);
     if (this.temporizadorGravacao) clearTimeout(this.temporizadorGravacao);
     this.temporizadorAmostragem = null; this.temporizadorGravacao = null; this.sessao = null;
-    await Promise.race([this.descarregarTudo(), new Promise<void>(resolve => setTimeout(resolve, 1_500))]);
+    await this.gravacaoEmAndamento;
+    await this.descarregarTudo(true);
   }
   private enfileirar(amostra: AmostraDesempenho): void {
     if (this.fila.length >= LIMITE_FILA) {
@@ -121,26 +126,31 @@ export class DesempenhoService {
     if (this.fila.length >= TAMANHO_LOTE || amostra.severidade === 'critico') void this.descarregar(); else this.agendarGravacao();
   }
   private agendarGravacao(): void {
-    if (this.temporizadorGravacao) return;
+    if (this.encerrando || this.temporizadorGravacao) return;
     this.temporizadorGravacao = setTimeout(() => { this.temporizadorGravacao = null; void this.descarregar(); }, INTERVALO_GRAVACAO_MS);
   }
-  private async descarregar(): Promise<void> {
+  private async descarregar(propagarFalha = false): Promise<void> {
     if (this.gravacaoEmAndamento) return this.gravacaoEmAndamento;
     const lote = this.fila.splice(0, TAMANHO_LOTE);
     if (!lote.length) return;
     this.gravacaoEmAndamento = (async () => {
       try { await fs.mkdir(diretorioLogs(), { recursive: true }); await this.rotacionarSeNecessario(); await fs.appendFile(caminhoLog(), `${lote.map(item => JSON.stringify(item)).join('\n')}\n`, 'utf8'); }
-      catch { this.fila.unshift(...lote.filter(item => item.severidade !== 'info')); this.eventosDescartados += lote.filter(item => item.severidade === 'info').length; }
+      catch (erro: unknown) {
+        this.fila.unshift(...lote.filter(item => item.severidade !== 'info'));
+        this.eventosDescartados += lote.filter(item => item.severidade === 'info').length;
+        if (propagarFalha) throw erro;
+      }
       finally { this.gravacaoEmAndamento = null; }
     })();
     await this.gravacaoEmAndamento;
     if (this.fila.length) this.agendarGravacao();
   }
-  private async descarregarTudo(): Promise<void> {
-    do { await this.descarregar(); } while (this.fila.length > 0 || this.gravacaoEmAndamento);
+  private async descarregarTudo(propagarFalha = false): Promise<void> {
+    do { await this.descarregar(propagarFalha); } while (this.fila.length > 0 || this.gravacaoEmAndamento);
   }
   private idSessaoPadrao(): string { return createHash('sha256').update(this.saltSessao).digest('hex').slice(0, 32); }
   private iniciarColetaPeriodica(): void {
+    if (this.encerrando) return;
     if (this.temporizadorAmostragem) clearInterval(this.temporizadorAmostragem);
     const intervalo = this.sessao?.ativa ? 2_000 : 10_000;
     this.temporizadorAmostragem = setInterval(() => {
