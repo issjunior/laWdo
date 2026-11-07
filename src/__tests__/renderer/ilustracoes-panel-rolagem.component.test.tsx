@@ -96,7 +96,7 @@ describe('rolagem do painel de ilustrações', () => {
       figurasNoEditor={[{ ...figura, dummy: true }]} figuraSubstituicaoSolicitada={figura.id}
       onReplaceImage={aoSubstituir} />)
     await act(async () => { await Promise.resolve() })
-    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Buscar REP' }))
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Buscar no GDL' }))
     expect(screen.getByRole('dialog', { name: 'Lista de Fotos da REP' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Capturar foto de teste' }))
     const seletor = await screen.findByRole('dialog', { name: 'Substituir figura' })
@@ -112,7 +112,7 @@ describe('rolagem do painel de ilustrações', () => {
     render(<IlustracoesPanel laudoId="laudo-1" onInsertImage={aoInserir} onRefreshHtml={vi.fn()}
       figurasNoEditor={[{ ...figura, dummy: true }]} figuraSubstituicaoSolicitada={figura.id}
       onReplaceImage={aoSubstituir} />)
-    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Buscar REP' }))
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Buscar no GDL' }))
     fireEvent.click(screen.getByRole('button', { name: 'Cancelar busca' }))
     expect(aoSubstituir).not.toHaveBeenCalled()
     expect(aoInserir).not.toHaveBeenCalled()
@@ -208,5 +208,44 @@ describe('rolagem do painel de ilustrações', () => {
 
     expect(painel).toHaveClass('h-full', 'min-h-0', 'flex-col', 'overflow-hidden')
     expect(cabecalho).toHaveClass('shrink-0')
+  })
+
+  it('previsualiza e confirma a altura contínua do par ativo por ocorrência', () => {
+    const aoPrevisualizar = vi.fn()
+    const aoConfirmar = vi.fn()
+    const aoCancelar = vi.fn()
+    const aoDefinirAjuste = vi.fn()
+    const propriedades = {
+      laudoId: 'laudo-1',
+      onInsertImage: vi.fn(),
+      onRefreshHtml: vi.fn(),
+      onPrevisualizarAlturaPar: aoPrevisualizar,
+      onConfirmarAlturaPar: aoConfirmar,
+      onCancelarAlturaPar: aoCancelar,
+      onDefinirAjusteVisualPar: aoDefinirAjuste,
+      figuraAtivaId: figura.id,
+    }
+    const { rerender } = render(
+      <IlustracoesPanel {...propriedades} figurasNoEditor={[{ ...figura, alturaParPercentual: 109 }]} />,
+    )
+
+    const slider = screen.getByRole('slider', { name: 'Ajuste da altura' })
+    expect(slider).toHaveAttribute('aria-valuemin', '0')
+    expect(slider).toHaveAttribute('aria-valuemax', '100')
+    expect(slider).toHaveAttribute('aria-valuenow', '50')
+    expect(screen.getByText('50%')).toBeInTheDocument()
+    expect(screen.queryByText('Mínimo 3:2 · máximo 2:3')).not.toBeInTheDocument()
+    expect(screen.getByPlaceholderText('Descreva a figura...').parentElement).toHaveClass('h-12', 'flex-col')
+    const switchPreencher = screen.getByRole('switch', { name: 'Preencher quadro' })
+    expect(switchPreencher).toHaveAttribute('aria-checked', 'false')
+    fireEvent.click(switchPreencher)
+    expect(aoDefinirAjuste).toHaveBeenCalledWith(0, 'preencher')
+    fireEvent.keyDown(slider, { key: 'ArrowRight' })
+    expect(aoPrevisualizar).toHaveBeenCalledWith(0, 113)
+    fireEvent.keyUp(slider, { key: 'ArrowRight' })
+    expect(aoConfirmar).toHaveBeenCalledWith(0, 113)
+
+    rerender(<IlustracoesPanel {...propriedades} figuraAtivaId="outra" figurasNoEditor={[{ ...figura, alturaParPercentual: 113 }]} />)
+    expect(aoCancelar).toHaveBeenCalledWith(0)
   })
 })

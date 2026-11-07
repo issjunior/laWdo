@@ -1,10 +1,15 @@
 import { converterMedidaTextoParaPt } from './medidas-texto';
 import type { AlinhamentoDocumento, BlocoExportacao, DocumentoExportacao, EstiloTextoExportacao, ListaExportacao, ParagrafoExportacao, TrechoExportacao } from '@shared/types/exportacao.types';
 import { elementoEhQuebraPagina, normalizarQuebrasPaginaHtml } from '@shared/utils/quebra-pagina';
-import { centralizarFigurasSozinhas } from './figuras';
+import { ajusteVisualParFigurasValido, alturaParFigurasValida, enquadramentoParFigurasValido } from '@shared/figura/enquadramento';
+import { centralizarFigurasSozinhas, normalizarParesFiguras } from './figuras';
 const numero = (v: string | null): number | undefined => { const n = Number.parseFloat(v || ''); return Number.isFinite(n) ? n : undefined; };
 const cor = (v: string): string | undefined => { const m = v.match(/#([0-9a-f]{6}|[0-9a-f]{3})\b/i); return m ? (m[1].length === 3 ? m[1].split('').map(x => x + x).join('') : m[1]).toUpperCase() : undefined; };
 const corDeFundoExportavel = (v: string): string | undefined => { const valor = cor(v); return valor && !['000000', '18181B', '1A1A1A'].includes(valor) ? valor : undefined; };
+const margemInternaPx = (v: string): number | undefined => {
+  const valor = numero(v.match(/padding:\s*([\d.]+)px\s*;?/i)?.[1] || null);
+  return valor !== undefined && valor >= 0 && valor <= 50 ? valor : undefined;
+};
 const alinhamento = (e: Element): AlinhamentoDocumento | undefined => (e.getAttribute('style') || '').match(/text-align:\s*(left|center|right|justify)/i)?.[1]?.toLowerCase() as AlinhamentoDocumento | undefined;
 function estilo(e: Element, p: EstiloTextoExportacao = {}): EstiloTextoExportacao { const t = e.tagName.toLowerCase(), c = e.getAttribute('style') || ''; return { ...p, negrito: p.negrito || /^(b|strong)$/.test(t) || /font-weight:\s*(bold|[6-9]00)/i.test(c), italico: p.italico || /^(i|em)$/.test(t) || /font-style:\s*italic/i.test(c), sublinhado: p.sublinhado || t === 'u' || /text-decoration[^;]*underline/i.test(c), tachado: p.tachado || /^(s|strike)$/.test(t) || /text-decoration[^;]*line-through/i.test(c), subscrito: p.subscrito || t === 'sub', sobrescrito: p.sobrescrito || t === 'sup', fonte: c.match(/font-family:\s*([^;,]+)/i)?.[1]?.replace(/["']/g, '').trim() || p.fonte, tamanhoPt: numero(c.match(/font-size:\s*([\d.]+)pt/i)?.[1] || null) || p.tamanhoPt, cor: cor(c.match(/(?:^|;)\s*color:\s*([^;]+)/i)?.[1] || '') || p.cor, realce: cor(c.match(/background-color:\s*([^;]+)/i)?.[1] || '') || p.realce, link: t === 'a' ? e.getAttribute('href') || undefined : p.link }; }
 function trechos(n: Node, p: EstiloTextoExportacao = {}): TrechoExportacao[] { if (n.nodeType === Node.TEXT_NODE) return n.textContent ? [{ texto: n.textContent, estilo: p }] : []; if (n.nodeType !== Node.ELEMENT_NODE) return []; const e = n as Element; if (e.tagName.toLowerCase() === 'br') return [{ texto: '', estilo: p, quebraLinha: true }]; return Array.from(e.childNodes).flatMap(f => trechos(f, estilo(e, p))); }
@@ -94,6 +99,7 @@ function blocos(p: Element, emTabela = false): BlocoExportacao[] {
               colspan: Number(celula.getAttribute('colspan')) || undefined,
               rowspan: Number(celula.getAttribute('rowspan')) || undefined,
               corFundo: corDeFundoExportavel(celula.getAttribute('style') || ''),
+              margemInternaPx: margemInternaPx(celula.getAttribute('style') || ''),
             };
           })
         ),
@@ -104,10 +110,16 @@ function blocos(p: Element, emTabela = false): BlocoExportacao[] {
     const dados = imagem?.getAttribute('src')?.match(/^data:image\/(\w+);base64,(.+)$/i);
     if ((tipo === 'figure' || tipo === 'img') && dados) {
       const css = imagem?.getAttribute('style') || '';
+      const enquadramentoAtributo = elemento.closest('[data-enquadramento-figura]')?.getAttribute('data-enquadramento-figura');
+      const alturaParAtributo = Number(elemento.closest('[data-altura-par-figuras]')?.getAttribute('data-altura-par-figuras'));
+      const ajusteVisualAtributo = elemento.closest('[data-ajuste-visual-par]')?.getAttribute('data-ajuste-visual-par');
       resultado.push({
         tipo: 'figura', formato: dados[1] === 'jpeg' ? 'jpg' : dados[1], base64: dados[2],
         larguraPx: numero(imagem?.getAttribute('width') || null) || numero(css.match(/width:\s*([\d.]+)px/i)?.[1] || null),
         alturaPx: numero(imagem?.getAttribute('height') || null) || numero(css.match(/height:\s*([\d.]+)px/i)?.[1] || null),
+        alturaParPercentual: alturaParFigurasValida(alturaParAtributo) ? alturaParAtributo : undefined,
+        enquadramento: enquadramentoParFigurasValido(enquadramentoAtributo) ? enquadramentoAtributo : undefined,
+        ajusteVisualPar: ajusteVisualParFigurasValido(ajusteVisualAtributo) ? ajusteVisualAtributo : undefined,
         alinhamento: alinhamento(elemento),
         legenda: elemento.querySelector('figcaption') ? paragrafo(elemento.querySelector('figcaption')!) : undefined,
       });
@@ -121,6 +133,7 @@ function blocos(p: Element, emTabela = false): BlocoExportacao[] {
 export function parseHtmlParaEstrutura(html: string): DocumentoExportacao {
   const documento = new DOMParser().parseFromString(normalizarQuebrasPaginaHtml(html), 'text/html');
   centralizarFigurasSozinhas(documento.body);
+  normalizarParesFiguras(documento.body);
   const css = documento.body.getAttribute('style') || '';
   const fechamento = documento.querySelector('[data-laudo-fechamento="true"]');
   const blocosFechamento = fechamento ? blocos(fechamento) : [];

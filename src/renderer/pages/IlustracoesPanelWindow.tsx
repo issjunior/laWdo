@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router';
 import { IlustracoesPanel, type ImagemLaudo } from '@/components/laudo/IlustracoesPanel';
+import type { AjusteVisualParFiguras } from '@shared/figura/enquadramento';
 import { Button } from '@/components/ui/button';
 import { PanelRightOpen } from 'lucide-react';
 import { toast } from 'sonner';
@@ -83,8 +84,8 @@ const IlustracoesPanelWindow: React.FC = () => {
     return preparadas.map(imagem => imagem.id);
   }, [laudoId, sendAction]);
 
-  const handleDeleteImage = useCallback((imageId: string) => {
-    sendAction('deleteImage', imageId);
+  const handleDeleteImage = useCallback((imageId: string, indice?: number) => {
+    sendAction('deleteImage', imageId, indice);
   }, [sendAction]);
 
   const handleUpdateLegenda = useCallback((id: string, legenda: string) => {
@@ -116,6 +117,22 @@ const IlustracoesPanelWindow: React.FC = () => {
 
   const handleScrollToFigure = useCallback((imageId: string) => {
     sendAction('scrollToFigure', imageId);
+  }, [sendAction]);
+
+  const handlePrevisualizarAlturaPar = useCallback((indice: number, alturaPercentual: number) => {
+    sendAction('previewPairHeight', indice, alturaPercentual);
+  }, [sendAction]);
+
+  const handleConfirmarAlturaPar = useCallback((indice: number, alturaPercentual: number) => {
+    sendAction('commitPairHeight', indice, alturaPercentual);
+  }, [sendAction]);
+
+  const handleCancelarAlturaPar = useCallback((indice: number) => {
+    sendAction('cancelPairHeight', indice);
+  }, [sendAction]);
+
+  const handleDefinirAjusteVisualPar = useCallback((indice: number, ajusteVisual: AjusteVisualParFiguras) => {
+    sendAction('setPairVisualMode', indice, ajusteVisual);
   }, [sendAction]);
 
   const handleReplaceImage = useCallback(async (imageId: string, imagem: ImagemLaudo, indice?: number) => {
@@ -179,6 +196,10 @@ const IlustracoesPanelWindow: React.FC = () => {
             onRefreshHtml={handleRefreshHtml}
             onSyncToggle={handleSyncToggle}
             onScrollToFigure={handleScrollToFigure}
+            onPrevisualizarAlturaPar={handlePrevisualizarAlturaPar}
+            onConfirmarAlturaPar={handleConfirmarAlturaPar}
+            onCancelarAlturaPar={handleCancelarAlturaPar}
+            onDefinirAjusteVisualPar={handleDefinirAjusteVisualPar}
             onReplaceImage={handleReplaceImage}
             onEditImage={handleEditImage}
             onGerarLegenda={handleGerarLegenda}

@@ -125,15 +125,15 @@ export function SeletorFiguraDialog({
                 <CardTitle className="text-sm">Escolha a nova figura</CardTitle>
                 <p className="text-xs text-muted-foreground">Miniaturas compactas mantêm mais imagens visíveis e destacam a seleção atual.</p>
                 <div className="flex flex-wrap gap-2">
-                  {onCarregarArquivo && <><Button type="button" variant="outline" size="sm" onClick={() => entradaArquivoRef.current?.click()}><Upload className="h-4 w-4" />Carregar arquivo local</Button><input ref={entradaArquivoRef} type="file" accept="image/*" className="sr-only" tabIndex={-1} onChange={event => { const arquivo = event.target.files?.[0]; if (arquivo) void onCarregarArquivo(arquivo); event.target.value = ''; }} /></>}
-                  {modo === 'substituir' && <Button type="button" variant="outline" size="sm" onClick={onBuscarGdl}><ImageDown className="h-4 w-4" />Buscar REP</Button>}
+                  {modo === 'substituir' && <Button type="button" variant="outline" size="sm" onClick={onBuscarGdl}><ImageDown className="h-4 w-4" />Buscar no GDL</Button>}
+                  {onCarregarArquivo && <><Button type="button" variant="outline" size="sm" onClick={() => entradaArquivoRef.current?.click()}><Upload className="h-4 w-4" />Buscar localmente</Button><input ref={entradaArquivoRef} type="file" accept="image/*" className="sr-only" tabIndex={-1} onChange={event => { const arquivo = event.target.files?.[0]; if (arquivo) void onCarregarArquivo(arquivo); event.target.value = ''; }} /></>}
                 </div>
               </CardHeader>
               <CardContent className="p-4 pt-0">
                 {imagens.length === 0 ? (
                   <div className="flex min-h-64 flex-col items-center justify-center gap-3 rounded-md border border-dashed bg-muted/40 p-6 text-center">
                     <ImageIcon className="h-8 w-8 text-muted-foreground" />
-                    <div className="space-y-1"><p className="text-sm font-medium">Nenhuma imagem está disponível</p><p className="text-xs text-muted-foreground">{modo === 'inserir' ? 'Carregue uma imagem local para continuar.' : 'Busque fotos na REP para continuar.'}</p></div>
+                    <div className="space-y-1"><p className="text-sm font-medium">Nenhuma imagem está disponível</p><p className="text-xs text-muted-foreground">{modo === 'inserir' ? 'Busque uma imagem local para continuar.' : 'Busque imagens no GDL ou localmente para continuar.'}</p></div>
                   </div>
                 ) : (
                   <div className="h-[344px] overflow-y-auto pr-1"><div className="grid grid-cols-3 gap-3">

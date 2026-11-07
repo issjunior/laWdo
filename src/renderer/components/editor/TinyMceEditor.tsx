@@ -21,12 +21,13 @@ import { ESTILO_TIPOGRAFIA_EDITOR_LAUDO } from '@/lib/tipografia-editor-laudo';
 import { ESTILOS_TABELAS_BALISTICA } from '@shared/utils/tabelas-balistica-layout';
 import { MEDIDAS_RECUO_PRIMEIRA_LINHA } from '@/lib/recuo-editor-laudo';
 export { MEDIDAS_RECUO_PRIMEIRA_LINHA } from '@/lib/recuo-editor-laudo';
-import { registrarSeletoresCamposB601 } from '@/lib/b601-campos-projetil';
+import { registrarSeletoresCamposB601, type SolicitacaoIdentificacaoProjetilB601 } from '@/lib/b601-campos-projetil';
 import { registrarColetaB601 } from '@/lib/b601-coleta';
 import { registrarMenuPreenchimentoB601 } from '@/lib/menu-preenchimento-b601';
 import { MARCADOR_QUEBRA_PAGINA } from '@shared/utils/quebra-pagina';
 import { criarHtmlFigura, URL_FIGURA_DUMMY } from '@shared/figura/html';
-import { atualizarNumeroFigura, centralizarFigurasSozinhas } from '@/lib/figuras';
+import { cancelarPrevisualizacaoAlturaParFiguras, definirAjusteVisualParFiguras, definirAlturaParFiguras, previsualizarAlturaParFiguras, atualizarNumeroFigura, centralizarFigurasSozinhas, normalizarParesFiguras, removerFiguraEReorganizarPar } from '@/lib/figuras';
+import type { AjusteVisualParFiguras } from '@shared/figura/enquadramento';
 import {
   aplicarRecuoPrimeiraLinha,
   aplicarEspacamentoParagrafo,
@@ -200,6 +201,7 @@ interface TinyMceEditorProps {
   onFiguraRealClick?: () => void;
   onSolicitarBusca?: () => void;
   onSolicitarSalvar?: () => void;
+  onSolicitarIdentificacaoProjetil?: (solicitacao: SolicitacaoIdentificacaoProjetilB601) => void;
   /** Auto-converter "XXX" digitado em span campo-reservado (apenas templates) */
   autoConverterReservados?: boolean;
   /** Toggles condicionais para o botão "Bloco Condicional" na toolbar (ex: B-602) */
@@ -309,6 +311,7 @@ async function converterBlobImagemParaDataUri(url: string): Promise<string> {
 
 interface RemoverImagemPayload {
   id: string;
+  figureElement?: HTMLElement;
 }
 
 interface SubstituirImagemPayload {
@@ -318,6 +321,16 @@ interface SubstituirImagemPayload {
   newUrl: string;
   imagemOrigemId?: string;
   previa?: boolean;
+}
+
+interface AlturaParFigurasPayload {
+  figureElement: HTMLElement;
+  alturaPercentual: number;
+}
+
+interface AjusteVisualParFigurasPayload {
+  figureElement: HTMLElement;
+  ajusteVisual: AjusteVisualParFiguras;
 }
 
 const BLOCOS_CONDICIONAIS_B602_POR_ARMA = [
@@ -535,6 +548,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
   onFiguraRealClick,
   onSolicitarBusca,
   onSolicitarSalvar,
+  onSolicitarIdentificacaoProjetil,
   autoConverterReservados = false,
   condToggles,
   onSolicitarExclusaoBlocoCondicional,
@@ -567,6 +581,8 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
   aoSolicitarBuscaRef.current = onSolicitarBusca;
   const aoSolicitarSalvarRef = useRef(onSolicitarSalvar);
   aoSolicitarSalvarRef.current = onSolicitarSalvar;
+  const aoSolicitarIdentificacaoProjetilRef = useRef(onSolicitarIdentificacaoProjetil);
+  aoSolicitarIdentificacaoProjetilRef.current = onSolicitarIdentificacaoProjetil;
   const editorProntoParaAlteracoesRef = useRef(false);
   const onChange = useCallback((html: string, origem?: 'usuario' | 'normalizacao-inicial') => {
     aoAlterarConteudo(html, origem ?? (editorProntoParaAlteracoesRef.current ? 'usuario' : 'normalizacao-inicial'));
@@ -843,6 +859,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
               setFalhaInicializacao('Não foi possível preparar o conteúdo do editor. Tente novamente.');
             };
             try {
+              normalizarParesFiguras(editor.getBody());
               normalizarBlocosCondicionais(editor.getBody(), condToggles);
               sincronizarAcoesBlocosCondicionais(editor.getBody());
               const preparacao = onEditorInit?.(editor);
@@ -872,6 +889,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
           formats: FORMATOS_LIMPEZA_EDITOR,
           image_advtab: true,
           image_title: true,
+          object_resizing: 'img:not([data-quadro-figura])',
 
           // ─── Upload de imagens (converte blob→dataURI na origem) ──
           images_upload_handler: imagesUploadHandler,
@@ -1211,20 +1229,43 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
 
           // ─── Placeholder personalizado e Proxy de ContextMenu ─────
           setup: (editor: TinyMceEditorInstance) => {
+            const atualizarPreviaFigura = (figura: HTMLElement) => {
+              if (!laudoId || figura.getAttribute('data-imagem-previa') !== 'true') return;
+              const imagem = figura.querySelector<HTMLImageElement>('img');
+              const id = figura.getAttribute('data-image-id');
+              if (!imagem || !id) return;
+              const limites = imagem.getBoundingClientRect();
+              void window.ipcAPI.ilustracoes.prepararInsercao(
+                laudoId, id, Math.max(1, limites.width), Math.max(1, limites.height), window.devicePixelRatio || 1,
+              ).then(resultado => {
+                if (!resultado.success || !resultado.data) throw new Error(resultado.error || 'Não foi possível atualizar a prévia.');
+                if (!editor.getBody().contains(figura) || figura.getAttribute('data-image-id') !== id) return;
+                const previaDataUri = resultado.data.previaDataUri;
+                editor.undoManager.ignore(() => imagem.setAttribute('src', previaDataUri));
+                onChange(editor.getContent());
+              }).catch((erro: unknown) => window.alert(erro instanceof Error ? erro.message : 'Não foi possível atualizar a prévia.'));
+            };
+            let previsualizacaoAlturaPendente: AlturaParFigurasPayload | null = null;
+            let quadroPrevisualizacaoAltura: number | null = null;
+            const agendarPrevisualizacaoAltura = (data: AlturaParFigurasPayload) => {
+              previsualizacaoAlturaPendente = data;
+              if (quadroPrevisualizacaoAltura !== null) return;
+              quadroPrevisualizacaoAltura = window.requestAnimationFrame(() => {
+                quadroPrevisualizacaoAltura = null;
+                const pendente = previsualizacaoAlturaPendente;
+                previsualizacaoAlturaPendente = null;
+                if (!pendente || !editor.getBody().contains(pendente.figureElement)) return;
+                editor.undoManager.ignore(() => {
+                  previsualizarAlturaParFiguras(pendente.figureElement, pendente.alturaPercentual);
+                });
+              });
+            };
             if (laudoId) {
               editor.on('ObjectResized', evento => {
                 const imagem = evento.target.tagName === 'IMG' ? evento.target as HTMLImageElement : null;
                 const figura = imagem?.closest<HTMLElement>('.laudo-figure[data-imagem-previa="true"]');
-                const id = figura?.getAttribute('data-image-id');
-                if (!imagem || !figura || !id) return;
-                void window.ipcAPI.ilustracoes.prepararInsercao(
-                  laudoId, id, Math.max(1, evento.width), Math.max(1, evento.height), window.devicePixelRatio || 1,
-                ).then(resultado => {
-                  if (!resultado.success || !resultado.data) throw new Error(resultado.error || 'Não foi possível atualizar a prévia.');
-                  if (!editor.getBody().contains(figura) || figura.getAttribute('data-image-id') !== id) return;
-                  imagem.setAttribute('src', resultado.data.previaDataUri);
-                  onChange(editor.getContent());
-                }).catch((erro: unknown) => window.alert(erro instanceof Error ? erro.message : 'Não foi possível atualizar a prévia.'));
+                if (!imagem || !figura) return;
+                atualizarPreviaFigura(figura);
               });
             }
             registrarInicializacao('editor_setup_iniciado', { tentativaInterna: tentativaInicializacao });
@@ -1237,8 +1278,14 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
             for (const fase of ['PreInit', 'PostRender', 'SkinLoaded', 'BeforeSetContent', 'SetContent', 'LoadContent']) {
               editor.on(fase, () => { if (!editorProntoParaAlteracoesRef.current) faseInicializacaoRef.current = fase; });
             }
-            editor.on('remove', () => registrarInicializacao('editor_instancia_removida', { tentativaInterna: tentativaInicializacao }));
-            editor.on('Undo Redo', () => window.requestAnimationFrame(() => onImageInserted?.()));
+            editor.on('remove', () => {
+              if (quadroPrevisualizacaoAltura !== null) window.cancelAnimationFrame(quadroPrevisualizacaoAltura);
+              registrarInicializacao('editor_instancia_removida', { tentativaInterna: tentativaInicializacao });
+            });
+            editor.on('SetContent Undo Redo', () => window.requestAnimationFrame(() => {
+              editor.undoManager.ignore(() => normalizarParesFiguras(editor.getBody()));
+              onImageInserted?.();
+            }));
             if (laudoId && onSolicitarInsercaoFigura) {
               editor.ui.registry.addButton('inserirfiguralaudo', {
                 text: 'Inserir figura',
@@ -1348,8 +1395,11 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
 
             editor.addCommand('removeLaudoImage', ((_ui, data) => {
               const body = editor.getBody();
-              const figure = body.querySelector(`.laudo-figure[data-image-id="${data.id}"]`);
+              const figure = data.figureElement && body.contains(data.figureElement)
+                ? data.figureElement
+                : body.querySelector(`.laudo-figure[data-image-id="${data.id}"]`);
               if (figure) {
+                if (removerFiguraEReorganizarPar(figure as HTMLElement)) return;
                 const nextSibling = figure.nextElementSibling;
                 figure.remove();
                 if (nextSibling && (nextSibling.tagName === 'BR' || (nextSibling.tagName === 'P' && (nextSibling as HTMLElement).innerHTML === '&nbsp;'))) {
@@ -1386,8 +1436,43 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
                 }
                 figure.removeAttribute('data-dummy');
                 figure.style.cursor = '';
+                normalizarParesFiguras(body);
               });
             }) satisfies ComandoTinyMce<SubstituirImagemPayload>);
+
+            editor.addCommand('previsualizarAlturaParFiguras', ((_ui, data) => {
+              agendarPrevisualizacaoAltura(data);
+            }) satisfies ComandoTinyMce<AlturaParFigurasPayload>);
+
+            editor.addCommand('cancelarPrevisualizacaoAlturaParFiguras', ((_ui, data) => {
+              previsualizacaoAlturaPendente = null;
+              editor.undoManager.ignore(() => cancelarPrevisualizacaoAlturaParFiguras(data.figureElement));
+            }) satisfies ComandoTinyMce<AlturaParFigurasPayload>);
+
+            editor.addCommand('confirmarAlturaParFiguras', ((_ui, data) => {
+              let figuras: HTMLElement[] = [];
+              previsualizacaoAlturaPendente = null;
+              editor.undoManager.ignore(() => cancelarPrevisualizacaoAlturaParFiguras(data.figureElement));
+              editor.undoManager.transact(() => {
+                const resultado = definirAlturaParFiguras(data.figureElement, data.alturaPercentual);
+                if (!resultado.alterou) return;
+                figuras = resultado.figuras;
+              });
+              if (figuras.length === 0) return;
+              onChange(editor.getContent());
+              onImageInserted?.();
+              window.requestAnimationFrame(() => figuras.forEach(atualizarPreviaFigura));
+            }) satisfies ComandoTinyMce<AlturaParFigurasPayload>);
+
+            editor.addCommand('definirAjusteVisualParFiguras', ((_ui, data) => {
+              let alterou = false;
+              editor.undoManager.transact(() => {
+                alterou = definirAjusteVisualParFiguras(data.figureElement, data.ajusteVisual).alterou;
+              });
+              if (!alterou) return;
+              onChange(editor.getContent());
+              onImageInserted?.();
+            }) satisfies ComandoTinyMce<AjusteVisualParFigurasPayload>);
 
             editor.addCommand('insertLaudoImageDummy', () => {
               const id = crypto.randomUUID();
@@ -1523,7 +1608,9 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
               const body = editor.getBody();
               if (laudoId) registrarEdicaoDiretaLaudo(editor);
               registrarSeletoresTabela(editor, definirSessaoSeletor);
-              registrarSeletoresCamposB601(editor, html => onChange(html, 'usuario'));
+              registrarSeletoresCamposB601(editor, html => onChange(html, 'usuario'), onSolicitarIdentificacaoProjetil
+                ? solicitacao => aoSolicitarIdentificacaoProjetilRef.current?.(solicitacao)
+                : undefined);
               registrarColetaB601(editor, laudoId, html => onChange(html, 'usuario'));
               if (laudoId) registrarMenuPreenchimentoB601(editor, html => onChange(html, 'usuario'));
 

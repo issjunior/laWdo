@@ -1,3 +1,5 @@
+import type { AjusteVisualParFiguras, EnquadramentoParFiguras } from '../figura/enquadramento.js';
+
 export type AlinhamentoDocumento = 'left' | 'center' | 'right' | 'justify';
 
 export interface EstiloTextoExportacao {
@@ -14,9 +16,9 @@ export interface ParagrafoExportacao {
   espacamentoLinha?: number; citacao?: boolean; preFormatado?: boolean;
 }
 export interface ListaExportacao { tipo: 'lista'; ordenada: boolean; nivel: number; itens: ParagrafoExportacao[]; }
-export interface CelulaTabelaExportacao { paragrafos: ParagrafoExportacao[]; blocos?: BlocoExportacao[]; colspan?: number; rowspan?: number; larguraPercentual?: number; corFundo?: string; }
+export interface CelulaTabelaExportacao { paragrafos: ParagrafoExportacao[]; blocos?: BlocoExportacao[]; colspan?: number; rowspan?: number; larguraPercentual?: number; corFundo?: string; margemInternaPx?: number; }
 export interface TabelaExportacao { tipo: 'tabela'; linhas: CelulaTabelaExportacao[][]; largurasPercentuais?: number[]; }
-export interface FiguraExportacao { tipo: 'figura'; base64: string; formato: string; larguraPx?: number; alturaPx?: number; alinhamento?: AlinhamentoDocumento; legenda?: ParagrafoExportacao; }
+export interface FiguraExportacao { tipo: 'figura'; base64: string; formato: string; larguraPx?: number; alturaPx?: number; alturaParPercentual?: number; enquadramento?: EnquadramentoParFiguras; ajusteVisualPar?: AjusteVisualParFiguras; alinhamento?: AlinhamentoDocumento; legenda?: ParagrafoExportacao; }
 export interface LinhaHorizontalExportacao { tipo: 'linha-horizontal'; }
 export interface QuebraPaginaExportacao { tipo: 'quebra-pagina'; }
 export type BlocoExportacao = ParagrafoExportacao | ListaExportacao | TabelaExportacao | FiguraExportacao | LinhaHorizontalExportacao | QuebraPaginaExportacao;
