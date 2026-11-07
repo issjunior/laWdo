@@ -21,7 +21,7 @@ describe('ErrorBoundary', () => {
     )
 
     expect(screen.getByRole('heading', { name: 'Ops! Algo deu errado' })).toBeInTheDocument()
-    expect(screen.getByText('Falha simulada')).toBeInTheDocument()
+    expect(screen.getByText('Consulte os logs locais para obter os detalhes técnicos desta falha.')).toBeInTheDocument()
     expect(window.ipcAPI.logError).toHaveBeenCalledWith(
       'renderer',
       'Erro não tratado no React',
@@ -32,7 +32,7 @@ describe('ErrorBoundary', () => {
     expect(window.ipcAPI.restartApp).toHaveBeenCalledTimes(1)
 
     const abrirJanela = vi.spyOn(window, 'open').mockImplementation(() => null)
-    fireEvent.click(screen.getByRole('button', { name: 'Limpar Cache' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Restaurar preferências locais' }))
     expect(window.localStorage.removeItem).toHaveBeenCalledWith('dashboard_tipo_grafico')
     expect(window.localStorage.removeItem).toHaveBeenCalledWith('dashboard_secoes_expandidas')
     expect(window.sessionStorage.removeItem).toHaveBeenCalledWith('lawdo_auth_user')

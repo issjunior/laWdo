@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron';
 import { logError } from '../../utils/logger.js';
 import { pecaService } from '../../services/peca.service.js';
+import { validarHtmlSeguro } from '../../services/html-seguro.service.js';
 import type { PecaRow } from '../../types/database.js';
 
 type PecaCreatePayload = Omit<PecaRow, 'id' | 'created_at' | 'updated_at'>;
@@ -33,6 +34,7 @@ export const registerPecaHandlers = (): void => {
     try {
       if (!data.nome) return { success: false, error: 'Nome é obrigatório' };
       if (!data.conteudo) return { success: false, error: 'Conteúdo é obrigatório' };
+      validarHtmlSeguro(data.conteudo, 'O conteúdo da peça');
       const created = await pecaService.create(data);
       return { success: true, data: created };
     } catch (error) {
@@ -44,6 +46,7 @@ export const registerPecaHandlers = (): void => {
   ipcMain.handle('peca:update', async (_event, id: string, data: PecaUpdatePayload) => {
     try {
       if (!id) return { success: false, error: 'ID inválido' };
+      if (data.conteudo !== undefined) validarHtmlSeguro(data.conteudo, 'O conteúdo da peça');
       const updated = await pecaService.update(id, data);
       return { success: true, data: updated };
     } catch (error) {

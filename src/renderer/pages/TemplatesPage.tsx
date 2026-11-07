@@ -14,6 +14,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { toast } from 'sonner';
+import { prepararHtmlPreviaSeguro } from '@/lib/html-previa-segura';
 import { lerUsuarioSessao } from '@/lib/usuario-sessao';
 import { obterFormasPerito, type FormaTratamentoLaudo } from '@/lib/perito-tratamento';
 import {
@@ -517,14 +518,14 @@ const SortableSecaoTemplateItem: React.FC<SortableSecaoTemplateItemProps> = ({
         <p className="text-xs text-muted-foreground">Prévia com cinco unidades. No laudo, a quantidade e a origem vêm da REP.</p>
         {blocosColeta.length ? blocosColeta.map((bloco, indiceBloco) => (
           <div key={bloco.origem} className="space-y-3">
-            <div className="overflow-x-auto text-xs [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:border-border [&_td]:p-2 [&_th]:border [&_th]:border-border [&_th]:bg-muted [&_th]:p-2 [&_p]:my-2" dangerouslySetInnerHTML={{ __html: bloco.descricao }} />
+            <div className="overflow-x-auto text-xs [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:border-border [&_td]:p-2 [&_th]:border [&_th]:border-border [&_th]:bg-muted [&_th]:p-2 [&_p]:my-2" dangerouslySetInnerHTML={{ __html: prepararHtmlPreviaSeguro(bloco.descricao) }} />
             <Label>Fotografias — {bloco.origem}</Label>
             <p className="text-xs text-muted-foreground">Edite as figuras e legendas neste quadro. Use o botão de inserir figura para adicionar espaços para imagens.</p>
             <TinyMceEditor editorId={`template-secao-${getSecaoRef(secao)}-fotos-${indiceBloco}`} value={bloco.fotos}
               onChange={html => updateSecao(index, 'conteudo', conteudoAtual => atualizarFotosColetaTemplateB601(conteudoAtual, bloco.origem, html))}
               height={300} placeholder="Figuras e legendas..." placeholderChaves={placeholderChaves} autoConverterReservados={true} condToggles={exameToggles} />
           </div>
-        )) : <div className="overflow-x-auto text-xs [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:border-border [&_td]:p-2 [&_th]:border [&_th]:border-border [&_th]:bg-muted [&_th]:p-2 [&_p]:my-2" dangerouslySetInnerHTML={{ __html: gerarPreviaColetaTemplateB601(secao.conteudo, secao.repetir_para || '') }} />}
+        )) : <div className="overflow-x-auto text-xs [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:border-border [&_td]:p-2 [&_th]:border [&_th]:border-border [&_th]:bg-muted [&_th]:p-2 [&_p]:my-2" dangerouslySetInnerHTML={{ __html: prepararHtmlPreviaSeguro(gerarPreviaColetaTemplateB601(secao.conteudo, secao.repetir_para || '')) }} />}
         </div>
       ) : <PlaceholderContextMenu
         editorId={`template-secao-${getSecaoRef(secao)}`}

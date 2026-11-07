@@ -5,6 +5,7 @@ import { executeNonQuery, executeQuery, withTransaction } from '../database/sqli
 import { getLogger } from '../utils/logger.js';
 import type { PacoteTemplate, PreviaPacoteTemplate, SecaoPacoteTemplate } from '@shared/types/template-pacote.types.js';
 import type { SecaoTemplateRow, TemplateRow, TipoExameRow } from '../types/database.js';
+import { validarHtmlSeguro } from './html-seguro.service.js';
 
 const log = getLogger('template');
 const LIMITE_BYTES = 20 * 1024 * 1024;
@@ -40,6 +41,7 @@ function validarPacote(valor: unknown): PacoteTemplate {
     return { contar_na_numeracao: secao.contar_na_numeracao !== false, ocultar_titulo: secao.ocultar_titulo === true, id_origem: id, parent_id_origem: texto(secao.parent_id_origem, `pai da seção ${indice + 1}`), nome: texto(secao.nome, `nome da seção ${indice + 1}`, true)!, ordem, conteudo: texto(secao.conteudo, `conteúdo da seção ${indice + 1}`), condicao: texto(secao.condicao, `condição da seção ${indice + 1}`), repetir_para: texto(secao.repetir_para, `repetição da seção ${indice + 1}`), repetir_titulo: texto(secao.repetir_titulo, `título de repetição da seção ${indice + 1}`) };
   });
   if (secoes.some(s => s.parent_id_origem && !ids.has(s.parent_id_origem))) throw new Error('Pacote inválido: seção pai não encontrada');
+  secoes.forEach(secao => { if (secao.conteudo) validarHtmlSeguro(secao.conteudo, `O conteúdo da seção ${secao.nome}`); });
   return { template: { nome, descricao: texto(valor.template.descricao, 'descrição') }, tipo_exame: { codigo, nome: nomeTipo, descricao: texto(valor.tipo_exame.descricao, 'descrição do tipo') }, secoes };
 }
 

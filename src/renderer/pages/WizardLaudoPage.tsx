@@ -18,6 +18,7 @@ import {
   ChevronRight, ChevronDown,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { prepararHtmlPreviaSeguro } from '@/lib/html-previa-segura';
 
 interface EtapaWizard {
   id: string; pergunta: string; descricao_ajuda?: string;
@@ -511,7 +512,7 @@ const WizardLaudoPage: React.FC = () => {
             {previewLoading ? (
               <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin" /></div>
             ) : previewHtml ? (
-              <div className="prose prose-sm max-w-none dark:prose-invert border rounded-md p-4 min-h-[400px]" dangerouslySetInnerHTML={{ __html: previewHtml }} />
+              <div className="prose prose-sm max-w-none dark:prose-invert border rounded-md p-4 min-h-[400px]" dangerouslySetInnerHTML={{ __html: prepararHtmlPreviaSeguro(previewHtml) }} />
             ) : (
               <div className="flex flex-col items-center py-12 text-muted-foreground gap-2">
                 <p>Responda as perguntas para ver a prévia do laudo.</p>
