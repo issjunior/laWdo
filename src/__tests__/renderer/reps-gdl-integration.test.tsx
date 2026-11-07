@@ -96,9 +96,13 @@ const identificarRep = vi.fn()
 const listarMinhasReps = vi.fn()
 
 function obterUfSelecionada(): HTMLElement {
-  const controle = screen.getAllByRole('combobox').find(item => /^[A-Z]{2}$/.test(item.textContent?.trim() ?? ''))
+  const controle = screen.getAllByRole('combobox').find(item => ['PR', 'SC'].includes(item.textContent?.trim() ?? ''))
   if (!controle) throw new Error('Controle de UF não encontrado')
   return controle
+}
+
+async function clicarAplicacaoGdl(): Promise<void> {
+  fireEvent.click(await screen.findByRole('button', { name: /^(Aplicar ao Formulário|Preencher formulário)$/ }))
 }
 
 beforeAll(() => {
@@ -259,7 +263,7 @@ describe('integração da consulta geral GDL com REPsPage', () => {
     fireEvent.change(await screen.findByLabelText('Nº da REP'), { target: { value: '109026' } });
     fireEvent.click(screen.getByRole('button', { name: 'Buscar' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Confirmar tipo e revisar dados' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Aplicar ao Formulário' }));
+    await clicarAplicacaoGdl();
 
     await waitFor(() => expect(obterUfSelecionada()).toHaveTextContent('SC'));
   });
@@ -351,7 +355,7 @@ describe('integração da consulta geral GDL com REPsPage', () => {
     fireEvent.change(await screen.findByLabelText('Nº da REP'), { target: { value: '109026' } })
     fireEvent.click(screen.getByRole('button', { name: 'Buscar' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Confirmar tipo e revisar dados' }))
-    fireEvent.click(await screen.findByRole('button', { name: 'Aplicar ao Formulário' }))
+    await clicarAplicacaoGdl()
 
     expect(screen.getByLabelText('Quesito Aberto')).toHaveValue('Quesito editado localmente.')
   })
