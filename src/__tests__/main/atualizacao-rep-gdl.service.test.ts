@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LaudoRow, REPRow } from '../../main/types/database'
 import type { DadosImportacaoB602, PecaB602, ResultadoImportacaoExame } from '../../shared/types/b602-gdl.types'
+import type { DadosImportacaoB601 } from '../../shared/types/gdl-importacao.types'
+import type { PecaBalistica } from '../../shared/types/pecas-balistica.types'
 
 const mocks = vi.hoisted(() => ({
   executar: vi.fn(),
@@ -132,6 +134,34 @@ function criarImportacao(): ResultadoImportacaoExame<DadosImportacaoB602> {
     },
     avisos: [],
     metadadosIntegracaoGdl: { origemInicial: 'gdl' },
+  }
+}
+
+function criarPecaB601(codigo: number, idLocal: string, extrasGdl: Record<string, unknown> = {}): PecaBalistica {
+  return {
+    idLocal, origem: 'gdl', alteradaLocalmente: false, codPecaGdl: codigo,
+    tipoCodigo: '101', tipoPeca: 'Estojo',
+    comuns: {
+      identificacao: `Identificação ${codigo}`, quantidade: 1, unidadeMedida: 'UNIDADES',
+      quantidadeDescricao: '', examinadoInLoco: false, dataEntrada: '', lacreEntrada: '',
+      lacreSaida: '', dataLiberacao: '', codigoVestigio: '', consumida: 'N', observacao: '',
+    },
+    personalizados: { '101:origem_coleta': '93' }, extrasGdl,
+  }
+}
+
+function criarImportacaoB601(pecas: PecaBalistica[] = [criarPecaB601(1, 'gdl-1'), criarPecaB601(2, 'gdl-2')]): ResultadoImportacaoExame<DadosImportacaoB601> {
+  return {
+    codigoExame: 'B-601',
+    camposGerais: {
+      tipo_solicitacao: 'Ofício', observacoes: 'Observação B601 do GDL', b601_local_cidade: 'Cidade B601',
+      b601_numero_bo: 'BO-2', b601_envolvidos_0: 'Nome GDL', b601_envolvidos_qualificacao_0: 'Vítima',
+    },
+    camposEspecificos: {
+      pecas, dadosSolicitacao: { orgao: 'Órgão GDL', responsavel: '', autoridade: '', origensDisponiveis: [] },
+      dadosInvestigacao: { envolvidos: [], boletinsOcorrencia: [], inqueritosPoliciais: [] },
+    },
+    avisos: [], metadadosIntegracaoGdl: { origemInicial: 'gdl' },
   }
 }
 
@@ -313,5 +343,56 @@ describe('AtualizacaoRepGdlService', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('prepara atualização seletiva B601 com campos, envolvidos e peças', async () => {
+    const pecaLocal = criarPecaB601(1, 'local-1')
+    mocks.extrairCodigo.mockReturnValue('B-601')
+    mocks.converter.mockReturnValue(criarImportacaoB601())
+    mocks.buscarRep.mockResolvedValue(criarRep(JSON.stringify({
+      b601: { pecas: [pecaLocal], local: { cidade: 'Cidade local' }, envolvidos: ['Antigo'] },
+    })))
+    const previa = await atualizacaoRepGdlService.preparar('rep-1')
+
+    expect(previa.codigoExame).toBe('B-601')
+    expect(previa.diferencas).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'campo:b601_local_cidade', grupo: 'Dados B-601' }),
+      expect.objectContaining({ id: 'campo:b601_envolvidos_0', grupo: 'Dados B-601' }),
+      expect.objectContaining({ id: 'peca:2', grupo: 'Peças B-601' }),
+    ]))
+    expect(previa.diferencas.map(item => item.id)).not.toContain('peca:1')
+  })
+
+  it('aplica somente diferenças B601 selecionadas e preserva peças locais', async () => {
+    mocks.extrairCodigo.mockReturnValue('B-601')
+    mocks.converter.mockReturnValue(criarImportacaoB601())
+    mocks.buscarRep.mockResolvedValue(criarRep(JSON.stringify({
+      b601: { pecas: [criarPecaB601(1, 'local-1')], local: { cidade: 'Cidade local' }, envolvidos: ['Antigo'] },
+    })))
+    const previa = await atualizacaoRepGdlService.preparar('rep-1')
+    await atualizacaoRepGdlService.aplicar({
+      operacaoId: previa.operacaoId,
+      diferencasSelecionadas: ['campo:b601_local_cidade', 'peca:2'],
+      reabrirLaudo: false,
+    })
+
+    const campos = JSON.parse(String((mocks.executar.mock.calls[0][1] as unknown[])[0])) as { b601: { local: { cidade: string }; pecas: PecaBalistica[] } }
+    expect(campos.b601.local.cidade).toBe('Cidade B601')
+    expect(campos.b601.pecas.map(peca => peca.codPecaGdl)).toEqual([1, 2])
+    expect(campos.b601.pecas[0].idLocal).toBe('local-1')
+  })
+
+  it('preserva extras GDL e não marca ausência de peças automaticamente no B601', async () => {
+    mocks.extrairCodigo.mockReturnValue('B-601')
+    mocks.converter.mockReturnValue(criarImportacaoB601([criarPecaB601(1, 'gdl-1', { 'Campo novo': 'valor' })]))
+    mocks.buscarRep.mockResolvedValue(criarRep(JSON.stringify({ b601: { semPecas: false, pecas: [], local: {}, envolvidos: [] } })))
+    const previa = await atualizacaoRepGdlService.preparar('rep-1')
+    expect(previa.diferencas.find(item => item.id === 'peca:1')?.detalhes).toEqual(expect.arrayContaining([
+      expect.objectContaining({ campo: 'Dado adicional: Campo novo', valorGdl: 'valor' }),
+    ]))
+
+    mocks.converter.mockReturnValue(criarImportacaoB601([]))
+    const semPecas = await atualizacaoRepGdlService.preparar('rep-1')
+    expect(semPecas.diferencas.some(item => item.id.startsWith('peca:'))).toBe(false)
   })
 })

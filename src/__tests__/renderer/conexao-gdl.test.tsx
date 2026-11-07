@@ -171,6 +171,23 @@ describe('indicador compacto', () => {
     expect(screen.getByRole('button', { name: 'GDL: Acesso ao GDL confirmado' })).toBeInTheDocument();
   });
 
+  it('aplica a recuperação de rede recebida por evento sem depender do dashboard', async () => {
+    estado = { ...estado, rede: 'indisponivel', acessoAutenticado: {
+      origem: 'web', resultado: 'falha', motivo: 'rede', realizadaEm: new Date().toISOString(),
+      confirmadoEm: null, rejeicaoPendente: false,
+    } };
+    montar();
+    await act(async () => undefined);
+    expect(screen.getByRole('button', { name: 'GDL: Não foi possível recuperar dados do GDL' })).toBeInTheDocument();
+    vi.advanceTimersByTime(1);
+    estado = { ...estado, versaoEstado: 1, rede: 'acessivel', redeVerificadaEm: new Date().toISOString() };
+    await act(async () => { notificar(); });
+    const botao = screen.getByRole('button', { name: 'GDL: Conexão disponível' });
+    expect(botao.querySelector('svg')).toHaveClass('dark:text-sky-400');
+    expect(obter).toHaveBeenCalledTimes(1);
+    expect(verificar).not.toHaveBeenCalled();
+  });
+
   it.each([
     ['rejeitadas', 'acessivel', 'GDL: Confira suas credenciais'],
     ['validadas', 'indisponivel', 'GDL: Não foi possível conectar ao GDL'],

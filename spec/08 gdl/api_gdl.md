@@ -82,9 +82,11 @@ O handler `gdl:atualizar-minhas-reps-cache` exige sessão e preferência ativa, 
 
 `gdl-listagem-preferencia.service.test.ts`, `gdl-minhas-reps-cache.service.test.ts`, `gdl-minhas-reps-erro.service.test.ts`, `gdl-config-page.component.test.tsx`, `gdl-minhas-reps-dashboard.test.tsx` e `gdl-minhas-reps-modal.test.tsx` cobrem guardas, cache, classificação e apresentação com respostas simuladas. Os testes usam respostas simuladas e não comprovam efeitos do servidor real. A leitura individual de detalhes, quando solicitada em seu fluxo próprio, permanece sujeita às regras de verificação controlada; não integra a atualização da listagem.
 
-## Limite atual do B-601
+## Atualização seletiva por natureza de exame
 
-A consulta/importação individual possui adaptadores ativos para B-601 e B-602 em `gdl-adaptadores.service.ts`. O B-601 usa normalizador e catálogo próprios, preserva dados não confirmados em `extrasGdl` e não reutiliza a conversão B-602. A consulta geral pode revisar/importar esses dados no formulário local; aplicar a revisão não salva automaticamente a REP. O fluxo específico de atualização seletiva de uma REP já salva (`gdl:preparar-atualizacao-rep`/`gdl:aplicar-atualizacao-rep`) continua restrito ao B-602 e rejeita B-601. Não confundir capacidade de importação com capacidade de atualização seletiva. Cadastro, obrigatoriedades, validação e preservação do JSON B-601 ficam em `spec/02 rep/b601.md`.
+A consulta/importação individual possui adaptadores ativos para B-601 e B-602 em `gdl-adaptadores.service.ts`. O B-601 usa normalizador e catálogo próprios, preserva dados não confirmados em `extrasGdl` e não reutiliza a conversão B-602. A atualização seletiva de uma REP já salva (`gdl:preparar-atualizacao-rep`/`gdl:aplicar-atualizacao-rep`) usa adaptadores específicos registrados em `gdl-atualizacao-adaptadores.service.ts`, com mecânica comum de consulta, comparação, seleção, concorrência, transação, reabertura e reconciliação do laudo.
+
+B-601 e B-602 permitem atualizar campos gerais, campos específicos, envolvidos e peças por `codPecaGdl`, preservando valores locais não selecionados e peças locais que não tenham sido selecionadas. O B-601 mantém os dados sob `b601`, preserva campos não reconhecidos em `extrasGdl` e não transforma automaticamente uma resposta sem peças em confirmação de `semPecas`; essa confirmação continua manual. Não confundir capacidade de importação com aplicação automática: a atualização exige revisão e seleção explícitas no diálogo. Cadastro, obrigatoriedades, validação e preservação do JSON B-601 ficam em `spec/02 rep/b601.md`.
 
 ## Atualização automática e falhas web
 
@@ -114,7 +116,7 @@ O metadado acompanha `integracaoGdl.dadosSolicitacao` e o schema de reidrataçã
 
 ## Referências de coleta no mesmo caso
 
-gdl:consultar-reps-mesmo-caso recebe somente laudoId e exige sessão local. O main resolve a REP vinculada, confirma seu número/ano pela identificação GDL e usa repsInvestigacaoPolicial/listarReps por POST como consulta de leitura, com CPF configurado de 11 dígitos, autenticação e timeout de 15 segundos por página. Primeiro confirma um único caso contendo a REP; depois lista somente referências M110/T002 desse caso, sem abrir detalhes de cada resultado e sem alterar seu status. Não é o fluxo de atualização seletiva B-602 nem a listagem Minhas REPs.
+`gdl:consultar-reps-mesmo-caso` recebe somente `laudoId` e exige sessão local. O main resolve a REP vinculada, confirma seu número/ano pela identificação GDL e usa `repsInvestigacaoPolicial/listarReps` por `POST` como consulta de leitura, com CPF configurado de 11 dígitos, autenticação e timeout de 15 segundos por página. Primeiro confirma um único caso contendo a REP; depois lista somente referências com natureza válida `Mxxx` (local) ou `Txxx` (necropsia/médico-legal), preservando o código completo e a categoria. Códigos de outras famílias ou malformados são ignorados. A consulta não abre detalhes de cada resultado nem altera seu status; não é o fluxo de atualização seletiva nem a listagem Minhas REPs.
 
 gdl-reps-mesmo-caso.service.ts percorre páginas de dez registros, até cem por consulta, valida total estável, páginas não repetidas, completude e número das referências. Casos ambíguos, número inválido ou naturezas divergentes para a mesma referência abortam; a deduplicação usa número/ano. O contrato Zod shared/gdl/reps-mesmo-caso.ts contém ambiente, identificação da REP, caso, data e referências. Main e renderer validam o retorno.
 

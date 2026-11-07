@@ -236,11 +236,10 @@ describe('estado da conexão GDL', () => {
   it.each([
     Object.assign(new Error('HTTP 503'), { statusHttp: 503 }),
     Object.assign(new Error('Falha TLS'), { code: 'ERR_CERT_AUTHORITY_INVALID' }),
-    Object.assign(new Error('Sem rede'), { code: 'ENOTFOUND' }),
     new Error('Grade em formato inesperado'),
     new Error('Resposta de detalhe indisponível'),
     new Error('sessão expirada'),
-  ])('uma falha de recuperação invalida sucesso e resiste à sondagem: %s', async falha => {
+  ])('uma falha não transitória de recuperação invalida sucesso e resiste à sondagem: %s', async falha => {
     servico.registrarWeb(await servico.capturarRequisicao(endereco, contexto.autorizacao), true);
     await expect(servico.executarOperacao('web', async () => {
       await servico.capturarRequisicao(endereco, contexto.autorizacao);
@@ -249,6 +248,25 @@ describe('estado da conexão GDL', () => {
     expect(apresentarConexaoGdl(await servico.obterEstado()).aparencia).not.toBe('disponivel');
     await servico.verificar();
     expect(apresentarConexaoGdl(await servico.obterEstado()).aparencia).not.toBe('disponivel');
+  });
+
+  it.each([
+    Object.assign(new Error('Sem rede'), { code: 'ENOTFOUND' }),
+    Object.assign(new Error('Tempo esgotado'), { code: 'ETIMEDOUT' }),
+  ])('sondagem positiva mais recente supera visualmente uma falha transitória: %s', async falha => {
+    await expect(servico.executarOperacao('web', async () => {
+      await servico.capturarRequisicao(endereco, contexto.autorizacao);
+      throw falha;
+    })).rejects.toThrow();
+    expect(apresentarConexaoGdl(await servico.obterEstado()).aparencia).toBe('indisponivel');
+    vi.advanceTimersByTime(1);
+    let estado = await servico.verificar();
+    expect(apresentarConexaoGdl(estado)).toMatchObject({ aparencia: 'acessivel', mensagem: 'Conexão disponível' });
+    expect(apresentarConexaoGdl(estado).mensagem).not.toBe('Acesso ao GDL confirmado');
+    verificar.mockResolvedValueOnce(false);
+    vi.advanceTimersByTime(1);
+    estado = await servico.verificar();
+    expect(apresentarConexaoGdl(estado).aparencia).toBe('indisponivel');
   });
 
   it('cache, cancelamento e falha local não substituem a última evidência de recuperação', async () => {

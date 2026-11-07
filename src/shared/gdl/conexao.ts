@@ -43,11 +43,16 @@ export function apresentarConexaoGdl(estado: EstadoConexaoGdl | null): {
     orientacao: 'Informe seu login, sua senha e seu CPF na página API GDL.',
   };
   const acesso = estado?.acessoAutenticado;
+  const falhaDeRedeSuperada = acesso?.resultado === 'falha'
+    && (acesso.motivo === 'rede' || acesso.motivo === 'tempo_esgotado')
+    && estado?.rede === 'acessivel'
+    && estado.redeVerificadaEm !== null
+    && Date.parse(estado.redeVerificadaEm) > Date.parse(acesso.realizadaEm);
   if (acesso?.resultado === 'rejeitada' || acesso?.rejeicaoPendente || (!acesso && estado?.credenciais === 'rejeitadas')) return {
     aparencia: 'atencao', mensagem: 'Confira suas credenciais', problemaCredenciais: 'rejeitadas',
     orientacao: 'Confira seu login e sua senha na página API GDL e salve as configurações.',
   };
-  if (acesso?.resultado === 'falha') return {
+  if (acesso?.resultado === 'falha' && !falhaDeRedeSuperada) return {
     aparencia: acesso.motivo === 'rede' || acesso.motivo === 'tempo_esgotado' ? 'indisponivel' : 'atencao',
     mensagem: 'Não foi possível recuperar dados do GDL',
     orientacao: acesso.condicaoEsperada === 'acesso_rede_institucional' ? MENSAGEM_ACESSO_REDE_GDL

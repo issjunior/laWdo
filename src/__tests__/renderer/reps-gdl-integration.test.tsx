@@ -95,6 +95,12 @@ const consultarRep = vi.fn()
 const identificarRep = vi.fn()
 const listarMinhasReps = vi.fn()
 
+function obterUfSelecionada(): HTMLElement {
+  const controle = screen.getAllByRole('combobox').find(item => /^[A-Z]{2}$/.test(item.textContent?.trim() ?? ''))
+  if (!controle) throw new Error('Controle de UF não encontrado')
+  return controle
+}
+
 beforeAll(() => {
   HTMLElement.prototype.hasPointerCapture = () => false
   HTMLElement.prototype.setPointerCapture = () => undefined
@@ -222,7 +228,9 @@ describe('integração da consulta geral GDL com REPsPage', () => {
     } });
     consultarRep.mockResolvedValue({ success: true, data: {
       ...resultadoConsulta, codigoExame: codigo,
-      camposGerais: Object.fromEntries(Object.entries(resultadoConsulta.camposGerais).map(([chave, valor]) => [chave.replace('b602_', codigo === 'B-601' ? 'b601_' : 'b602_'), valor])),
+      camposGerais: Object.fromEntries(Object.entries(resultadoConsulta.camposGerais)
+        .filter(([chave]) => chave !== 'b602_local_uf')
+        .map(([chave, valor]) => [chave.replace('b602_', codigo === 'B-601' ? 'b601_' : 'b602_'), valor])),
       avisos: [{ codigo: 'CAMPOS_B601_PARA_REVISAO', mensagem: 'Peça 3: confira incinerado.' }],
     } });
     render(<MemoryRouter><REPsPage /></MemoryRouter>);
@@ -234,8 +242,26 @@ describe('integração da consulta geral GDL com REPsPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Preencher formulário' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     await waitFor(() => expect(screen.getByRole('combobox', { name: /template/i })).toHaveTextContent(`Laudo Padrão ${codigo}`));
+    expect(obterUfSelecionada()).toHaveTextContent('PR');
     expect(screen.queryByText('Peça 3: confira incinerado.') !== null).toBe(codigo !== 'B-601');
     expect(criarRep).not.toHaveBeenCalled();
+  });
+
+  it('preserva a UF informada pelo GDL durante a importação', async () => {
+    consultarRep.mockResolvedValue({ success: true, data: {
+      ...resultadoConsulta,
+      camposGerais: { ...resultadoConsulta.camposGerais, b602_local_uf: 'SC' },
+    } });
+
+    render(<MemoryRouter><REPsPage /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole('button', { name: 'Nova REP' }));
+    fireEvent.click(screen.getByRole('button', { name: 'GDL' }));
+    fireEvent.change(await screen.findByLabelText('Nº da REP'), { target: { value: '109026' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Buscar' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirmar tipo e revisar dados' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Aplicar ao Formulário' }));
+
+    await waitFor(() => expect(obterUfSelecionada()).toHaveTextContent('SC'));
   });
 
   it('preenche o mesmo formulário, importa as peças e não salva automaticamente', async () => {

@@ -1,4 +1,4 @@
-import { esquemaRepsMesmoCasoGdl } from '../../shared/gdl/reps-mesmo-caso.js';
+import { categoriaColetaPorCodigoNatureza, esquemaRepsMesmoCasoGdl } from '../../shared/gdl/reps-mesmo-caso.js';
 import type { RepsMesmoCasoGdl } from '../../shared/gdl/reps-mesmo-caso.js';
 import type { GdlListaRepsInvestigacaoValidada, GdlRepValidada } from './gdl.schema.js';
 
@@ -50,7 +50,8 @@ export async function consultarReferenciasMesmoCasoGdl(
     if (registro.numeroCaso !== numeroCaso) continue;
     const codigo = registro.naturezaExame.trim().toUpperCase().match(/^([A-Z])\s*-?\s*(\d{3})\b/);
     const codigoNatureza = codigo ? `${codigo[1]}${codigo[2]}` : '';
-    if (codigoNatureza !== 'M110' && codigoNatureza !== 'T002') continue;
+    const categoriaColeta = categoriaColetaPorCodigoNatureza(codigoNatureza);
+    if (!categoriaColeta) continue;
     const identificacao = registro.numeroRep.trim().match(/^([\d.]+)\s*\/\s*(\d{4})$/);
     if (!identificacao) throw new Error('O GDL retornou um número inválido de exame de coleta.');
     const numero = identificacao[1].replace(/\D/g, '');
@@ -58,7 +59,7 @@ export async function consultarReferenciasMesmoCasoGdl(
     const chave = `${numero}/${ano}`;
     const anterior = referencias.get(chave);
     if (anterior && anterior.codigoNatureza !== codigoNatureza) throw new Error('O GDL retornou naturezas divergentes para o mesmo exame de coleta.');
-    referencias.set(chave, { numero, ano, codigoNatureza });
+    referencias.set(chave, { numero, ano, codigoNatureza, categoriaColeta });
   }
   return esquemaRepsMesmoCasoGdl.parse({ ambiente, numeroRep: String(rep.numero), anoRep: String(rep.ano),
     numeroCaso, consultadoEm: new Date().toISOString(), reps: [...referencias.values()] });
