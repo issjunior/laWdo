@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Editor as TinyMceEditorInstance } from 'tinymce';
 import { atualizarNumeroFigura, cancelarPrevisualizacaoAlturaParFiguras, centralizarFigurasSozinhas, centralizarFigurasSozinhasHtml, corrigirMolduraVaziaLocalNecropsia, definirAjusteVisualParFiguras, definirAlturaParFiguras, legendaFiguraAusente, localizarFiguraPorIndice, normalizarParesFiguras, previsualizarAlturaParFiguras, reindexarFiguras, renumerarFigurasNosEditores, restaurarLegendaFigura } from '../../renderer/lib/figuras';
+import { extrairFigurasDoHtml } from '../../renderer/features/figuras/extracao';
 import { criarHtmlFigura } from '../../renderer/lib/figura-html';
 import { ajusteVisualPorAlturaPar, alturaParPorAjusteVisual } from '../../shared/figura/enquadramento';
 
@@ -214,6 +215,14 @@ describe('ocorrências de figuras', () => {
     expect(localizarFiguraPorIndice(editores, 0)?.figura).toBe(primeiro.querySelector('figure'));
     expect(localizarFiguraPorIndice(editores, 1)?.figura).toBe(segundo.querySelector('figure'));
     expect(localizarFiguraPorIndice(editores, 2)).toBeNull();
+  });
+
+  it('preserva a identidade de cada ocorrência ao extrair o documento', () => {
+    const figuras = extrairFigurasDoHtml('<figure class="laudo-figure" data-image-id="foto" data-figure-id="primeira"><img src="a"></figure>'
+      + '<figure class="laudo-figure" data-image-id="foto" data-figure-id="segunda"><img src="b"></figure>');
+    expect(figuras.map(figura => [figura.id, figura.ocorrenciaId, figura.url])).toEqual([
+      ['foto', 'primeira', 'a'], ['foto', 'segunda', 'b'],
+    ]);
   });
 
   it('usa a moldura das dummies e numera figuras manuais junto das existentes', () => {

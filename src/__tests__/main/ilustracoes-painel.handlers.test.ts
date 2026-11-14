@@ -108,4 +108,25 @@ describe('janela destacada do painel de Ilustrações', () => {
       minHeight: 400,
     }))
   })
+
+  it('repassa estado e ações somente entre as janelas autorizadas e com payload válido', async () => {
+    const principal = { id: 10, isDestroyed: vi.fn(() => false), getBounds: vi.fn(() => ({ x: 0, y: 0, width: 1000, height: 800 })), webContents: { id: 101, send: vi.fn() } }
+    const painel = { id: 20, isDestroyed: vi.fn(() => false), getSize: vi.fn(() => [700, 720]), getBounds: vi.fn(() => ({ x: 0, y: 0, width: 700, height: 720 })), loadURL: vi.fn(), show: vi.fn(), focus: vi.fn(), close: vi.fn(), once: vi.fn(), on: vi.fn(), webContents: { id: 202, send: vi.fn() } }
+    mocks.fromWebContents.mockReturnValue(principal)
+    mocks.fromId.mockReturnValue(principal)
+    mocks.criarBrowserWindow.mockReturnValue(painel)
+    registerIlustracoesHandlers({ preloadPath: 'preload.js', rendererHtmlPath: 'index.html', isDev: false })
+    const on = new Map(mocks.ipcOn.mock.calls.map(([canal, callback]) => [canal, callback]))
+    on.get('ilustracoes:close-panel')?.()
+    await on.get('ilustracoes:open-panel')?.({ sender: principal.webContents }, 'laudo-1')
+    const estado = { figurasNoEditor: [], syncEnabled: true, figuraAtivaId: null }
+    on.get('ilustracoes:sync-to-panel')?.({ sender: { id: 999 } }, estado)
+    on.get('ilustracoes:sync-to-panel')?.({ sender: principal.webContents }, { ...estado, syncEnabled: 'sim' })
+    on.get('ilustracoes:sync-to-panel')?.({ sender: principal.webContents }, estado)
+    expect(painel.webContents.send).toHaveBeenCalledTimes(1)
+    on.get('ilustracoes:panel-action')?.({ sender: { id: 999 } }, 'ready')
+    on.get('ilustracoes:panel-action')?.({ sender: painel.webContents }, 'deleteImage', 'figura-1')
+    on.get('ilustracoes:panel-action')?.({ sender: painel.webContents }, 'ready')
+    expect(principal.webContents.send).toHaveBeenCalledWith('ilustracoes:panel-action', 'ready')
+  })
 })

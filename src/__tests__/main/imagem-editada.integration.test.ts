@@ -40,6 +40,8 @@ describe('imagem editada no laudo', () => {
       })).rejects.toThrow('Ajustes da figura inválidos.');
       expect(await sqlite.executeQuery('SELECT id FROM imagens_laudo WHERE id = ?', ['invalida'])).toHaveLength(0);
       await expect(imagens.excluirImagemLaudo('laudo', base.id)).rejects.toThrow('base de uma figura editada');
+      await sqlite.executeNonQuery("UPDATE laudos SET conteudo = ? WHERE id = 'laudo'", ['<figure data-image-id="editada"></figure>']);
+      await expect(imagens.excluirImagemLaudo('laudo', derivada.id)).rejects.toThrow('laudo salvo');
       const [registro] = await sqlite.executeQuery<{ ajustes_json: string }>('SELECT ajustes_json FROM imagens_laudo WHERE id = ?', [derivada.id]);
       expect(JSON.parse(registro.ajustes_json)).toEqual(reaberta.ajustesFigura);
       await sqlite.executeNonQuery('UPDATE imagens_laudo SET ajustes_json = ? WHERE id = ?', ['{"angulo":90}', derivada.id]);
