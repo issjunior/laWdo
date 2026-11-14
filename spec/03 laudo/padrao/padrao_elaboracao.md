@@ -25,6 +25,7 @@ Os caminhos abaixo são relativos à raiz do repositório.
 | Dock, trilho e apresentação compartilhada | src/renderer/components/laudo/PainelLateralRedimensionavel.tsx e src/renderer/styles/globals.css |
 | Acionadores no iframe e menus externos dos seletores | src/renderer/lib/seletores-tabela-laudo.ts e src/renderer/components/editor/SeletorTabelaLaudo.tsx |
 | HTML comum das figuras e imagem dummy | src/shared/figura/html.ts |
+| Contrato validado do painel, identidade e operações de figuras | src/shared/figura/painel.ts e src/renderer/features/figuras/ |
 | Materialização de tabelas editadas no laudo | src/renderer/lib/edicao-direta-laudo.ts |
 | Campos e opções dos quadros B-601 | src/shared/catalogos/b601-tabelas.catalogo.ts |
 | Corretor e menu de sugestões | src/main/services/corretor.service.ts e src/renderer/lib/corretor-editor.ts |
@@ -101,6 +102,7 @@ O estilo compartilhado de impressão em `src/main/services/pdf-tabelas.ts`, cons
 - A preparação comum agrupa eventos em um requestAnimationFrame por editor: superfície na prioridade 0, seletores na prioridade padrão 10. A remoção cancela trabalho e listeners. Normalização visual não cria edição de usuário; alteração semântica real deve continuar detectável.
 - Controles, classes de edição e contenteditable transitórios são limpos antes da serialização, comparação e saída; identidades, vínculos e personalizações persistíveis precisam sobreviver. Não usar normalização ampla para esconder diferenças de conteúdo.
 - Salvamento aguarda reconciliação de imagens em curso; imagens em processamento bloqueiam salvar e trocar de modo. Saída usa o gerenciador comum de alterações pendentes. Abrir, buscar, consultar ou fechar recursos sem editar não estabelece nova referência nem deve criar falsa pendência.
+- Operações assíncronas sobre figuras carregam a identidade da ocorrência e a sessão do laudo. Antes de aplicar prévia, remoção, substituição ou edição, o controlador confirma que editor, laudo e sessão continuam atuais; resultados obsoletos são descartados. O processamento pendente bloqueia os caminhos já protegidos de salvar/trocar modo, mas a abertura do painel e a sincronização visual não contam como edição.
 
 Contratos completos em [Editor](../editor_texto.md), [Ciclo de vida](../laudo_ciclo_vida.md), [Falsa pendência](../../problemas%20diversos/aviso_salvar_sem_edicao.md), [Exportação](../exportar_laudo.md) e [Prévia PDF](../visualizar_pdf.md).
 
