@@ -11,6 +11,7 @@ import type { ApiCorretor } from './types.js';
 import type { ProjetilPersonalizadoEntrada, ProjetilReferencia } from '../shared/types/projetil.types.js';
 import type { FalhaPdf } from '../shared/types/pdf.types.js';
 import type { FalhaImagemImpressao } from '../shared/types/imagem-laudo.types.js';
+import type { EstadoPainelFiguras } from '../shared/figura/painel.js';
 import type {
   AtualizacaoPainelIa,
   ContextoIa,
@@ -67,7 +68,6 @@ import type {
   ImagemPreparadaEditor,
   MiniaturaImagemLaudo,
   ResultadoReconciliacaoImagensLaudo,
-  ResultadoAtualizacaoFiguras,
   SalvarImagemLaudoEntrada,
 } from '../shared/types/imagem-laudo.types.js';
 import type { AutorizacaoReinicioAtualizacao, ProgressoAtualizacao, RespostaAtualizacao } from '../shared/atualizacao/atualizacao.types.js';
@@ -514,10 +514,10 @@ export interface IpcAPI {
     atualizarOrdem: (laudoId: string, ordem: AtualizarOrdemImagemLaudoEntrada[]) => Promise<{ success: boolean; error?: string }>;
     openPanel: (laudoId: string, tituloLaudo?: string) => void;
     closePanel: () => void;
-    syncToPanel: (data: { figurasNoEditor: unknown[]; syncEnabled: boolean; figuraAtivaId: string | null; tema?: string; resultadoAtualizacao?: ResultadoAtualizacaoFiguras }) => void;
+    syncToPanel: (data: EstadoPainelFiguras) => void;
     sendAction: (action: string, ...args: unknown[]) => void;
     onPanelAction: (cb: (action: string, ...args: unknown[]) => void) => () => void;
-    onStateSync: (cb: (data: { figurasNoEditor: unknown[]; syncEnabled: boolean; figuraAtivaId: string | null; tema?: string; resultadoAtualizacao?: ResultadoAtualizacaoFiguras }) => void) => () => void;
+    onStateSync: (cb: (data: unknown) => void) => () => void;
     onPanelClosed: (cb: () => void) => () => void;
   };
 }
@@ -2015,7 +2015,7 @@ contextBridge.exposeInMainWorld('ipcAPI', {
       return () => { ipcRenderer.removeListener('ilustracoes:panel-action', handler); };
     },
     onStateSync: (cb) => {
-      const handler = (_event: Electron.IpcRendererEvent, data: { figurasNoEditor: unknown[]; syncEnabled: boolean; figuraAtivaId: string | null }) => cb(data);
+      const handler = (_event: Electron.IpcRendererEvent, data: unknown) => cb(data);
       ipcRenderer.on('ilustracoes:state-sync', handler);
       return () => { ipcRenderer.removeListener('ilustracoes:state-sync', handler); };
     },

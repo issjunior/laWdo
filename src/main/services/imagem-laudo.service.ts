@@ -669,6 +669,10 @@ export async function excluirImagemLaudo(laudoIdEntrada: string, imagemIdEntrada
   const imagemId = validarIdentificador(imagemIdEntrada, 'Imagem')
   const registro = (await executeQuery<ImagemLaudoRow>('SELECT * FROM imagens_laudo WHERE id = ? AND laudo_id = ?', [imagemId, laudoId]))[0]
   if (!registro) return
+  const laudo = (await executeQuery<{ conteudo: string }>('SELECT conteudo FROM laudos WHERE id = ?', [laudoId]))[0]
+  if (laudo && extrairIdsDeImagemDoConteudo(laudo.conteudo || '').has(imagemId)) {
+    throw new Error('Esta imagem está no laudo salvo e não pode ser excluída permanentemente.')
+  }
   const derivados = await executeQuery<{ id: string }>('SELECT id FROM imagens_laudo WHERE imagem_origem_id = ? AND laudo_id = ? LIMIT 1', [imagemId, laudoId])
   if (derivados.length > 0) throw new Error('Esta imagem é a base de uma figura editada e não pode ser excluída.')
   await executeNonQuery('DELETE FROM imagens_laudo WHERE id = ? AND laudo_id = ?', [imagemId, laudoId])

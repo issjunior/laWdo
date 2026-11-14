@@ -199,6 +199,19 @@ async function executarCaso(nome, modo, repeticao, origem, massa, resistencia = 
     if (!persistido.success || typeof persistido.data?.conteudo !== 'string') throw new Error('Não foi possível ler o laudo salvo.');
     const documentoPersistido = inspecionarDocumento(persistido.data.conteudo);
     validarIntegridade(documentoPersistido, massa, referencia, await obterOriginais(documentoPersistido));
+    if (parametros.imagemInseridaId && referencia.figuras.some(figura => figura.id === parametros.imagemInseridaId)) {
+      if (documentoPersistido.figuras.filter(figura => figura.id === parametros.imagemInseridaId).length !== 1) {
+        throw new Error('A figura inserida não foi preservada uma única vez no laudo salvo.');
+      }
+      await pagina.getByRole('button', { name: 'Voltar', exact: true }).first().click();
+      await pagina.getByRole('button', { name: 'Editar laudo da REP 999999/2026', exact: true }).click();
+      await trocarModo(pagina, modo);
+      const secaoIlustracoes = pagina.locator('[aria-expanded="false"]').filter({ has: pagina.getByRole('heading', { name: 'ILUSTRAÇÕES', exact: true }) });
+      if (await secaoIlustracoes.count()) await secaoIlustracoes.first().click();
+      await pagina.waitForFunction(id => [...globalThis.document.querySelectorAll('iframe.tox-edit-area__iframe')]
+        .flatMap(iframe => [...(iframe.contentDocument?.querySelectorAll('.laudo-figure[data-image-id]') ?? [])])
+        .filter(figura => figura.getAttribute('data-image-id') === id).length === 1, parametros.imagemInseridaId, { polling: 100 });
+    }
     caso.integridade = { verificada: true, figuras: referencia.figuras.map(figura => ({ ...figura })), tabelas: referencia.tabelas, celulas: referencia.celulas, hashCelulas: referencia.hashCelulas, placeholders: referencia.chavesPlaceholders.length };
     caso.estado = 'concluido';
   } catch (erro) {

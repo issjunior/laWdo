@@ -23,6 +23,7 @@ import {
 } from '../../services/imagem-laudo.service.js';
 import { laudoService } from '../../services/laudo.service.js';
 import type { SalvarImagemLaudoEntrada } from '../../../shared/types/imagem-laudo.types.js';
+import { ehAcaoPainelFiguras, ehEstadoPainelFiguras } from '../../../shared/figura/painel.js';
 import { carregarDimensoesJanela, observarDimensoesJanela } from '../../utils/dimensoes-janela.js';
 import { desempenhoService } from '../../services/desempenho.service.js';
 import { comContextoImagens, cancelarProcessamentoImagens } from '../../services/processador-imagens.service.js';
@@ -335,15 +336,18 @@ export function registerIlustracoesHandlers(options: IlustracoesHandlerOptions):
     }
   });
 
-  ipcMain.on('ilustracoes:sync-to-panel', (_event, data) => {
-    if (panelWindow && !panelWindow.isDestroyed()) {
+  ipcMain.on('ilustracoes:sync-to-panel', (event, data: unknown) => {
+    const main = mainWindowId != null ? BrowserWindow.fromId(mainWindowId) : null;
+    if (main && !main.isDestroyed() && event.sender === main.webContents
+      && panelWindow && !panelWindow.isDestroyed() && ehEstadoPainelFiguras(data)) {
       panelWindow.webContents.send('ilustracoes:state-sync', data);
     }
   });
 
-  ipcMain.on('ilustracoes:panel-action', (_event, action, ...args) => {
+  ipcMain.on('ilustracoes:panel-action', (event, action: unknown, ...args: unknown[]) => {
     const target = mainWindowId != null ? BrowserWindow.fromId(mainWindowId) : null;
-    if (target && !target.isDestroyed()) {
+    if (panelWindow && !panelWindow.isDestroyed() && event.sender === panelWindow.webContents
+      && target && !target.isDestroyed() && ehAcaoPainelFiguras(action, args)) {
       target.webContents.send('ilustracoes:panel-action', action, ...args);
     }
   });

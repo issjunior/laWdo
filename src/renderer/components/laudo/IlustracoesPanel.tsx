@@ -64,12 +64,13 @@ import {
   PASSO_AJUSTE_VISUAL_ALTURA_PAR,
   type AjusteVisualParFiguras,
 } from '@shared/figura/enquadramento';
+import { ehResultadoInsercaoFiguras } from '@shared/figura/painel';
 import { GdlImagensRepModal } from '@/components/laudo/GdlImagensRepModal';
 import { SeletorFiguraDialog } from '@/components/laudo/SeletorFiguraDialog';
 import { EditorFiguraDialog, type AjustesFigura } from '@/components/laudo/EditorFiguraDialog';
 import { PreencherDummiesDialog } from '@/components/laudo/PreencherDummiesDialog';
 import type { ImagemRepGdlAdicionadaAoLaudo } from '@shared/types/gdl-arquivos.types';
-import type { ImagemLaudoResumo, ResultadoAtualizacaoFiguras } from '@shared/types/imagem-laudo.types';
+import type { ImagemLaudoResumo, ResultadoAtualizacaoFiguras, ResultadoInsercaoFiguras } from '@shared/types/imagem-laudo.types';
 import { ajustesFiguraValidos } from '@shared/types/imagem-laudo.types';
 
 const MINIATURAS_POR_LOTE = 30;
@@ -88,22 +89,8 @@ function readFileAsDataUri(file: File): Promise<string> {
   });
 }
 
-export interface ImagemLaudo {
-  id: string;
-  url: string;
-  thumbnailUrl: string;
-  legenda: string;
-  numero_figura: number;
-  sequencia: number;
-  created_at: string;
-  dummy?: boolean;
-  origem?: 'gdl';
-  sha256?: string;
-  nomeArquivo?: string;
-  imagemOrigemId?: string;
-  alturaParPercentual?: number;
-  ajusteVisualPar?: AjusteVisualParFiguras;
-}
+export type { ImagemLaudo } from '@/features/figuras/tipos';
+import type { ImagemLaudo } from '@/features/figuras/tipos';
 
 function sugerirLegenda(nomeArquivo: string): string {
   return nomeArquivo.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim();
@@ -112,33 +99,39 @@ function sugerirLegenda(nomeArquivo: string): string {
 interface IlustracoesPanelProps {
   laudoId: string;
   onInsertImage: (imageUrl: string, imageId: string, legenda: string) => Promise<boolean> | boolean;
-  onInsertAll?: (imagens: ImagemLaudo[]) => Promise<string[]> | string[];
-  onDeleteImage?: (imageId: string, indice?: number) => void;
+  onInsertAll?: (imagens: ImagemLaudo[]) => Promise<ResultadoInsercaoFiguras> | ResultadoInsercaoFiguras;
+  onDeleteImage?: (imageId: string, indice?: number, ocorrenciaId?: string) => Promise<boolean> | boolean;
+  onExcluirArquivo?: (imageId: string) => Promise<void>;
   onReorder?: (imagens: ImagemLaudo[]) => void;
   onRefreshHtml: (restaurarLegendas?: boolean) => Promise<ResultadoAtualizacaoFiguras>;
   /** Lista de figuras já existentes no editor (extraídas do HTML pelo LaudosPage) */
   figurasNoEditor?: ImagemLaudo[];
+  figurasDevolvidas?: ImagemLaudo[];
+  imagensProtegidas?: string[];
   /** Callback quando o painel altera a legenda de uma figura existente no editor */
-  onUpdateLegendaInEditor?: (id: string, legenda: string) => void;
+  onUpdateLegendaInEditor?: (id: string, legenda: string, ocorrenciaId?: string) => Promise<void> | void;
   syncEnabled?: boolean;
   figuraAtivaId?: string | null;
+  figuraAtivaOcorrenciaId?: string | null;
   onSyncToggle?: (enabled: boolean) => void;
-  onScrollToFigure?: (imageId: string) => void;
+  onScrollToFigure?: (imageId: string, ocorrenciaId?: string) => void;
   onPopOut?: () => void;
   onRecolher?: () => void;
   onFechar?: () => void;
   onReplaceImage?: (imageId: string, imagem: ImagemLaudo, indice?: number) => Promise<boolean> | boolean;
   onEditImage?: (indice: number, imagem: ImagemLaudo, imagemOrigemId: string, imagemAnteriorId: string) => Promise<void> | void;
-  onPrevisualizarAlturaPar?: (indice: number, alturaPercentual: number) => void;
-  onConfirmarAlturaPar?: (indice: number, alturaPercentual: number) => void;
-  onCancelarAlturaPar?: (indice: number) => void;
-  onDefinirAjusteVisualPar?: (indice: number, ajusteVisual: AjusteVisualParFiguras) => void;
+  onPrevisualizarAlturaPar?: (indice: number, alturaPercentual: number, ocorrenciaId?: string) => void;
+  onConfirmarAlturaPar?: (indice: number, alturaPercentual: number, ocorrenciaId?: string) => Promise<boolean> | boolean | void;
+  onCancelarAlturaPar?: (indice: number, ocorrenciaId?: string) => void;
+  onDefinirAjusteVisualPar?: (indice: number, ajusteVisual: AjusteVisualParFiguras, ocorrenciaId?: string) => Promise<boolean> | boolean | void;
   onGerarLegenda?: (imageId: string) => Promise<string | null>;
   figuraSubstituicaoSolicitada?: string | null;
+  ocorrenciaSubstituicaoSolicitada?: string | null;
   onFiguraSubstituicaoSolicitadaConsumida?: () => void;
   insercaoNoCursorSolicitada?: number | null;
   onInsercaoNoCursorConsumida?: () => void;
   onInserirNoCursor?: (imagem: ImagemLaudo) => Promise<boolean> | boolean;
+  onIniciarProcessamentoImagem?: () => () => void;
 }
 
 interface SortableItemProps {
@@ -273,14 +266,14 @@ interface FiguraEditorItemProps {
   onDelete: (id: string, indice: number) => void;
   onUpdateLegenda: (id: string, legenda: string) => void;
   onPreview: () => void;
-  onScrollToFigure?: (id: string) => void;
+  onScrollToFigure?: (id: string, ocorrenciaId?: string) => void;
   onReplaceImage?: (id: string) => void;
   onEditImage?: () => void;
   onGerarLegenda?: (id: string) => Promise<string | null>;
   onPrevisualizarAlturaPar?: (alturaPercentual: number) => void;
-  onConfirmarAlturaPar?: (alturaPercentual: number) => void;
+  onConfirmarAlturaPar?: (alturaPercentual: number) => Promise<boolean> | boolean | void;
   onCancelarAlturaPar?: () => void;
-  onDefinirAjusteVisualPar?: (ajusteVisual: AjusteVisualParFiguras) => void;
+  onDefinirAjusteVisualPar?: (ajusteVisual: AjusteVisualParFiguras) => Promise<boolean> | boolean | void;
 }
 
 const FiguraEditorItem: React.FC<FiguraEditorItemProps> = ({
@@ -312,6 +305,7 @@ const FiguraEditorItem: React.FC<FiguraEditorItemProps> = ({
     imagem.alturaParPercentual === undefined ? undefined : ajusteVisualPorAlturaPar(imagem.alturaParPercentual),
   );
   const previsualizacaoAlturaAtivaRef = useRef(false);
+  const [ajustandoPar, setAjustandoPar] = useState(false);
   const onCancelarAlturaParRef = useRef(onCancelarAlturaPar);
   onCancelarAlturaParRef.current = onCancelarAlturaPar;
 
@@ -369,7 +363,7 @@ const FiguraEditorItem: React.FC<FiguraEditorItemProps> = ({
       }`}
     >
       <div className="w-12 h-12 rounded overflow-hidden shrink-0 bg-muted flex items-center justify-center relative cursor-pointer group/thumb"
-        onClick={() => onScrollToFigure?.(imagem.id)}
+        onClick={() => imagem.ocorrenciaId ? onScrollToFigure?.(imagem.id, imagem.ocorrenciaId) : onScrollToFigure?.(imagem.id)}
         title="Clique para localizar no editor"
       >
         <img
@@ -471,7 +465,15 @@ const FiguraEditorItem: React.FC<FiguraEditorItemProps> = ({
               <Switch
                 aria-label="Preencher quadro"
                 checked={imagem.ajusteVisualPar === 'preencher'}
-                onCheckedChange={preencher => onDefinirAjusteVisualPar(preencher ? 'preencher' : 'conter')}
+                disabled={ajustandoPar}
+                onCheckedChange={preencher => {
+                  const resultado = onDefinirAjusteVisualPar(preencher ? 'preencher' : 'conter');
+                  if (resultado instanceof Promise) setAjustandoPar(true);
+                  void Promise.resolve(resultado).then(aplicado => {
+                    if (aplicado === false) throw new Error('O par de figuras não está mais disponível.');
+                  }).catch((erro: unknown) => toast.error(erro instanceof Error ? erro.message : 'Não foi possível ajustar as figuras.'))
+                    .finally(() => setAjustandoPar(false));
+                }}
               />
             </div>
           )}
@@ -484,6 +486,7 @@ const FiguraEditorItem: React.FC<FiguraEditorItemProps> = ({
             min={AJUSTE_VISUAL_MINIMO_ALTURA_PAR}
             max={AJUSTE_VISUAL_MAXIMO_ALTURA_PAR}
             step={PASSO_AJUSTE_VISUAL_ALTURA_PAR}
+            disabled={ajustandoPar}
             value={[ajusteAltura]}
             onValueChange={([valor]) => {
               setAjusteAltura(valor);
@@ -493,7 +496,15 @@ const FiguraEditorItem: React.FC<FiguraEditorItemProps> = ({
             onValueCommit={([valor]) => {
               setAjusteAltura(valor);
               previsualizacaoAlturaAtivaRef.current = false;
-              onConfirmarAlturaPar(alturaParPorAjusteVisual(valor));
+              const resultado = onConfirmarAlturaPar(alturaParPorAjusteVisual(valor));
+              if (resultado instanceof Promise) setAjustandoPar(true);
+              void Promise.resolve(resultado).then(aplicado => {
+                if (aplicado === false) throw new Error('O par de figuras não está mais disponível.');
+              }).catch((erro: unknown) => {
+                onCancelarAlturaPar?.();
+                setAjusteAltura(imagem.alturaParPercentual === undefined ? undefined : ajusteVisualPorAlturaPar(imagem.alturaParPercentual));
+                toast.error(erro instanceof Error ? erro.message : 'Não foi possível ajustar as figuras.');
+              }).finally(() => setAjustandoPar(false));
             }}
           />
         </div>
@@ -507,12 +518,16 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
   onInsertImage,
   onInsertAll,
   onDeleteImage,
+  onExcluirArquivo,
   onReorder,
   onRefreshHtml,
   figurasNoEditor,
+  figurasDevolvidas = [],
+  imagensProtegidas = [],
   onUpdateLegendaInEditor,
   syncEnabled: _syncEnabled,
   figuraAtivaId,
+  figuraAtivaOcorrenciaId,
   onSyncToggle: _onSyncToggle,
   onScrollToFigure,
   onPopOut,
@@ -526,27 +541,36 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
   onDefinirAjusteVisualPar,
   onGerarLegenda,
   figuraSubstituicaoSolicitada,
+  ocorrenciaSubstituicaoSolicitada,
   onFiguraSubstituicaoSolicitadaConsumida,
   insercaoNoCursorSolicitada,
   onInsercaoNoCursorConsumida,
   onInserirNoCursor,
+  onIniciarProcessamentoImagem,
 }) => {
   const [imagens, setImagens] = useState<ImagemLaudo[]>([]);
+  const figurasDevolvidasAtuaisRef = useRef(figurasDevolvidas);
+  figurasDevolvidasAtuaisRef.current = figurasDevolvidas;
   const [loading, setLoading] = useState(true);
   const [modalGdlAberto, setModalGdlAberto] = useState(false);
   const [figuraSubstituicaoId, setFiguraSubstituicaoId] = useState<string | null>(null);
   const [figuraSubstituicaoIndice, setFiguraSubstituicaoIndice] = useState<number | null>(null);
+  const [figuraSubstituicaoOcorrencia, setFiguraSubstituicaoOcorrencia] = useState<string | undefined>();
   const [imagemSubstituicaoId, setImagemSubstituicaoId] = useState<string | null>(null);
   const [seletorSubstituicaoAberto, setSeletorSubstituicaoAberto] = useState(false);
   const [seletorInsercaoAberto, setSeletorInsercaoAberto] = useState(false);
   const insercaoNoCursorEmAndamentoRef = useRef(false);
+  const substituicaoEmAndamentoRef = useRef(false);
+  const preenchimentoEmAndamentoRef = useRef(false);
   const [preenchimentoDummiesAberto, setPreenchimentoDummiesAberto] = useState(false);
   const [indiceEdicao, setIndiceEdicao] = useState<number | null>(null);
+  const figuraEdicaoRef = useRef<ImagemLaudo | null>(null);
   const [origemEdicao, setOrigemEdicao] = useState('');
   const [imagemBaseEdicaoId, setImagemBaseEdicaoId] = useState('');
   const [ajustesIniciaisEdicao, setAjustesIniciaisEdicao] = useState<AjustesFigura>();
 
   const abrirEdicao = async (indice: number, figura: ImagemLaudo) => {
+    figuraEdicaoRef.current = figura;
     try {
       const respostaAtual = await window.ipcAPI.ilustracoes.obterImagem(laudoId, figura.id);
       let imagemAtual = respostaAtual.success ? respostaAtual.data?.dataUri : undefined;
@@ -582,27 +606,36 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
 
   const aplicarEdicao = async (dataUri: string, ajustes: AjustesFigura) => {
     if (indiceEdicao === null) return;
-    const figura = figurasNoEditor?.[indiceEdicao];
-    if (!figura) throw new Error('A figura selecionada não está mais disponível.');
-    const id = crypto.randomUUID();
-    const resposta = await window.ipcAPI.ilustracoes.salvarImagem(laudoId, {
-      id, nomeArquivo: `figura-editada-${indiceEdicao + 1}.png`, dataUri,
-      legenda: figura.legenda, origem: 'local', sequencia: indiceEdicao + 1,
-      imagemOrigemId: imagemBaseEdicaoId, ajustesJson: JSON.stringify(ajustes),
-    });
-    if (!resposta.success || !resposta.data) throw new Error(resposta.error || 'Não foi possível salvar a figura editada.');
-    await onEditImage?.(indiceEdicao, { ...figura, id, url: '', thumbnailUrl: '', imagemOrigemId: imagemBaseEdicaoId }, imagemBaseEdicaoId, figura.id);
-    await window.ipcAPI.ilustracoes.arquivarImagem(laudoId, id);
-    toast.success('Figura editada');
+    const figuraAnterior = figuraEdicaoRef.current;
+    const figura = figuraAnterior?.ocorrenciaId
+      ? figurasNoEditor?.find(item => item.ocorrenciaId === figuraAnterior.ocorrenciaId && item.id === figuraAnterior.id)
+      : figurasNoEditor?.[indiceEdicao];
+    if (!figura || figura.id !== figuraAnterior?.id) throw new Error('A figura selecionada não está mais disponível.');
+    const finalizarProcessamento = onIniciarProcessamentoImagem?.();
+    try {
+      const id = crypto.randomUUID();
+      const resposta = await window.ipcAPI.ilustracoes.salvarImagem(laudoId, {
+        id, nomeArquivo: `figura-editada-${indiceEdicao + 1}.png`, dataUri,
+        legenda: figura.legenda, origem: 'local', sequencia: indiceEdicao + 1,
+        imagemOrigemId: imagemBaseEdicaoId, ajustesJson: JSON.stringify(ajustes),
+      });
+      if (!resposta.success || !resposta.data) throw new Error(resposta.error || 'Não foi possível salvar a figura editada.');
+      await onEditImage?.(indiceEdicao, { ...figura, id, url: '', thumbnailUrl: '', imagemOrigemId: imagemBaseEdicaoId }, imagemBaseEdicaoId, figura.id);
+      await window.ipcAPI.ilustracoes.arquivarImagem(laudoId, id);
+      toast.success('Figura editada');
+    } finally {
+      finalizarProcessamento?.();
+    }
   };
 
   useEffect(() => {
     if (!figuraSubstituicaoSolicitada) return;
     setImagemSubstituicaoId(null);
     setFiguraSubstituicaoId(figuraSubstituicaoSolicitada);
+    setFiguraSubstituicaoOcorrencia(ocorrenciaSubstituicaoSolicitada || figurasNoEditor?.find(figura => figura.id === figuraSubstituicaoSolicitada)?.ocorrenciaId);
     setSeletorSubstituicaoAberto(true);
     onFiguraSubstituicaoSolicitadaConsumida?.();
-  }, [figuraSubstituicaoSolicitada, onFiguraSubstituicaoSolicitadaConsumida]);
+  }, [figuraSubstituicaoSolicitada, ocorrenciaSubstituicaoSolicitada, figurasNoEditor, onFiguraSubstituicaoSolicitadaConsumida]);
   useEffect(() => {
     if (insercaoNoCursorSolicitada === null || insercaoNoCursorSolicitada === undefined) return;
     setImagemSubstituicaoId(null);
@@ -632,6 +665,19 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
+
+  useEffect(() => {
+    if (figurasDevolvidas.length) setImagens(imagensAtuais => {
+      const ids = new Set(imagensAtuais.map(imagem => imagem.id));
+      const adicionadas: ImagemLaudo[] = [];
+      for (const figura of figurasDevolvidas) {
+        if (ids.has(figura.id)) continue;
+        ids.add(figura.id);
+        adicionadas.push({ ...figura, ocorrenciaId: undefined });
+      }
+      return adicionadas.length ? [...imagensAtuais, ...adicionadas] : imagensAtuais;
+    });
+  }, [figurasDevolvidas]);
 
   useEffect(() => {
     let cancelado = false;
@@ -676,6 +722,12 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
         sha256: imagem.sha256, nomeArquivo: imagem.nomeArquivo,
       }));
       const todas = [...carregadas.map(imagem => ({ ...imagem, thumbnailUrl: miniaturasPorId.get(imagem.id) || imagem.thumbnailUrl })), ...temporarias];
+      const idsDisponiveis = new Set(todas.map(imagem => imagem.id));
+      for (const figura of figurasDevolvidasAtuaisRef.current) {
+        if (idsDisponiveis.has(figura.id)) continue;
+        idsDisponiveis.add(figura.id);
+        todas.push({ ...figura, ocorrenciaId: undefined });
+      }
       setImagens(todas);
       hashesGdlCapturados.current = new Set(
         todas.flatMap(imagem => imagem.origem === 'gdl' && imagem.sha256 ? [imagem.sha256] : []),
@@ -823,12 +875,22 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
   };
 
   const handleDelete = async (id: string) => {
+    if (imagensProtegidas.includes(id)) {
+      toast.error('Esta imagem faz parte do histórico de edição do laudo e não pode ser excluída nesta sessão.');
+      return;
+    }
     if (!confirm('Deseja excluir permanentemente esta imagem?')) return;
     const removida = imagens.find(imagem => imagem.id === id);
-    await window.ipcAPI.ilustracoes.descartarEstagio(laudoId, id);
-    const resultado = await window.ipcAPI.ilustracoes.excluirImagem(laudoId, id);
-    if (!resultado.success) {
-      toast.error(resultado.error || 'Não foi possível excluir a imagem.');
+    try {
+      if (onExcluirArquivo) await onExcluirArquivo(id);
+      else {
+        const resultado = await window.ipcAPI.ilustracoes.excluirImagem(laudoId, id);
+        if (!resultado.success) throw new Error(resultado.error || 'Não foi possível excluir a imagem.');
+        const descarte = await window.ipcAPI.ilustracoes.descartarEstagio(laudoId, id);
+        if (!descarte.success) throw new Error(descarte.error || 'Não foi possível descartar a imagem temporária.');
+      }
+    } catch (erro: unknown) {
+      toast.error(erro instanceof Error ? erro.message : 'Não foi possível excluir a imagem.');
       return;
     }
     const restantes = imagens
@@ -837,7 +899,6 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
     setImagens(restantes);
     if (removida?.origem === 'gdl' && removida.sha256) hashesGdlCapturados.current.delete(removida.sha256);
     void window.ipcAPI.ilustracoes.atualizarOrdem(laudoId, restantes.map(imagem => ({ id: imagem.id, sequencia: imagem.sequencia })));
-    onDeleteImage?.(id);
   };
 
   const handleUpdateLegenda = (id: string, legenda: string) => {
@@ -853,34 +914,52 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
     if (falha) toast.error(falha.error || 'Não foi possível arquivar as imagens inseridas.');
   };
 
-  const handleDeleteFiguraEditor = (id: string, indice: number) => {
+  const handleDeleteFiguraEditor = async (id: string, indice: number) => {
     const figura = figurasNoEditor?.[indice];
     if (!figura || figura.id !== id) return;
-    if (figura?.dummy) {
-      onDeleteImage?.(id, indice);
-      return;
+    try {
+      if (!await onDeleteImage?.(id, indice, figura.ocorrenciaId)) throw new Error('A figura não está mais disponível no documento.');
+      if (!figura.dummy) {
+        setImagens(atuais => atuais.some(imagem => imagem.id === id) ? atuais : [...atuais, { ...figura, ocorrenciaId: undefined }]);
+      }
+    } catch (erro) {
+      toast.error(erro instanceof Error ? erro.message : 'Não foi possível remover a figura.');
     }
-    onDeleteImage?.(id, indice);
   };
 
   const handleInsertAll = async () => {
-    const disponiveis = imagens.filter(imagem => !figurasNoEditor?.some(figura => figura.id === imagem.id));
+    const disponiveis = filteredImagens;
     if (disponiveis.length === 0) return;
     const inicio = performance.now();
     try {
-      const inseridas: string[] = onInsertAll ? await onInsertAll(disponiveis) : [];
+      const resultado: ResultadoInsercaoFiguras = onInsertAll ? await onInsertAll(disponiveis) : { inseridas: [], falhas: [] };
       if (!onInsertAll) for (const imagem of disponiveis) {
-        if (await onInsertImage(imagem.url, imagem.id, imagem.legenda)) inseridas.push(imagem.id);
+        try {
+          if (await onInsertImage(imagem.url, imagem.id, imagem.legenda)) resultado.inseridas.push(imagem.id);
+          else resultado.falhas.push({ imagemId: imagem.id, mensagem: 'O editor não confirmou a inserção.' });
+        } catch (erro: unknown) {
+          resultado.falhas.push({ imagemId: imagem.id, mensagem: erro instanceof Error ? erro.message : 'Não foi possível inserir a imagem.' });
+        }
       }
-      setImagens(atuais => atuais.filter(imagem => !inseridas.includes(imagem.id)));
-      registrarDesempenhoIlustracao('inserir_todas', inicio, { imagens: inseridas.length, imagensMemoria: 0 });
+      if (!ehResultadoInsercaoFiguras(resultado, disponiveis.map(imagem => imagem.id))) throw new Error('Resposta inválida do editor.');
+      setImagens(atuais => atuais.filter(imagem => !resultado.inseridas.includes(imagem.id)));
+      const naoInseridas = disponiveis.filter(imagem => !resultado.inseridas.includes(imagem.id));
+      if (naoInseridas.length > 0) {
+        const detalhes = naoInseridas.map(imagem => {
+          const falha = resultado.falhas.find(item => item.imagemId === imagem.id);
+          return `${imagem.nomeArquivo || 'Imagem'}: ${falha?.mensagem || 'O editor não confirmou a inserção.'}`;
+        });
+        toast.error(`${detalhes.join('; ')} As imagens continuam disponíveis no painel.`);
+      }
+      registrarDesempenhoIlustracao('inserir_todas', inicio, { imagens: resultado.inseridas.length, imagensMemoria: 0 });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Não foi possível preparar as imagens para inserção.');
     }
   };
 
   const idsNoEditor = new Set((figurasNoEditor || []).map(figura => figura.id));
-  const filteredImagens = imagens.filter(imagem => !idsNoEditor.has(imagem.id))
+  const idsDevolvidos = new Set(figurasDevolvidas.map(figura => figura.id));
+  const filteredImagens = imagens.filter(imagem => !idsNoEditor.has(imagem.id) || idsDevolvidos.has(imagem.id))
     .sort((a, b) => a.sequencia - b.sequencia);
   const figurasReaisNoEditor = (figurasNoEditor || []).filter(figura => !figura.dummy);
 
@@ -1030,7 +1109,10 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
                       onUpdateLegenda={handleUpdateLegenda}
                       onInsert={img => {
                         void Promise.resolve(onInsertImage(img.url, img.id, img.legenda)).then(inserida => {
-                          if (!inserida) return;
+                          if (!inserida) {
+                            toast.error('Não foi possível inserir a imagem no laudo.');
+                            return;
+                          }
                           if (img.origem === 'gdl' && img.sha256) hashesGdlCapturados.current.delete(img.sha256);
                           setImagens(prev =>
                             prev.filter(i => i.id !== img.id).map((i, idx) => ({ ...i, sequencia: idx + 1, numero_figura: idx + 1 }))
@@ -1097,25 +1179,30 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
           <div className="space-y-3 max-h-[300px] overflow-y-auto custom-scrollbar px-4">
             {figurasNoEditor.map((fig, idx) => (
               <FiguraEditorItem
-                key={`${fig.id}-${idx}`}
+                key={fig.ocorrenciaId || `${fig.id}-${idx}`}
                 imagem={fig}
                 index={idx}
-                ativo={fig.id === figuraAtivaId}
-                onDelete={handleDeleteFiguraEditor}
-                onUpdateLegenda={onUpdateLegendaInEditor || (() => {})}
-                onPreview={() => setLightboxEditorIndex(figurasReaisNoEditor.findIndex(figura => figura.id === fig.id))}
+                ativo={figuraAtivaOcorrenciaId ? fig.ocorrenciaId === figuraAtivaOcorrenciaId : fig.id === figuraAtivaId}
+                onDelete={(id, indice) => { void handleDeleteFiguraEditor(id, indice); }}
+                onUpdateLegenda={(id, legenda) => {
+                  void Promise.resolve(onUpdateLegendaInEditor?.(id, legenda, fig.ocorrenciaId)).catch((erro: unknown) => {
+                    toast.error(erro instanceof Error ? erro.message : 'Não foi possível atualizar a legenda.');
+                  });
+                }}
+                onPreview={() => setLightboxEditorIndex(figurasReaisNoEditor.findIndex(figura => fig.ocorrenciaId ? figura.ocorrenciaId === fig.ocorrenciaId : figura.id === fig.id))}
                 onScrollToFigure={onScrollToFigure}
                 onReplaceImage={(id) => {
                   setImagemSubstituicaoId(null);
                   setFiguraSubstituicaoId(id);
                   setFiguraSubstituicaoIndice(idx);
+                  setFiguraSubstituicaoOcorrencia(fig.ocorrenciaId);
                   setSeletorSubstituicaoAberto(true);
                 }}
                 onEditImage={onEditImage ? () => { void abrirEdicao(idx, fig); } : undefined}
-                onPrevisualizarAlturaPar={onPrevisualizarAlturaPar ? altura => onPrevisualizarAlturaPar(idx, altura) : undefined}
-                onConfirmarAlturaPar={onConfirmarAlturaPar ? altura => onConfirmarAlturaPar(idx, altura) : undefined}
-                onCancelarAlturaPar={onCancelarAlturaPar ? () => onCancelarAlturaPar(idx) : undefined}
-                onDefinirAjusteVisualPar={onDefinirAjusteVisualPar ? ajuste => onDefinirAjusteVisualPar(idx, ajuste) : undefined}
+                onPrevisualizarAlturaPar={onPrevisualizarAlturaPar ? altura => fig.ocorrenciaId ? onPrevisualizarAlturaPar(idx, altura, fig.ocorrenciaId) : onPrevisualizarAlturaPar(idx, altura) : undefined}
+                onConfirmarAlturaPar={onConfirmarAlturaPar ? altura => fig.ocorrenciaId ? onConfirmarAlturaPar(idx, altura, fig.ocorrenciaId) : onConfirmarAlturaPar(idx, altura) : undefined}
+                onCancelarAlturaPar={onCancelarAlturaPar ? () => fig.ocorrenciaId ? onCancelarAlturaPar(idx, fig.ocorrenciaId) : onCancelarAlturaPar(idx) : undefined}
+                onDefinirAjusteVisualPar={onDefinirAjusteVisualPar ? ajuste => fig.ocorrenciaId ? onDefinirAjusteVisualPar(idx, ajuste, fig.ocorrenciaId) : onDefinirAjusteVisualPar(idx, ajuste) : undefined}
                 onGerarLegenda={onGerarLegenda}
               />
             ))}
@@ -1186,6 +1273,7 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
           const selecionada = imagens.find(imagem => imagem.id === imagemSubstituicaoId);
           if (!selecionada) return;
           insercaoNoCursorEmAndamentoRef.current = true;
+          const finalizarProcessamento = onIniciarProcessamentoImagem?.();
           void (async () => {
             let imagem = selecionada;
             if (imagemEditada) {
@@ -1210,22 +1298,22 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
             if (!arquivamento.success) toast.error(arquivamento.error || 'Não foi possível atualizar o painel de imagens.');
             if (imagemEditada) {
               await window.ipcAPI.ilustracoes.arquivarImagem(laudoId, selecionada.id);
-              setImagens(atuais => atuais.filter(item => item.id !== selecionada.id));
             }
+            setImagens(atuais => atuais.filter(item => item.id !== selecionada.id));
             setSeletorInsercaoAberto(false);
             setImagemSubstituicaoId(null);
           })().catch((erro: unknown) => toast.error(erro instanceof Error ? erro.message : 'Não foi possível inserir a figura.'))
-            .finally(() => { insercaoNoCursorEmAndamentoRef.current = false; });
+            .finally(() => { finalizarProcessamento?.(); insercaoNoCursorEmAndamentoRef.current = false; });
         }}
       />
 
       <SeletorFiguraDialog
         laudoId={laudoId}
         aberto={seletorSubstituicaoAberto}
-        figuraAlvo={figuraSubstituicaoIndice !== null ? figurasNoEditor?.[figuraSubstituicaoIndice] || null : figurasNoEditor?.find(figura => figura.id === figuraSubstituicaoId) || null}
+        figuraAlvo={figurasNoEditor?.find(figura => figuraSubstituicaoOcorrencia ? figura.ocorrenciaId === figuraSubstituicaoOcorrencia : figura.id === figuraSubstituicaoId) || null}
         imagens={filteredImagens}
         imagemSelecionadaId={imagemSubstituicaoId}
-        onAbertoChange={(aberto) => { setSeletorSubstituicaoAberto(aberto); if (!aberto) { setFiguraSubstituicaoId(null); setFiguraSubstituicaoIndice(null); setImagemSubstituicaoId(null); } }}
+        onAbertoChange={(aberto) => { setSeletorSubstituicaoAberto(aberto); if (!aberto) { setFiguraSubstituicaoId(null); setFiguraSubstituicaoIndice(null); setFiguraSubstituicaoOcorrencia(undefined); setImagemSubstituicaoId(null); } }}
         onSelecionar={setImagemSubstituicaoId}
         onBuscarGdl={() => { setSeletorSubstituicaoAberto(false); setModalGdlAberto(true); }}
         onGerarLegenda={onGerarLegenda}
@@ -1234,8 +1322,11 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
           if (imagem) setImagemSubstituicaoId(imagem.id);
         }}
         onConfirmar={(legenda, imagemEditada) => {
+          if (substituicaoEmAndamentoRef.current) return;
           const imagem = filteredImagens.find(item => item.id === imagemSubstituicaoId);
           if (!figuraSubstituicaoId || !imagem) return;
+          substituicaoEmAndamentoRef.current = true;
+          const finalizarProcessamento = onIniciarProcessamentoImagem?.();
           void (async () => {
             let carregada = imagem;
             if (imagemEditada) {
@@ -1250,9 +1341,8 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
               if (!resposta.success || !resposta.data) throw new Error(resposta.error || 'Não foi possível salvar a figura editada.');
               carregada = { ...imagem, id, imagemOrigemId: imagem.id };
             }
-            const substituida = await onReplaceImage?.(figuraSubstituicaoId, carregada, figuraSubstituicaoIndice ?? undefined);
+            const substituida = await onReplaceImage?.(figuraSubstituicaoId, { ...carregada, ocorrenciaId: figuraSubstituicaoOcorrencia, legendaSubstituicao: legenda }, figuraSubstituicaoIndice ?? undefined);
             if (!substituida) throw new Error('Não foi possível substituir a figura no editor.');
-            onUpdateLegendaInEditor?.(carregada.id, legenda);
             void window.ipcAPI.ilustracoes.atualizarLegenda(laudoId, carregada.id, legenda).then(resultado => {
               if (!resultado.success) toast.error(resultado.error || 'Não foi possível salvar a legenda da figura.');
             });
@@ -1261,9 +1351,11 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
             setImagens(prev => prev.filter(item => item.id !== imagem.id).map((item, indice) => ({ ...item, sequencia: indice + 1, numero_figura: indice + 1 })));
             setFiguraSubstituicaoId(null);
             setFiguraSubstituicaoIndice(null);
+            setFiguraSubstituicaoOcorrencia(undefined);
             setImagemSubstituicaoId(null);
             setSeletorSubstituicaoAberto(false);
-          })().catch(error => toast.error(error instanceof Error ? error.message : 'Não foi possível preparar a imagem.'));
+          })().catch(error => toast.error(error instanceof Error ? error.message : 'Não foi possível preparar a imagem.'))
+            .finally(() => { finalizarProcessamento?.(); substituicaoEmAndamentoRef.current = false; });
         }}
       />
 
@@ -1273,20 +1365,35 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
         imagens={filteredImagens}
         onAbertoChange={setPreenchimentoDummiesAberto}
         onConfirmar={(associacoes) => {
+          if (preenchimentoEmAndamentoRef.current) return;
           const imagensPorId = new Map(filteredImagens.map(imagem => [imagem.id, imagem]));
+          preenchimentoEmAndamentoRef.current = true;
+          const finalizarProcessamento = onIniciarProcessamentoImagem?.();
           void (async () => {
             const usadas: ImagemLaudo[] = [];
+            const falhas: string[] = [];
             for (const associacao of associacoes) {
               const imagem = imagensPorId.get(associacao.imagemId);
-              if (!imagem) continue;
-              if (await onReplaceImage?.(associacao.figuraId, imagem)) usadas.push(imagem);
+              if (!imagem) {
+                falhas.push('Uma imagem selecionada não está mais disponível.');
+                continue;
+              }
+              try {
+                if (await onReplaceImage?.(associacao.figuraId, { ...imagem, ocorrenciaId: associacao.ocorrenciaId })) usadas.push(imagem);
+                else falhas.push(`${imagem.nomeArquivo || 'Imagem selecionada'}: a figura não está mais disponível.`);
+              } catch (erro: unknown) {
+                falhas.push(`${imagem.nomeArquivo || 'Imagem selecionada'}: ${erro instanceof Error ? erro.message : 'não foi possível aplicar a imagem.'}`);
+              }
             }
-            if (usadas.length === 0) return;
-            void arquivarImagensInseridas(usadas.map(imagem => imagem.id));
-            setImagens(prev => prev.filter(imagem => !usadas.some(usada => usada.id === imagem.id)).map((imagem, indice) => ({ ...imagem, sequencia: indice + 1, numero_figura: indice + 1 })));
-            setPreenchimentoDummiesAberto(false);
-            toast.success(`${usadas.length} figura(s) substituída(s)`);
-          })().catch(error => toast.error(error instanceof Error ? error.message : 'Não foi possível preparar as imagens.'));
+            if (usadas.length > 0) {
+              void arquivarImagensInseridas(usadas.map(imagem => imagem.id));
+              setImagens(prev => prev.filter(imagem => !usadas.some(usada => usada.id === imagem.id)).map((imagem, indice) => ({ ...imagem, sequencia: indice + 1, numero_figura: indice + 1 })));
+              toast.success(`${usadas.length} figura(s) substituída(s)`);
+            }
+            if (falhas.length === 0) setPreenchimentoDummiesAberto(false);
+            else falhas.forEach(falha => toast.error(falha));
+          })().catch(error => toast.error(error instanceof Error ? error.message : 'Não foi possível preparar as imagens.'))
+            .finally(() => { finalizarProcessamento?.(); preenchimentoEmAndamentoRef.current = false; });
         }}
       />
 
