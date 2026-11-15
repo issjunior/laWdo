@@ -59,14 +59,16 @@ it('não inclui a escrita externa no rollback e libera a fila após falha', asyn
   expect(await banco.executeQuery('SELECT id FROM itens')).toEqual([{ id: 'preservar' }]);
 });
 
-it('recusa aninhamento sem prejudicar a transação externa', async () => {
+it('reutiliza a transação externa para operações aninhadas', async () => {
   await banco.withTransaction(async () => {
-    await expect(banco.withTransaction(async () => undefined)).rejects.toThrow('aninhadas');
+    await expect(banco.withTransaction(async () => {
+      await banco.executeNonQuery("INSERT INTO itens VALUES ('interna')");
+    })).resolves.toBeUndefined();
     await expect(banco.criarBackupConsistente(path.join(ambiente.diretorio, 'indevido.db'))).rejects.toThrow('dentro de uma transação');
     await banco.executeNonQuery("INSERT INTO itens VALUES ('externa')");
   });
   await expect(banco.withTransaction(async () => banco.executeQuery('SELECT id FROM itens')))
-    .resolves.toEqual([{ id: 'externa' }]);
+    .resolves.toEqual([{ id: 'interna' }, { id: 'externa' }]);
 });
 
 it('fecha somente após as operações pendentes e reabre com os PRAGMAs ativos', async () => {

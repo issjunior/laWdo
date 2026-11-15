@@ -10,6 +10,7 @@ import type { RespostasIncorporadas } from '../../shared/types/laudo-bkp.types';
 let diretorio: string;
 let sqlite: typeof import('../../main/database/sqlite');
 let wizard: typeof import('../../main/services/wizard.service')['wizardService'];
+let servicoRegras: typeof import('../../main/services/regra-wizard.service')['regraWizardService'];
 let estrutura: typeof import('../../main/services/laudo-estrutura.service');
 let catalogo: LaudoRow;
 let incorporado: LaudoRow;
@@ -49,6 +50,7 @@ beforeAll(async () => {
   sqlite = await import('../../main/database/sqlite');
   await (await import('../../main/database/index')).setupDatabase();
   wizard = (await import('../../main/services/wizard.service')).wizardService;
+  servicoRegras = (await import('../../main/services/regra-wizard.service')).regraWizardService;
   estrutura = await import('../../main/services/laudo-estrutura.service');
   await sqlite.executeNonQuery("INSERT INTO tipos_exame (id, codigo, nome) VALUES ('tipo', 'WIZARD-REGRESSAO', 'Sintético')");
   await sqlite.executeNonQuery("INSERT INTO templates (id, tipo_exame_id, nome) VALUES ('template', 'tipo', 'Sintético')");
@@ -149,6 +151,19 @@ describe('persistência e regras do wizard', () => {
       expect(await sqlite.executeQuery('PRAGMA foreign_key_check')).toEqual([]);
     } finally {
       await sqlite.executeNonQuery('DROP TRIGGER falha_wizard_regressao');
+    }
+  });
+
+  it('reverte a substituição em lote das regras se uma inserção falha', async () => {
+    const antes = await sqlite.executeQuery('SELECT * FROM regras_wizard WHERE wizard_id = ? ORDER BY id', ['catalogo']);
+    await sqlite.executeNonQuery("CREATE TRIGGER falha_regras_lote BEFORE INSERT ON regras_wizard WHEN NEW.id = 'regra-falha-lote' BEGIN SELECT RAISE(ABORT, 'falha sintética nas regras'); END");
+    try {
+      await expect(servicoRegras.saveBatch([{
+        id: 'regra-falha-lote', wizard_id: 'catalogo', peca_id: 'exata', secao_template_id: 'secao', condicoes: '{}', ordem: 0,
+      }])).rejects.toThrow('falha sintética nas regras');
+      expect(await sqlite.executeQuery('SELECT * FROM regras_wizard WHERE wizard_id = ? ORDER BY id', ['catalogo'])).toEqual(antes);
+    } finally {
+      await sqlite.executeNonQuery('DROP TRIGGER falha_regras_lote');
     }
   });
 

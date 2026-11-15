@@ -51,6 +51,8 @@ interface IpcRespostaLegada {
   limiteRequisicoes?: LimiteUsoIa;
   message?: string;
   total?: number;
+  temProxima?: boolean;
+  proximoCursor?: string;
   count?: number;
   path?: string;
   valid?: boolean;
@@ -338,7 +340,7 @@ const initApp = async () => {
         log: {
           listar: async () => ({ success: true, data: [] }),
           limpar: async () => ({ success: true }),
-          listarAuditoria: async () => ({ success: true, data: [], total: 0 }),
+          listarAuditoria: async () => ({ success: true, data: [], temProxima: false }),
           limparAuditoria: async () => ({ success: true, count: 0 }),
           contar: async () => ({ success: true, data: { sistema: 0, auditoria: 0 } }),
         },

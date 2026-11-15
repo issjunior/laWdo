@@ -61,9 +61,8 @@ describe('DashboardPage', () => {
       success: true,
       data: {
         itens: [],
-        total: 0,
-        pagina: 1,
         tamanhoPagina: 10,
+        temProxima: false,
         porStatus: [],
       },
     });
@@ -180,9 +179,9 @@ describe('DashboardPage', () => {
       success: true,
       data: {
         itens: [laudo],
-        total: 11,
-        pagina: 1,
         tamanhoPagina: 10,
+        temProxima: true,
+        proximoCursor: 'cursor-proxima-pagina',
         porStatus: [],
       },
     });
@@ -212,7 +211,7 @@ describe('DashboardPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Voltar à consulta' }));
     fireEvent.click(screen.getByRole('button', { name: 'Próxima' }));
     expect(consultarLaudos).toHaveBeenLastCalledWith(
-      expect.objectContaining({ pagina: 2, dataInicial: '2026-01-01' })
+      expect.objectContaining({ cursor: 'cursor-proxima-pagina', dataInicial: '2026-01-01' })
     );
   });
 
@@ -241,9 +240,8 @@ describe('DashboardPage', () => {
       success: true,
       data: {
         itens: [laudo],
-        total: 1,
-        pagina: 1,
         tamanhoPagina: 10,
+        temProxima: false,
         porStatus: [],
       },
     });

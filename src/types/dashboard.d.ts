@@ -19,7 +19,7 @@ export interface DashboardConsultaLaudosEntrada {
   tipoData: DashboardTipoDataConsulta
   dataInicial?: string
   dataFinal?: string
-  pagina?: number
+  cursor?: string
   tamanhoPagina?: number
 }
 
@@ -40,9 +40,9 @@ export interface DashboardLaudoConsulta {
 
 export interface DashboardConsultaLaudosResultado {
   itens: DashboardLaudoConsulta[]
-  total: number
-  pagina: number
   tamanhoPagina: number
+  proximoCursor?: string
+  temProxima: boolean
   porStatus: DashboardKpiStatus[]
 }
 

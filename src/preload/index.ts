@@ -144,7 +144,7 @@ type PacoteTemplateResponse = { success: boolean; data?: IpcPayload; nome?: stri
 type BackupResponse = { success: boolean; path?: string; error?: string; canceled?: boolean };
 type TipoBackup = 'completo' | 'configuracao';
 type PreviaBackup = Record<string, unknown>;
-type ListaAuditoriaResponse = { success: boolean; data?: IpcPayload[]; total?: number; error?: string };
+type ListaAuditoriaResponse = { success: boolean; data?: IpcPayload[]; temProxima?: boolean; proximoCursor?: string; error?: string };
 type TimelineResponse = { success: boolean; data?: IpcPayload[]; error?: string };
 type ExportacaoLaudoParams = {
   laudoId: string;

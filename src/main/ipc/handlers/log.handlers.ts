@@ -61,7 +61,7 @@ export const registerLogSystemHandlers = (): void => {
   ipcMain.handle('log:listar-auditoria', async (_event, filters?: AuditFilters) => {
     try {
       const result = await listAuditLogs(filters);
-      return { success: true, data: result.data, total: result.total };
+      return { success: true, data: result.data, temProxima: result.temProxima, proximoCursor: result.proximoCursor };
     } catch (error) {
       logError('Erro ao listar auditoria', error);
       return { success: false, error: String(error) };

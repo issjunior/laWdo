@@ -2,7 +2,7 @@ import { CATEGORIAS_PLACEHOLDERS_COMUNS, PLACEHOLDERS_COMUNS as PLACEHOLDERS_SIS
 import { PLACEHOLDERS_B601 } from '../../shared/catalogos/b601-placeholders.catalogo.js';
 import { BaseService } from './base.service.js';
 import { getLogger } from '../utils/logger.js';
-import { executeNonQuery } from '../database/sqlite.js'
+import { executeNonQuery, withTransaction } from '../database/sqlite.js'
 const log = getLogger('placeholder');
 
 export interface PlaceholderRow {
@@ -123,6 +123,7 @@ class PlaceholderService extends BaseService<PlaceholderRow> {
     let migradas = 0;
     let puladas = 0;
     try {
+      await withTransaction(async () => {
       for (const [oldChave, newChave] of Object.entries(RENOMEACOES)) {
         // Verifica se a chave nova já existe (já migrado ou instalação limpa)
         const jaMigrado = await this.executeCustomQuery<{ id: string }>(
@@ -144,6 +145,7 @@ class PlaceholderService extends BaseService<PlaceholderRow> {
           migradas++;
         }
       }
+      });
       log.info('Migração de placeholders concluída', { migradas, puladas });
     } catch (error) {
       log.error('Erro ao migrar placeholders', error);
@@ -157,6 +159,7 @@ class PlaceholderService extends BaseService<PlaceholderRow> {
    */
   async seedSistema(): Promise<void> {
     try {
+      await withTransaction(async () => {
       // Safety net: garantir categorias de sistema antes do seed, resolvendo conflitos de label
       const categoriasSistema = [
         ...CATEGORIAS_PLACEHOLDERS_COMUNS,
@@ -264,6 +267,7 @@ class PlaceholderService extends BaseService<PlaceholderRow> {
           await this.create(p);
         }
       }
+      });
       log.info('Seed de placeholders do sistema concluído', { total: PLACEHOLDERS_SISTEMA.length + CAMPOS_ESPECIFICOS_PLACEHOLDERS.length });
     } catch (error) {
       log.error('Erro ao semear placeholders do sistema', error);

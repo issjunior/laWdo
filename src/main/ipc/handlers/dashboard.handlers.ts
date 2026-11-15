@@ -35,13 +35,12 @@ export const registerDashboardHandlers = (): void => {
       if (dataValida(filtros.dataInicial) && dataValida(filtros.dataFinal) && filtros.dataInicial > filtros.dataFinal) {
         throw new Error('A data inicial não pode ser posterior à data final')
       }
-      const pagina = typeof filtros.pagina === 'number' && Number.isInteger(filtros.pagina) ? filtros.pagina : undefined
+      const cursor = typeof filtros.cursor === 'string' && filtros.cursor.trim() ? filtros.cursor.trim() : undefined
       const tamanhoPagina = typeof filtros.tamanhoPagina === 'number' && Number.isInteger(filtros.tamanhoPagina) ? filtros.tamanhoPagina : undefined
-      if (pagina !== undefined && pagina < 1) throw new Error('Página inválida')
       if (tamanhoPagina !== undefined && (tamanhoPagina < 1 || tamanhoPagina > 100)) throw new Error('Tamanho de página inválido')
       const data = await dashboardService.consultarLaudos({
         busca: textoOpcional(filtros.busca), tipoData: filtros.tipoData as DashboardTipoDataConsulta,
-        dataInicial: filtros.dataInicial as string | undefined, dataFinal: filtros.dataFinal as string | undefined, pagina, tamanhoPagina,
+        dataInicial: filtros.dataInicial as string | undefined, dataFinal: filtros.dataFinal as string | undefined, cursor, tamanhoPagina,
       } satisfies DashboardConsultaLaudosEntrada)
       return { success: true, data }
     } catch (error) {

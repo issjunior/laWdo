@@ -1,6 +1,7 @@
 import { obterContextoWizardLaudo, calcularPecasDoLaudo } from '../../services/laudo-estrutura.service.js';
 import { esquemaRespostasIncorporadas } from '../../../shared/types/laudo-bkp.types.js';
 import { authSessaoService } from '../../services/auth-sessao.service.js';
+import { STATUS_LAUDO } from '../../utils/data-civil.js';
 import { ipcMain } from 'electron';
 import { logDebug, logError } from '../../utils/logger.js';
 import { auditCicloVida, auditDelete } from '../../services/audit-log.service.js';
@@ -267,9 +268,8 @@ export const registerLaudoHandlers = (): void => {
     let preparacao: Awaited<ReturnType<typeof prepararConclusaoImagensLaudo>> | undefined;
     try {
       if (!laudoId) return { success: false, error: 'ID do laudo inválido' };
-      const statusValidos = ['Em andamento', 'Concluído', 'Entregue'];
-      if (!statusValidos.includes(novoStatus)) {
-        return { success: false, error: `Status inválido. Use: ${statusValidos.join(', ')}` };
+      if (!STATUS_LAUDO.includes(novoStatus as typeof STATUS_LAUDO[number])) {
+        return { success: false, error: `Status inválido. Use: ${STATUS_LAUDO.join(', ')}` };
       }
 
       const laudoAntes = await laudoService.findById(laudoId);

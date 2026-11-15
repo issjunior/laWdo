@@ -33,8 +33,8 @@ describe('dashboard.service', () => {
       laudosConcluidosAguardandoEntrega: 3,
       laudosEmAndamentoSemAlteracao: 4,
     });
-    expect(executeQueryMock.mock.calls[3]?.[0]).toContain("'+7 days'");
-    expect(executeQueryMock.mock.calls[5]?.[0]).toContain('julianday(updated_at) >= 7');
+    expect(executeQueryMock.mock.calls[3]?.[0]).toContain('prazo >= ? AND prazo <= ?');
+    expect(executeQueryMock.mock.calls[5]?.[0]).toContain('updated_at <= ?');
   });
 
   it('aplica paginação e retorna a agregação de todo o resultado', async () => {
@@ -55,46 +55,41 @@ describe('dashboard.service', () => {
           dataOrdenacao: '2026-01-03',
         },
       ])
-      .mockResolvedValueOnce([{ total: 11 }])
       .mockResolvedValueOnce([{ status: 'Concluído', total: 11 }]);
     const resultado = await new DashboardService().consultarLaudos({ tipoData: 'conclusao' });
-    expect(resultado.total).toBe(11);
     expect(resultado.itens).toHaveLength(1);
+    expect(resultado.temProxima).toBe(false);
     expect(resultado.porStatus[1]).toEqual({ status: 'Concluído', total: 11 });
   });
 
   it('aplica o fim do período de forma inclusiva na consulta cronológica', async () => {
     executeQueryMock
       .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([{ total: 0 }])
       .mockResolvedValueOnce([]);
     await new DashboardService().consultarLaudos({
       tipoData: 'entrega',
       dataInicial: '2026-01-01',
       dataFinal: '2026-01-31',
     });
-    expect(executeQueryMock.mock.calls[0]?.[0]).toContain('date(l.data_entrega) <= date(?)');
-    expect(executeQueryMock.mock.calls[0]?.[1]).toEqual(['2026-01-01', '2026-01-31', '10', '0']);
+    expect(executeQueryMock.mock.calls[0]?.[0]).toContain('l.data_entrega < ?');
+    expect(executeQueryMock.mock.calls[0]?.[1]).toEqual(['2026-01-01', '2026-02-01', '11']);
   });
 
   it('normaliza paginação, aplica filtros e preenche status sem resultado', async () => {
     executeQueryMock
       .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([{ total: 'invalido' }])
       .mockResolvedValueOnce([{ status: 'Em andamento', total: '2' }]);
     const resultado = await new DashboardService().consultarLaudos({
       tipoData: 'alteracao',
       busca: ' BAL ',
-      pagina: 0,
       tamanhoPagina: 999,
       dataInicial: '2026-02-01',
       dataFinal: '2026-02-28',
     });
     expect(resultado).toEqual({
       itens: [],
-      total: 0,
-      pagina: 1,
       tamanhoPagina: 100,
+      temProxima: false,
       porStatus: [
         { status: 'Em andamento', total: 2 },
         { status: 'Concluído', total: 0 },
@@ -102,7 +97,33 @@ describe('dashboard.service', () => {
       ],
     });
     expect(executeQueryMock.mock.calls[0]?.[1]).toEqual([
-      '%BAL%', '%BAL%', '%BAL%', '2026-02-01', '2026-02-28', '100', '0',
+      '%BAL%', '%BAL%', '%BAL%', '2026-02-01', '2026-03-01', '101',
+    ]);
+  });
+
+  it('usa cursor estável para desempatar registros com a mesma data', async () => {
+    executeQueryMock
+      .mockResolvedValueOnce([
+        { id: 'l-3', dataOrdenacao: '2026-03-01T10:00:00.000Z' },
+        { id: 'l-2', dataOrdenacao: '2026-03-01T10:00:00.000Z' },
+      ])
+      .mockResolvedValueOnce([]);
+    const primeiro = await new DashboardService().consultarLaudos({ tipoData: 'alteracao', tamanhoPagina: 1 });
+    expect(primeiro.itens).toEqual([{ id: 'l-3', dataOrdenacao: '2026-03-01T10:00:00.000Z' }]);
+    expect(primeiro.temProxima).toBe(true);
+    expect(primeiro.proximoCursor).toBeDefined();
+
+    executeQueryMock
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+    await new DashboardService().consultarLaudos({
+      tipoData: 'alteracao',
+      tamanhoPagina: 1,
+      cursor: primeiro.proximoCursor,
+    });
+    expect(executeQueryMock.mock.calls[2]?.[0]).toContain('(l.updated_at < ? OR (l.updated_at = ? AND l.id < ?))');
+    expect(executeQueryMock.mock.calls[2]?.[1]).toEqual([
+      '2026-03-01T10:00:00.000Z', '2026-03-01T10:00:00.000Z', 'l-3', '2',
     ]);
   });
 
@@ -225,6 +246,6 @@ describe('dashboard.service', () => {
         laudoAteConclusao: { quantidade: 2, mediaDias: 1, medianaDias: 1 },
       },
     ]);
-    expect(executeQueryMock.mock.calls[0]?.[1]).toEqual(['te-1', '2026-01-01', '2026-01-31']);
+    expect(executeQueryMock.mock.calls[0]?.[1]).toEqual(['te-1', '2026-01-01', '2026-02-01']);
   });
 });
