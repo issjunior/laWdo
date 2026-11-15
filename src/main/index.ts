@@ -37,6 +37,7 @@ import { schemaEventoEditorLaudo } from '../shared/diagnostico/contratos.js';
 import { navegacaoAplicacaoPermitida } from './security/navegacao.js';
 import { criarAtalhoDesktopLinux } from './services/atalho-linux.service.js';
 import { criarAtalhoMesaMacOS } from './services/atalho-macos.service.js';
+import * as electron from 'electron';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -46,6 +47,8 @@ const caminhoRelatorioSmoke = process.env.LAWDO_SMOKE_SAIDA;
 const caminhoIcone = app.isPackaged
   ? path.join(process.resourcesPath, 'assets/icon.ico')
   : path.join(__dirname, '../../src/renderer/assets/icon.ico');
+
+electron.crashReporter?.start({ productName: 'laWdo', uploadToServer: false });
 
 // Configurações de segurança
 if (squirrelStartup) {

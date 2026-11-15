@@ -90,6 +90,19 @@ describe('Header - atualizações', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Reiniciar e instalar' }));
     expect(await screen.findByText('Reiniciar e instalar a atualização?')).toBeInTheDocument();
   });
+
+  it('trata a recusa de permissão ao copiar o contato sem rejeição não tratada', async () => {
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: vi.fn().mockRejectedValue(new DOMException('Write permission denied.', 'NotAllowedError')) },
+    });
+    render(<MemoryRouter><Header currentUser={null} onLogout={vi.fn()} /></MemoryRouter>);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Informações' }));
+    fireEvent.click(await screen.findByRole('button', { name: /dúvidas e sugestões/i }));
+
+    await vi.waitFor(() => expect(toast.error).toHaveBeenCalledWith('Não foi possível copiar o e-mail.'));
+  });
 });
 
 const render = (ui: React.ReactNode) => renderOriginal(<ConexaoGdlProvider>{ui}</ConexaoGdlProvider>);
