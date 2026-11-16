@@ -139,6 +139,7 @@ interface IpcAPIRendererLegada {
   rep: IpcGrupoLegado;
   dashboard: IpcGrupoLegado;
   configuracao: IpcGrupoLegado;
+    googleDrive: Pick<import('../shared/types/google-drive.types.js').ApiGoogleDrive, 'estadoRapido' | 'estado' | 'resumo' | 'conectar' | 'desconectar' | 'definirEnvioAutomatico' | 'listarCopias' | 'listarLaudosConcluidos' | 'enviarLaudo' | 'verificar' | 'analisarRestauracao' | 'confirmarRestauracao' | 'cancelarRestauracao'>;
   gdl: IpcGrupoLegado & ApiCredenciaisGdl & {
     consultarRepsMesmoCaso: (laudoId: string) => Promise<{ success: boolean; data?: import('@shared/gdl/reps-mesmo-caso').RepsMesmoCasoGdl; error?: string }>;
     obterMiniaturasImagensLaudo: (laudoId: string, sessaoId: string, idsSelecao: string[]) => Promise<{ success: boolean; data?: MiniaturaArquivoRepGdl[]; error?: string }>;

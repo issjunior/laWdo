@@ -25,6 +25,7 @@ import { DiagnosticoCapturaService } from './services/diagnostico-captura.servic
 import { DiagnosticoSourceMapService } from './services/diagnostico-source-map.service.js';
 import { prepararAvisoConsoleDiagnostico } from './services/diagnostico-console.service.js';
 import { iaExecucaoService } from './services/ia-execucao.service.js';
+import { googleDriveService } from './services/google-drive.service.js';
 import { authSessaoService } from './services/auth-sessao.service.js';
 import { concluirRestauracaoPendente, reverterRestauracaoPendente } from './services/backup.service.js';
 import { desempenhoService } from './services/desempenho.service.js';
@@ -445,6 +446,9 @@ async function iniciarDiagnosticoAssistido(): Promise<void> {
     const falha = canal.startsWith('gdl:') && (resultadoFuncional === 'falha' || resultadoFuncional === 'indisponivel') ? normalizarFalhaDiagnosticoGdl(entrada.falha) : undefined;
     const falhaImagem = canal === 'ilustracoes:obter-imagem-impressao' && resultadoFuncional === 'falha'
       ? normalizarFalhaDiagnosticoImagem(entrada.falhaImagem) : undefined;
+    const diagnosticoGoogleDrive = canal.startsWith('google-drive:') && resultadoFuncional === 'falha' && entrada.diagnosticoGoogleDrive && typeof entrada.diagnosticoGoogleDrive === 'object'
+      && typeof (entrada.diagnosticoGoogleDrive as Record<string, unknown>).etapa === 'string' && typeof (entrada.diagnosticoGoogleDrive as Record<string, unknown>).codigo === 'string'
+      ? { etapa: (entrada.diagnosticoGoogleDrive as Record<string, string>).etapa, codigo: (entrada.diagnosticoGoogleDrive as Record<string, string>).codigo } : undefined;
     const tipoFalha = entrada.tipoFalha === 'transporte' ? 'transporte' : undefined;
     const categoria = entrada.categoria === 'acao' ? 'acao' : 'ipc';
     const nivel = entrada.nivel === 'debug' || entrada.nivel === 'warn' || entrada.nivel === 'error' ? entrada.nivel : 'info';
@@ -457,7 +461,7 @@ async function iniciarDiagnosticoAssistido(): Promise<void> {
       correlacaoId,
       dados: categoria === 'acao'
         ? entrada
-        : { fase, canal, duracaoMs, resultadoFuncional, tipoFalha, interacaoUsuario: CANAIS_COM_INTERACAO_USUARIO.some(item => item === canal), ...(falha ? { falha } : {}), ...(falhaImagem ? { falhaImagem } : {}), erro: typeof entrada.erro === 'string' ? entrada.erro : undefined },
+        : { fase, canal, duracaoMs, resultadoFuncional, tipoFalha, interacaoUsuario: CANAIS_COM_INTERACAO_USUARIO.some(item => item === canal), ...(falha ? { falha } : {}), ...(falhaImagem ? { falhaImagem } : {}), ...(diagnosticoGoogleDrive ? { diagnosticoGoogleDrive } : {}), erro: typeof entrada.erro === 'string' ? entrada.erro : undefined },
     });
   });
   ipcMain.on('diagnostico:erro-fatal-renderer', (evento, erro: unknown) => {
@@ -475,12 +479,16 @@ async function iniciarDiagnosticoAssistido(): Promise<void> {
   iaExecucaoService.configurarRegistradorDiagnostico(dados => {
     registrarEventoDiagnostico('erro', 'warn', dados, mainWindow ?? undefined);
   });
+  googleDriveService.configurarRegistradorDiagnostico(dados => {
+    registrarEventoDiagnostico('erro', 'error', { integracao: 'google_drive', ...dados }, mainWindow ?? undefined);
+  });
   pipeDiagnostico = pipe;
   log.info(`Modo diagnóstico pronto (${ativa.sessionId.slice(0, 8)}).`);
 }
 
 async function encerrarDiagnosticoAssistido(): Promise<void> {
   iaExecucaoService.configurarRegistradorDiagnostico();
+  googleDriveService.configurarRegistradorDiagnostico();
   await capturaDiagnostico?.interromper('Aplicativo encerrado durante a captura.').catch(() => undefined);
   if (temporizadorAtrasoEventLoopDiagnostico) clearInterval(temporizadorAtrasoEventLoopDiagnostico);
   temporizadorAtrasoEventLoopDiagnostico = null;

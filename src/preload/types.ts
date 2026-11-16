@@ -153,6 +153,7 @@ export interface TipoExameUpdateData {
 }
 
 export type { ApiBkpLaudo } from '../shared/types/laudo-bkp.types.js';
+export type { ApiGoogleDrive } from '../shared/types/google-drive.types.js';
 
 export interface ApiCredenciaisGdl {
   excluirCredenciais: (ambiente: AmbienteGdl) => Promise<UserResponse>;

@@ -1,4 +1,5 @@
 import { registrarLaudoBkpHandlers } from './handlers/laudo-bkp.handlers.js';
+import { registrarGoogleDriveHandlers } from './handlers/google-drive.handlers.js';
 import { ipcMain, BrowserWindow, app } from 'electron';
 import { getLogger, type LogModule } from '../utils/logger.js'
 const log = getLogger('ipc');
@@ -15,6 +16,7 @@ import { registerCategoriaHandlers } from './handlers/categoria-placeholder.hand
 import { registerTemplateHandlers } from './handlers/template.handlers.js';
 import { registerImportacaoHandlers } from './handlers/importacao.handlers.js';
 import { authSessaoService } from '../services/auth-sessao.service.js';
+import { googleDriveService } from '../services/google-drive.service.js';
 import { registerLaudoHandlers } from './handlers/laudo.handlers.js';
 import { registerIAHandlers } from './handlers/ia.handlers.js';
 import { registerBackupHandlers } from './handlers/backup.handlers.js';
@@ -87,6 +89,7 @@ export const registerIpcHandlers = (options: {
   registerImportacaoHandlers();
   registerLaudoHandlers();
   registrarLaudoBkpHandlers();
+  registrarGoogleDriveHandlers();
   registerIAHandlers(options);
   registerBackupHandlers();
   registerLogSystemHandlers();
@@ -265,6 +268,7 @@ const registerAuthHandlers = (): void => {
       const user = await userService.authenticate(credenciais.username, credenciais.password)
       if (user) {
         authSessaoService.iniciar(event.sender.id, user.id);
+        void googleDriveService.retomarFila(user.id);
         log.info(`Login bem-sucedido: ${sanitizedUsername}`);
         auditLogin(user.id, true);
         return {

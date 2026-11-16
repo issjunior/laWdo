@@ -7,6 +7,7 @@ import { logDebug, logError } from '../../utils/logger.js';
 import { auditCicloVida, auditDelete } from '../../services/audit-log.service.js';
 import { laudoService } from '../../services/laudo.service.js';
 import { repService } from '../../services/rep.service.js';
+import { googleDriveService } from '../../services/google-drive.service.js';
 import { withTransaction } from '../../database/sqlite.js';
 import { concluirImagensLaudo, prepararConclusaoImagensLaudo, descartarPreparacaoImagens, descartarArquivosConcluidos } from '../../services/imagem-laudo.service.js';
 import {
@@ -291,6 +292,9 @@ export const registerLaudoHandlers = (): void => {
       if (novoStatus === 'Concluído' && statusAnterior !== 'Concluído') {
         try { await descartarArquivosConcluidos(laudoId, caminhosAntigos); }
         catch (error) { logError('Falha ao descartar arquivos após conclusão do laudo', { laudoId, error }); }
+        void googleDriveService.enfileirarConclusao(laudo.perito_id, laudo.id).catch(error => {
+          logError('Falha ao enfileirar backup automático do laudo', { laudoId, error });
+        });
       }
 
       const rep = await repService.findById(laudoAntes.rep_id);

@@ -16,6 +16,7 @@ const LaudosPage = lazy(() => import('@/pages/LaudosPage').then(m => ({ default:
 const ModelosIAPage = lazy(() => import('@/pages/ModelosIAPage').then(m => ({ default: m.ModelosIAPage })));
 const ImagensPage = lazy(() => import('@/pages/ImagensPage').then(m => ({ default: m.ImagensPage })));
 const BackupPage = lazy(() => import('@/pages/BackupPage').then(m => ({ default: m.BackupPage })));
+const GoogleDrivePage = lazy(() => import('@/pages/GoogleDrivePage').then(m => ({ default: m.GoogleDrivePage })));
 const ProjeteisPage = lazy(() => import('@/pages/ProjeteisPage').then(m => ({ default: m.ProjeteisPage })));
 const LogsPage = lazy(() => import('@/pages/LogsPage').then(m => ({ default: m.LogsPage })));
 const GdlConfigPage = lazy(() => import('@/pages/GdlConfigPage').then(m => ({ default: m.GdlConfigPage })));
@@ -125,6 +126,7 @@ const App = () => {
         <Route path="/modelos-ia" element={<ModelosIAPage />} />
         <Route path="/imagens" element={<ImagensPage />} />
         <Route path="/backup" element={<BackupPage currentUser={currentUser} />} />
+        <Route path="/google-drive" element={<GoogleDrivePage />} />
         <Route path="/projeteis" element={<ProjeteisPage />} />
         <Route path="/logs" element={<LogsPage />} />
         <Route path="/gdl-config" element={<GdlConfigPage />} />

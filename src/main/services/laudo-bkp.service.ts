@@ -31,6 +31,15 @@ function referenciasImagens(html: string): Set<string> {
 function validarHtml(html: string): void {
   const documento = parseDocument(html);
   const elementos = DomUtils.findAll(() => true, documento.children);
+  const imagemSvgDePlaceholder = (elemento: (typeof elementos)[number], valor: string): boolean => {
+    if (!/^data:image\/svg\+xml(?:;base64)?,/i.test(valor)) return false;
+    let ancestral = elemento.parent;
+    while (ancestral) {
+      if ('attribs' in ancestral && ancestral.attribs['data-dummy'] === 'true') return true;
+      ancestral = ancestral.parent;
+    }
+    return false;
+  };
   if (elementos.length > 500000) throw new Error('HTML do laudo excede o limite de complexidade.');
   for (const elemento of elementos) {
     if (['script', 'iframe', 'object', 'embed', 'base', 'link', 'meta', 'style', 'form', 'input', 'button'].includes(elemento.name)) throw new Error('O BKP contém conteúdo ativo não permitido.');
@@ -39,7 +48,8 @@ function validarHtml(html: string): void {
         || (chave === 'style' && /url\s*\(|expression\s*\(|@import|behavior\s*:/i.test(valor))
         || (['href', 'src', 'xlink:href'].includes(chave) && /^\s*(javascript|vbscript):/i.test(valor))) throw new Error('Atributo ativo não permitido no BKP.');
       if (chave === 'src' && elemento.name === 'img' && !/^data:image\/(?:jpeg|png|gif|bmp|webp);base64,/i.test(valor)
-        && !(elemento.parent && 'attribs' in elemento.parent && elemento.parent.attribs['data-dummy'] === 'true')) throw new Error('Imagem externa não permitida no BKP.');
+        && !(elemento.parent && 'attribs' in elemento.parent && elemento.parent.attribs['data-dummy'] === 'true')
+        && !imagemSvgDePlaceholder(elemento, valor)) throw new Error('Imagem externa não permitida no BKP.');
     }
   }
 }
@@ -238,12 +248,13 @@ export async function importarBkpLaudo(pacote: PacoteLaudo, diretorio: string, u
       if (conflitos.repId) await executeNonQuery(`UPDATE reps SET ${colunasRep.map(coluna => `${coluna} = ?`).join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [...Object.values(dadosRep), repId]);
       else await executeNonQuery(`INSERT INTO reps (id, ${colunasRep.join(', ')}) VALUES (?, ${colunasRep.map(() => '?').join(', ')})`, [repId, ...Object.values(dadosRep)]);
       const id = laudoIdDestino;
-      const apresentacao = await capturarApresentacaoLaudo(usuarioId);
+      // BKPs antigos não incluem a apresentação; nesses casos preservamos o comportamento local.
+      const apresentacaoJson = pacote.laudo.apresentacao_json ?? JSON.stringify(await capturarApresentacaoLaudo(usuarioId));
       const respostas = Object.fromEntries(Object.entries(pacote.laudo.respostas).filter(([chave]) => !chave.startsWith('_')).map(([chave, valor]) => [idNovo(chave), Array.isArray(valor) ? valor.map(item => ids.get(item) ?? item) : ids.get(valor) ?? valor]));
       const dadosLaudo = { rep_id: repId, perito_id: usuarioId, template_id: null, conteudo: remapear(pacote.laudo.conteudo), status: pacote.laudo.status,
         data_inicio: pacote.laudo.data_inicio, data_conclusao: pacote.laudo.data_conclusao, data_entrega: pacote.laudo.data_entrega,
         versao: pacote.laudo.versao, tipo_criacao: pacote.laudo.tipo_criacao, wizard_id: null, respostas_wizard: JSON.stringify(respostas),
-        apresentacao_json: JSON.stringify(apresentacao), estrutura_incorporada_json: JSON.stringify(estrutura) };
+        apresentacao_json: apresentacaoJson, estrutura_incorporada_json: JSON.stringify(estrutura) };
       const colunasLaudo = Object.keys(dadosLaudo);
       if (conflitos.laudoId) {
         const antigas = await executeQuery<{ caminho_relativo: string }>('SELECT DISTINCT caminho_relativo FROM imagens_laudo WHERE laudo_id = ?', [id]);

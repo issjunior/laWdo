@@ -77,6 +77,10 @@ jobs:
           NOTAS_ATUALIZACAO: ${{ inputs.notas_atualizacao }}
         run: node scripts/release/validar-solicitacao.mjs
 
+      - name: Confirmar branch de release
+        shell: bash
+        run: test "$GITHUB_REF" = 'refs/heads/main'
+
       - name: Calcular próxima versão
         id: planejamento
         env:
@@ -207,6 +211,9 @@ jobs:
     needs: validar
     if: ${{ inputs.incluir_windows }}
     runs-on: windows-latest
+    environment: release
+    permissions:
+      contents: read
     steps:
       - name: Obter código
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6.0.2
@@ -225,8 +232,18 @@ jobs:
       - name: Gerar build
         run: npm run build
 
+      - name: Preparar credencial OAuth do Google Drive
+        env:
+          LAWDO_GOOGLE_CLIENT_SECRET: ${{ secrets.LAWDO_GOOGLE_CLIENT_SECRET }}
+        run: npm run preparar:oauth-google-drive
+
       - name: Gerar instalador
         run: npx electron-builder --win --x64 --publish never
+
+      - name: Limpar credencial OAuth temporária
+        if: ${{ always() }}
+        shell: pwsh
+        run: Remove-Item -LiteralPath build/google-drive-oauth.dat -Force -ErrorAction SilentlyContinue
 
       - name: Confirmar versão do aplicativo empacotado
         shell: pwsh
@@ -303,6 +320,9 @@ jobs:
     needs: validar
     if: ${{ inputs.incluir_linux }}
     runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
     steps:
       - name: Obter código
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6.0.2
@@ -317,6 +337,11 @@ jobs:
 
       - name: Instalar dependências
         run: npm ci --strict-allow-scripts
+
+      - name: Preparar credencial OAuth do Google Drive
+        env:
+          LAWDO_GOOGLE_CLIENT_SECRET: ${{ secrets.LAWDO_GOOGLE_CLIENT_SECRET }}
+        run: npm run preparar:oauth-google-drive
 
       - name: Gerar pacotes
         shell: bash
@@ -334,6 +359,10 @@ jobs:
             sleep $((tentativa * 15))
           done
 
+      - name: Limpar credencial OAuth temporária
+        if: ${{ always() }}
+        run: rm -f build/google-drive-oauth.dat
+
       - name: Enviar artefatos temporários
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -350,6 +379,9 @@ jobs:
     needs: validar
     if: ${{ inputs.incluir_macos }}
     runs-on: macos-latest
+    environment: release
+    permissions:
+      contents: read
     steps:
       - name: Obter código
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6.0.2
@@ -365,8 +397,17 @@ jobs:
       - name: Instalar dependências
         run: npm ci --strict-allow-scripts
 
+      - name: Preparar credencial OAuth do Google Drive
+        env:
+          LAWDO_GOOGLE_CLIENT_SECRET: ${{ secrets.LAWDO_GOOGLE_CLIENT_SECRET }}
+        run: npm run preparar:oauth-google-drive
+
       - name: Gerar pacotes
         run: npm run build && npx electron-builder --mac --x64 --publish never
+
+      - name: Limpar credencial OAuth temporária
+        if: ${{ always() }}
+        run: rm -f build/google-drive-oauth.dat
 
       - name: Enviar artefatos temporários
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -381,6 +422,9 @@ jobs:
     needs: validar
     if: ${{ inputs.incluir_macos }}
     runs-on: macos-latest
+    environment: release
+    permissions:
+      contents: read
     steps:
       - name: Obter código
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6.0.2
@@ -396,8 +440,17 @@ jobs:
       - name: Instalar dependências
         run: npm ci --strict-allow-scripts
 
+      - name: Preparar credencial OAuth do Google Drive
+        env:
+          LAWDO_GOOGLE_CLIENT_SECRET: ${{ secrets.LAWDO_GOOGLE_CLIENT_SECRET }}
+        run: npm run preparar:oauth-google-drive
+
       - name: Gerar pacotes
         run: npm run build && npx electron-builder --mac --arm64 --publish never
+
+      - name: Limpar credencial OAuth temporária
+        if: ${{ always() }}
+        run: rm -f build/google-drive-oauth.dat
 
       - name: Enviar artefatos temporários
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
