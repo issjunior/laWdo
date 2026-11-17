@@ -1,4 +1,4 @@
-import type { AnaliseBkpLaudo, PreviaBkpLaudo } from './laudo-bkp.types.js';
+import type { AnaliseBkpLaudo, PacoteLaudo, PreviaBkpLaudo } from './laudo-bkp.types.js';
 
 export interface RespostaGoogleDrive<T = undefined> {
   success: boolean;
@@ -56,6 +56,20 @@ export interface PreviaRestauracaoGoogleDrive extends AnaliseBkpLaudo {
   revisao: string;
 }
 
+export interface VisualizacaoGoogleDrive {
+  cacheId: string;
+  html: string;
+  titulo: string;
+  contexto: Pick<PacoteLaudo, 'rep' | 'tipoExame' | 'solicitante' | 'placeholders'>;
+  apresentacaoJson?: string;
+}
+
+export interface ProgressoVerificacaoGoogleDrive {
+  operacaoId: string;
+  recebidos: number;
+  total?: number;
+}
+
 export interface ApiGoogleDrive {
   estadoRapido: () => Promise<RespostaGoogleDrive<EstadoGoogleDrive>>;
   estado: () => Promise<RespostaGoogleDrive<EstadoGoogleDrive>>;
@@ -66,8 +80,12 @@ export interface ApiGoogleDrive {
   listarCopias: () => Promise<RespostaGoogleDrive<CopiaGoogleDrive[]>>;
   listarLaudosConcluidos: () => Promise<RespostaGoogleDrive<LaudoElegivelGoogleDrive[]>>;
   enviarLaudo: (laudoId: string, confirmarSubstituicao: boolean) => Promise<RespostaGoogleDrive>;
-  verificar: (copiaId: string) => Promise<RespostaGoogleDrive<{ previa: PreviaBkpLaudo }>>;
+  verificar: (copiaId: string, operacaoId: string) => Promise<RespostaGoogleDrive<{ previa: PreviaBkpLaudo }>>;
+  cancelarVerificacao: (operacaoId: string) => Promise<RespostaGoogleDrive>;
+  onProgressoVerificacao: (callback: (progresso: ProgressoVerificacaoGoogleDrive) => void) => () => void;
+  prepararVisualizacao: (copiaId: string) => Promise<RespostaGoogleDrive<VisualizacaoGoogleDrive>>;
   analisarRestauracao: (copiaId: string) => Promise<RespostaGoogleDrive<PreviaRestauracaoGoogleDrive>>;
   confirmarRestauracao: (operacaoId: string, confirmarSubstituicao: boolean) => Promise<RespostaGoogleDrive<{ laudoId: string }>>;
   cancelarRestauracao: (operacaoId: string) => Promise<RespostaGoogleDrive>;
+  moverParaLixeira: (copiaId: string, revisao: string) => Promise<RespostaGoogleDrive>;
 }

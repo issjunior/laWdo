@@ -4,7 +4,7 @@ import { createServer } from 'node:http';
 import { createReadStream, createWriteStream } from 'node:fs';
 import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
-import { Readable } from 'node:stream';
+import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { configuracaoService } from './configuracao.service.js';
 import { exportarBkpLaudo, lerBkpLaudo } from './laudo-bkp.service.js';
@@ -26,6 +26,8 @@ const DOMINIO_INSTITUCIONAL = '@policiacientifica.pr.gov.br';
 const VERSAO_VALIDACAO_FILA = 2;
 const DURACAO_CACHE_RESUMO_MS = 5 * 60 * 1000;
 const LIMITE_BACKUPS_BYTES = 10 * 1024 ** 3;
+const TEMPO_LIMITE_REQUISICAO_MS = 45_000;
+const TEMPO_LIMITE_INATIVIDADE_DOWNLOAD_MS = 90_000;
 
 interface Tokens { access_token: string; refresh_token?: string; expires_at: number; escopos?: string[] }
 interface ArquivoDrive { id: string; name: string; mimeType?: string; modifiedTime?: string; size?: string; version?: string; appProperties?: Record<string, string>; parents?: string[] }
@@ -272,6 +274,11 @@ class GoogleDriveService {
     await configuracaoService.salvar(chave('verificacoes', usuarioId), JSON.stringify(verificacoes), 'json', 'Verificações dos backups Google Drive');
   }
 
+  async registrarVerificacaoConcluida(usuarioId: string, revisao: string): Promise<void> {
+    await this.registrarVerificacao(usuarioId, revisao);
+    await this.invalidarCacheResumo(usuarioId);
+  }
+
   private agendarProcessamentoFila(usuarioId: string): void {
     if (this.temporizadoresFila.has(usuarioId)) return;
     const temporizador = setTimeout(() => {
@@ -289,7 +296,7 @@ class GoogleDriveService {
     if (!tokens.refresh_token) throw new ErroGoogleDrive('renovar_token', 'A autorização do Google Drive expirou. Conecte a conta novamente.', 'refresh_token_ausente');
     let resposta: Response;
     const clientSecret = await this.segredoClienteObrigatorio('renovar_token');
-    try { resposta = await fetch('https://oauth2.googleapis.com/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ client_id: CLIENT_ID, client_secret: clientSecret, grant_type: 'refresh_token', refresh_token: tokens.refresh_token }) }); }
+    try { resposta = await fetch('https://oauth2.googleapis.com/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ client_id: CLIENT_ID, client_secret: clientSecret, grant_type: 'refresh_token', refresh_token: tokens.refresh_token }), signal: AbortSignal.timeout(TEMPO_LIMITE_REQUISICAO_MS) }); }
     catch { throw new ErroGoogleDrive('renovar_token', 'Não foi possível renovar a autorização do Google Drive.', 'rede_indisponivel'); }
     const dados: unknown = await resposta.json().catch(() => null);
     if (!resposta.ok || !dados || typeof dados !== 'object' || typeof (dados as Record<string, unknown>).access_token !== 'string') throw new ErroGoogleDrive('renovar_token', 'O Google recusou a renovação da autorização. Conecte a conta novamente.', codigoErroOAuth(dados, resposta.status));
@@ -301,12 +308,23 @@ class GoogleDriveService {
 
   private async requisitar(usuarioId: string, url: string, init: RequestInit = {}): Promise<Response> {
     const token = await this.tokenValido(usuarioId);
-    const resposta = await fetch(url, { ...init, headers: { ...init.headers, Authorization: `Bearer ${token}` } });
+    const enviar = async (tokenAtual: string): Promise<Response> => {
+      const prazo = new AbortController();
+      const temporizador = setTimeout(() => prazo.abort(), TEMPO_LIMITE_REQUISICAO_MS);
+      const sinal = init.signal ? AbortSignal.any([init.signal, prazo.signal]) : prazo.signal;
+      try { return await fetch(url, { ...init, signal: sinal, headers: { ...init.headers, Authorization: `Bearer ${tokenAtual}` } }); }
+      catch (erro) {
+        if (init.signal?.aborted) throw new ErroGoogleDrive('verificar_pacote', 'A conferência de integridade foi cancelada.', 'verificacao_cancelada');
+        if (prazo.signal.aborted) throw new ErroGoogleDrive('verificar_pacote', 'O Google Drive demorou demais para iniciar a resposta. Tente novamente.', 'tempo_limite_drive');
+        throw erro;
+      } finally { clearTimeout(temporizador); }
+    };
+    const resposta = await enviar(token);
     if (resposta.status !== 401) return resposta;
     const tokens = await this.obterTokens(usuarioId);
     if (tokens) { tokens.expires_at = 0; await this.salvarTokens(usuarioId, tokens); }
     const renovado = await this.tokenValido(usuarioId);
-    return fetch(url, { ...init, headers: { ...init.headers, Authorization: `Bearer ${renovado}` } });
+    return enviar(renovado);
   }
 
   async conectar(usuarioId: string): Promise<EstadoGoogleDrive> {
@@ -376,13 +394,13 @@ class GoogleDriveService {
     await this.invalidarCacheResumo(usuarioId);
   }
 
-  private async listar(usuarioId: string, consulta: string, campos: string): Promise<ArquivoDrive[]> {
+  private async listar(usuarioId: string, consulta: string, campos: string, sinal?: AbortSignal): Promise<ArquivoDrive[]> {
     const arquivos: ArquivoDrive[] = [];
     let pagina: string | undefined;
     do {
       const parametros = new URLSearchParams({ q: consulta, fields: `nextPageToken,files(${campos})`, pageSize: '1000', spaces: 'drive' });
       if (pagina) parametros.set('pageToken', pagina);
-      const resposta = await this.requisitar(usuarioId, `https://www.googleapis.com/drive/v3/files?${parametros}`);
+      const resposta = await this.requisitar(usuarioId, `https://www.googleapis.com/drive/v3/files?${parametros}`, { signal: sinal });
       const json: unknown = await resposta.json();
       if (!resposta.ok) throw new ErroGoogleDrive('localizar_raiz_drive', 'Não foi possível consultar a pasta do laWdo no Google Drive.', `http_${resposta.status}`);
       if (!json || typeof json !== 'object' || !('files' in json) || !Array.isArray(json.files)) throw new ErroGoogleDrive('localizar_raiz_drive', 'O Google Drive retornou uma resposta inválida.', 'resposta_invalida');
@@ -447,7 +465,7 @@ class GoogleDriveService {
     return String((criada as Record<string, unknown>).id);
   }
 
-  private async listarDescendentes(usuarioId: string, raizId: string): Promise<ArquivoDrive[]> {
+  private async listarDescendentes(usuarioId: string, raizId: string, sinal?: AbortSignal): Promise<ArquivoDrive[]> {
     const encontrados: ArquivoDrive[] = [];
     const pendentes = [raizId];
     const visitados = new Set<string>();
@@ -455,11 +473,35 @@ class GoogleDriveService {
       const pai = pendentes.pop()!;
       if (visitados.has(pai)) continue;
       visitados.add(pai);
-      const filhos = await this.listar(usuarioId, `'${escaparConsultaDrive(pai)}' in parents and trashed = false`, 'id,name,mimeType,size,modifiedTime,version,appProperties,parents');
+      const filhos = await this.listar(usuarioId, `'${escaparConsultaDrive(pai)}' in parents and trashed = false`, 'id,name,mimeType,size,modifiedTime,version,appProperties,parents', sinal);
       encontrados.push(...filhos);
       for (const filho of filhos) if (filho.mimeType === MIME_PASTA) pendentes.push(filho.id);
     }
     return encontrados;
+  }
+
+  private async obterPastaExclusivaDaCopia(usuarioId: string, copiaId: string): Promise<ArquivoDrive> {
+    const raizId = await this.obterRaiz(usuarioId);
+    const descendentes = await this.listarDescendentes(usuarioId, raizId);
+    const porId = new Map(descendentes.map(item => [item.id, item]));
+    const copia = porId.get(copiaId);
+    const obterPaiUnico = (item: ArquivoDrive | undefined): ArquivoDrive | undefined => {
+      if (!item || item.parents?.length !== 1) return undefined;
+      return porId.get(item.parents[0]);
+    };
+    const pastaRep = obterPaiUnico(copia);
+    const pastaMes = obterPaiUnico(pastaRep);
+    const pastaAno = obterPaiUnico(pastaMes);
+    const raiz = pastaAno?.parents?.length === 1 && pastaAno.parents[0] === raizId;
+    const pastaLaWdo = (pasta: ArquivoDrive | undefined) => pasta?.mimeType === MIME_PASTA
+      && pasta.appProperties?.lawdoPasta === '1' && pasta.appProperties.lawdoRaizId === raizId;
+
+    if (!copia || !pastaRep || !pastaMes || !pastaAno || copia.appProperties?.lawdoBackup !== '1'
+      || copia.appProperties.lawdoRaizId !== raizId || !pastaLaWdo(pastaRep)
+      || !pastaLaWdo(pastaMes) || !pastaLaWdo(pastaAno) || !raiz) {
+      throw new ErroGoogleDrive('verificar_pacote', 'A pasta exclusiva desta cópia não pôde ser confirmada. Nenhum arquivo foi enviado para a Lixeira.', 'pasta_copia_invalida');
+    }
+    return pastaRep;
   }
 
   private async conferirCotaAntesDoEnvio(usuarioId: string, raizId: string, tamanhoNovoBackup: number): Promise<void> {
@@ -481,11 +523,36 @@ class GoogleDriveService {
     if (limiteConta !== undefined && usoConta + tamanhoNovoBackup > limiteConta) throw new ErroGoogleDrive('verificar_cota', 'Não há espaço suficiente na conta Google para enviar esta cópia.', 'cota_conta_excedida');
   }
 
-  private async baixarArquivo(usuarioId: string, arquivoId: string, destino: string): Promise<void> {
-    const resposta = await this.requisitar(usuarioId, `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(arquivoId)}?alt=media`);
-    if (!resposta.ok || !resposta.body) throw new ErroGoogleDrive('verificar_pacote', 'Não foi possível baixar a cópia do Google Drive.', `http_${resposta.status}`);
-    const fluxo = Readable.fromWeb(resposta.body as import('node:stream/web').ReadableStream);
-    await pipeline(fluxo, createWriteStream(destino, { flags: 'wx' }));
+  private async baixarArquivo(usuarioId: string, arquivoId: string, destino: string, sinal?: AbortSignal, aoProgresso?: (recebidos: number, total?: number) => void): Promise<void> {
+    const inatividade = new AbortController();
+    let temporizadorInatividade: NodeJS.Timeout | undefined;
+    const reiniciarInatividade = () => {
+      if (temporizadorInatividade) clearTimeout(temporizadorInatividade);
+      temporizadorInatividade = setTimeout(() => inatividade.abort(), TEMPO_LIMITE_INATIVIDADE_DOWNLOAD_MS);
+    };
+    const sinalDownload = sinal ? AbortSignal.any([sinal, inatividade.signal]) : inatividade.signal;
+    try {
+      const resposta = await this.requisitar(usuarioId, `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(arquivoId)}?alt=media`, { signal: sinalDownload });
+      if (!resposta.ok || !resposta.body) throw new ErroGoogleDrive('verificar_pacote', 'Não foi possível baixar a cópia do Google Drive.', `http_${resposta.status}`);
+      const tamanhoCabecalho = Number(resposta.headers.get('content-length'));
+      const total = Number.isFinite(tamanhoCabecalho) && tamanhoCabecalho > 0 ? tamanhoCabecalho : undefined;
+      let recebidos = 0;
+      reiniciarInatividade();
+      const fluxo = Readable.fromWeb(resposta.body as import('node:stream/web').ReadableStream);
+      const medidor = new Transform({
+        transform(parte: Buffer, _codificacao, concluir) {
+          recebidos += parte.length;
+          reiniciarInatividade();
+          aoProgresso?.(recebidos, total);
+          concluir(null, parte);
+        },
+      });
+      await pipeline(fluxo, medidor, createWriteStream(destino, { flags: 'wx' }), { signal: sinalDownload });
+    } catch (erro) {
+      if (sinal?.aborted) throw new ErroGoogleDrive('verificar_pacote', 'A conferência de integridade foi cancelada.', 'verificacao_cancelada');
+      if (inatividade.signal.aborted) throw new ErroGoogleDrive('verificar_pacote', 'O download ficou sem receber dados por muito tempo. Tente novamente.', 'download_inativo');
+      throw erro;
+    } finally { if (temporizadorInatividade) clearTimeout(temporizadorInatividade); }
   }
 
   private async enviarArquivo(usuarioId: string, caminho: string, metadados: Record<string, unknown>): Promise<ArquivoDrive> {
@@ -599,19 +666,19 @@ class GoogleDriveService {
     return chave;
   }
 
-  async obterRaiz(usuarioId: string): Promise<string> {
+  async obterRaiz(usuarioId: string, sinal?: AbortSignal): Promise<string> {
     const filtro = "trashed = false and mimeType = 'application/vnd.google-apps.folder' and appProperties has { key='lawdoRaiz' and value='1' }";
-    const encontrados = await this.listar(usuarioId, filtro, 'id,name,parents,appProperties');
+    const encontrados = await this.listar(usuarioId, filtro, 'id,name,parents,appProperties', sinal);
     if (encontrados.length > 1) throw new ErroGoogleDrive('localizar_raiz_drive', 'Foram encontradas raízes laWdo duplicadas. A integração foi pausada para proteção dos backups.', 'raizes_duplicadas');
     if (encontrados.length === 1) {
       const raiz = encontrados[0];
-      const naRaiz = await this.listar(usuarioId, `'root' in parents and ${filtro}`, 'id,name');
+      const naRaiz = await this.listar(usuarioId, `'root' in parents and ${filtro}`, 'id,name', sinal);
       if (raiz.name !== 'laWdo' || !naRaiz.some(item => item.id === raiz.id)) throw new ErroGoogleDrive('localizar_raiz_drive', 'A pasta laWdo foi movida ou alterada. Restaure-a para Meu Drive antes de continuar.', 'raiz_movida');
       return raiz.id;
     }
-    const homonimas = await this.listar(usuarioId, `'root' in parents and trashed = false and mimeType = '${MIME_PASTA}' and name = 'laWdo'`, 'id,name,appProperties');
+    const homonimas = await this.listar(usuarioId, `'root' in parents and trashed = false and mimeType = '${MIME_PASTA}' and name = 'laWdo'`, 'id,name,appProperties', sinal);
     if (homonimas.length) throw new ErroGoogleDrive('localizar_raiz_drive', 'Já existe uma pasta laWdo em Meu Drive que não pertence a esta integração. Ela foi preservada; renomeie-a ou solicite suporte antes de conectar.', 'conflito_raiz_homonima');
-    const resposta = await this.requisitar(usuarioId, 'https://www.googleapis.com/drive/v3/files', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'laWdo', mimeType: MIME_PASTA, parents: ['root'], appProperties: { lawdoRaiz: '1' } }) });
+    const resposta = await this.requisitar(usuarioId, 'https://www.googleapis.com/drive/v3/files', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'laWdo', mimeType: MIME_PASTA, parents: ['root'], appProperties: { lawdoRaiz: '1' } }), signal: sinal });
     const criada: unknown = await resposta.json();
     if (!resposta.ok || !criada || typeof criada !== 'object' || typeof (criada as Record<string, unknown>).id !== 'string') throw new ErroGoogleDrive('criar_raiz_drive', 'Não foi possível criar a pasta laWdo no Meu Drive.', `http_${resposta.status}`);
     return String((criada as Record<string, unknown>).id);
@@ -805,9 +872,9 @@ class GoogleDriveService {
     ).then(laudos => laudos.map(laudo => ({ id: laudo.id, numeroRep: laudo.numero, concluidoEm: laudo.data_conclusao })));
   }
 
-  async listarCopias(usuarioId: string): Promise<CopiaGoogleDrive[]> {
-    const raiz = await this.obterRaiz(usuarioId);
-    const arquivos = await this.listarDescendentes(usuarioId, raiz);
+  async listarCopias(usuarioId: string, sinal?: AbortSignal): Promise<CopiaGoogleDrive[]> {
+    const raiz = await this.obterRaiz(usuarioId, sinal);
+    const arquivos = await this.listarDescendentes(usuarioId, raiz, sinal);
     const verificacoes = await this.obterVerificacoes(usuarioId);
     return arquivos.filter(item => item.appProperties?.lawdoBackup === '1' && item.appProperties?.lawdoRaizId === raiz).map(item => {
       const revisao = item.appProperties?.lawdoHash ?? item.version ?? '';
@@ -837,7 +904,7 @@ class GoogleDriveService {
     try {
       const pacote = path.join(temporario, 'backup.bkp');
       const cifrado = path.join(temporario, 'backup.lawdo');
-      await exportarBkpLaudo(laudo.id, pacote);
+      await exportarBkpLaudo(laudo.id, pacote, { incluirApresentacao: true });
       const hash = await hashArquivo(pacote);
       const existenteIgual = copiasAtuais.find(copia => copia.revisao === hash);
       if (existenteIgual) {
@@ -852,11 +919,12 @@ class GoogleDriveService {
       const ano = String(conclusao.getUTCFullYear());
       const mes = String(conclusao.getUTCMonth() + 1).padStart(2, '0');
       const { numeroFormatado } = obterIdentificacaoBkpLaudo(laudo.numero);
+      const nomeArquivoDrive = `${numeroFormatado}.laWdo`;
       const pastaAno = await this.criarPasta(usuarioId, ano, raizId, raizId);
       const pastaMes = await this.criarPasta(usuarioId, mes, pastaAno, raizId);
       const pastaLaudo = await this.criarPasta(usuarioId, nomePastaLaudo(numeroFormatado), pastaMes, raizId);
       const enviada = await this.enviarArquivo(usuarioId, cifrado, {
-        name: 'backup.lawdo', parents: [pastaLaudo], mimeType: 'application/octet-stream',
+        name: nomeArquivoDrive, parents: [pastaLaudo], mimeType: 'application/octet-stream',
         appProperties: { lawdoBackup: '1', lawdoRaizId: raizId, lawdoLaudoId: laudo.id, lawdoNumeroRep: laudo.numero, lawdoHash: hash, lawdoVersao: String(laudo.versao) },
       });
       const validacao = path.join(temporario, 'validacao.lawdo');
@@ -868,7 +936,7 @@ class GoogleDriveService {
         const resposta = await this.requisitar(usuarioId, `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(copia.id)}`, { method: 'DELETE' });
         if (!resposta.ok && resposta.status !== 404) throw new ErroGoogleDrive('enviar_pacote', 'A nova cópia foi validada, mas não foi possível remover a cópia anterior.', `http_${resposta.status}`);
       }
-      const copia = { id: enviada.id, laudoId: laudo.id, numeroRep: laudo.numero, nome: 'backup.lawdo', tamanho: Number(enviada.size ?? 0), modificadaEm: enviada.modifiedTime ?? new Date().toISOString(), revisao: hash };
+      const copia = { id: enviada.id, laudoId: laudo.id, numeroRep: laudo.numero, nome: nomeArquivoDrive, tamanho: Number(enviada.size ?? 0), modificadaEm: enviada.modifiedTime ?? new Date().toISOString(), revisao: hash };
       await this.registrarRevisao(usuarioId, laudo.id, hash);
       await configuracaoService.salvar(chave('ultimo_envio', usuarioId), new Date().toISOString(), 'texto', 'Último envio ao Google Drive');
       await this.invalidarCacheResumo(usuarioId);
@@ -892,25 +960,41 @@ class GoogleDriveService {
     } finally { await rm(temporario, { recursive: true, force: true }).catch(() => undefined); }
   }
 
-  async verificar(usuarioId: string, copiaId: string): Promise<{ previa: import('../../shared/types/laudo-bkp.types.js').PreviaBkpLaudo }> {
+  async verificar(usuarioId: string, copiaId: string, sinal?: AbortSignal, aoProgresso?: (recebidos: number, total?: number) => void): Promise<{ previa: import('../../shared/types/laudo-bkp.types.js').PreviaBkpLaudo }> {
     const temporario = await mkdtemp(path.join(app.getPath('userData'), 'google-drive-verificacao-'));
     try {
-      const { pacote, revisao } = await this.lerPacoteCopia(usuarioId, copiaId, temporario);
-      await this.registrarVerificacao(usuarioId, revisao);
-      await this.invalidarCacheResumo(usuarioId);
+      const { pacote, revisao } = await this.lerPacoteCopia(usuarioId, copiaId, temporario, sinal, aoProgresso);
+      await this.registrarVerificacaoConcluida(usuarioId, revisao);
       return { previa: { numeroRep: pacote.rep.numero, tipoExame: `${pacote.tipoExame.codigo} — ${pacote.tipoExame.nome}`, status: pacote.laudo.status, figuras: pacote.imagens.length, substituiRep: false, substituiLaudo: false } };
     } finally { await rm(temporario, { recursive: true, force: true }).catch(() => undefined); }
   }
 
-  async lerPacoteCopia(usuarioId: string, copiaId: string, diretorio: string): Promise<{ pacote: PacoteLaudo; hashCifrado: string; revisao: string }> {
-    if (!/^[\w-]+$/.test(copiaId)) throw new ErroGoogleDrive('verificar_pacote', 'Cópia inválida.', 'copia_invalida');
+  async conferirCopiaAtual(usuarioId: string, copiaId: string, revisaoEsperada: string): Promise<CopiaGoogleDrive> {
     const copia = (await this.listarCopias(usuarioId)).find(item => item.id === copiaId);
+    if (!copia) throw new ErroGoogleDrive('verificar_pacote', 'A cópia não pertence mais à pasta do laWdo.', 'copia_fora_da_raiz');
+    if (copia.revisao !== revisaoEsperada) throw new ErroGoogleDrive('verificar_pacote', 'A cópia foi alterada desde a última consulta. Atualize a lista antes de continuar.', 'revisao_alterada');
+    return copia;
+  }
+
+  async moverParaLixeira(usuarioId: string, copiaId: string, revisaoEsperada: string): Promise<void> {
+    await this.conferirCopiaAtual(usuarioId, copiaId, revisaoEsperada);
+    const pastaRep = await this.obterPastaExclusivaDaCopia(usuarioId, copiaId);
+    const resposta = await this.requisitar(usuarioId, `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(pastaRep.id)}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trashed: true }),
+    });
+    if (!resposta.ok) throw new ErroGoogleDrive('enviar_pacote', 'Não foi possível enviar a pasta da cópia para a Lixeira do Google Drive.', `http_${resposta.status}`);
+    await this.invalidarCacheResumo(usuarioId);
+  }
+
+  async lerPacoteCopia(usuarioId: string, copiaId: string, diretorio: string, sinal?: AbortSignal, aoProgresso?: (recebidos: number, total?: number) => void): Promise<{ pacote: PacoteLaudo; hashCifrado: string; revisao: string }> {
+    if (!/^[\w-]+$/.test(copiaId)) throw new ErroGoogleDrive('verificar_pacote', 'Cópia inválida.', 'copia_invalida');
+    const copia = (await this.listarCopias(usuarioId, sinal)).find(item => item.id === copiaId);
     if (!copia) throw new ErroGoogleDrive('verificar_pacote', 'A cópia não pertence à pasta do laWdo.', 'copia_fora_da_raiz');
-    const raizId = await this.obterRaiz(usuarioId);
+    const raizId = await this.obterRaiz(usuarioId, sinal);
     const chave = await this.obterChavePacote(usuarioId, raizId);
     const cifrado = path.join(diretorio, 'backup.lawdo');
     const arquivo = path.join(diretorio, 'backup.bkp');
-    await this.baixarArquivo(usuarioId, copia.id, cifrado);
+    await this.baixarArquivo(usuarioId, copia.id, cifrado, sinal, aoProgresso);
     const hashCifrado = await hashArquivo(cifrado);
     await decifrarPacoteGoogleDrive(cifrado, arquivo, chave);
     const pacote = await lerBkpLaudo(arquivo, path.join(diretorio, 'conteudo'));

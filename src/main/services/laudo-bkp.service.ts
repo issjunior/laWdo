@@ -54,7 +54,7 @@ function validarHtml(html: string): void {
   }
 }
 
-export async function exportarBkpLaudo(laudoId: string, destino: string): Promise<void> {
+export async function exportarBkpLaudo(laudoId: string, destino: string, opcoes: { incluirApresentacao?: boolean } = {}): Promise<void> {
   const entradas: EntradaArquivoLaudo[] = [];
   const pacote = await withTransaction(async () => {
     const laudo = await laudoService.findById(laudoId);
@@ -109,8 +109,9 @@ export async function exportarBkpLaudo(laudoId: string, destino: string): Promis
       }
     }
     const placeholders = cadastrados.filter(item => referencias.has(item.chave));
+    const { apresentacao_json, ...laudoSemApresentacao } = laudo;
     return esquemaPacoteLaudo.parse({ formato: 1, rep, tipoExame, solicitante: solicitante ?? null,
-      laudo: { ...laudo, respostas }, estrutura, placeholders, imagens: selecionadas.map(item => item.imagem) });
+      laudo: { ...laudoSemApresentacao, ...(opcoes.incluirApresentacao ? { apresentacao_json } : {}), respostas }, estrutura, placeholders, imagens: selecionadas.map(item => item.imagem) });
   });
   validarPacoteConteudo(pacote);
   entradas.unshift({ nome: 'laudo.json', conteudo: Buffer.from(JSON.stringify(pacote), 'utf8') });

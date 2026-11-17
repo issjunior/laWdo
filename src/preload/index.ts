@@ -361,7 +361,7 @@ export interface IpcAPI {
     sincronizarSecoes: (laudoId: string) => Promise<UserResponse>;
   };
 
-  googleDrive: Pick<ApiGoogleDrive, 'estadoRapido' | 'estado' | 'resumo' | 'conectar' | 'desconectar' | 'definirEnvioAutomatico' | 'listarCopias' | 'listarLaudosConcluidos' | 'enviarLaudo' | 'verificar' | 'analisarRestauracao' | 'confirmarRestauracao' | 'cancelarRestauracao'>;
+  googleDrive: Pick<ApiGoogleDrive, 'estadoRapido' | 'estado' | 'resumo' | 'conectar' | 'desconectar' | 'definirEnvioAutomatico' | 'listarCopias' | 'listarLaudosConcluidos' | 'enviarLaudo' | 'verificar' | 'cancelarVerificacao' | 'onProgressoVerificacao' | 'prepararVisualizacao' | 'analisarRestauracao' | 'confirmarRestauracao' | 'cancelarRestauracao' | 'moverParaLixeira'>;
 
   // Wizard
   wizard: {
@@ -715,9 +715,12 @@ const ALLOWED_CHANNELS = new Set([
     'google-drive:listar-laudos-concluidos',
     'google-drive:enviar-laudo',
     'google-drive:verificar',
+    'google-drive:cancelar-verificacao',
+    'google-drive:preparar-visualizacao',
     'google-drive:analisar-restauracao',
     'google-drive:confirmar-restauracao',
     'google-drive:cancelar-restauracao',
+    'google-drive:mover-para-lixeira',
   'laudo:contextoWizard',
   'laudo:calcularPecasWizard',
   'laudo:updateConteudo',
@@ -1812,10 +1815,23 @@ contextBridge.exposeInMainWorld('ipcAPI', {
     listarCopias: () => invocarComDiagnostico('google-drive:listar-copias'),
       listarLaudosConcluidos: () => invocarComDiagnostico('google-drive:listar-laudos-concluidos'),
       enviarLaudo: (laudoId: string, confirmarSubstituicao: boolean) => invocarComDiagnostico('google-drive:enviar-laudo', laudoId, confirmarSubstituicao),
-      verificar: (copiaId: string) => invocarComDiagnostico('google-drive:verificar', copiaId),
+      verificar: (copiaId: string, operacaoId: string) => invocarComDiagnostico('google-drive:verificar', copiaId, operacaoId),
+      cancelarVerificacao: (operacaoId: string) => invocarComDiagnostico('google-drive:cancelar-verificacao', operacaoId),
+      onProgressoVerificacao: (callback) => {
+        const ouvinte = (_evento: Electron.IpcRendererEvent, progresso: unknown) => {
+          if (!progresso || typeof progresso !== 'object') return;
+          const dados = progresso as Record<string, unknown>;
+          if (typeof dados.operacaoId !== 'string' || typeof dados.recebidos !== 'number' || !Number.isFinite(dados.recebidos)) return;
+          callback({ operacaoId: dados.operacaoId, recebidos: dados.recebidos, total: typeof dados.total === 'number' && Number.isFinite(dados.total) ? dados.total : undefined });
+        };
+        ipcRenderer.on('google-drive:progresso-verificacao', ouvinte);
+        return () => ipcRenderer.removeListener('google-drive:progresso-verificacao', ouvinte);
+      },
+      prepararVisualizacao: (copiaId: string) => invocarComDiagnostico('google-drive:preparar-visualizacao', copiaId),
       analisarRestauracao: (copiaId: string) => invocarComDiagnostico('google-drive:analisar-restauracao', copiaId),
       confirmarRestauracao: (operacaoId: string, confirmarSubstituicao: boolean) => invocarComDiagnostico('google-drive:confirmar-restauracao', operacaoId, confirmarSubstituicao),
       cancelarRestauracao: (operacaoId: string) => invocarComDiagnostico('google-drive:cancelar-restauracao', operacaoId),
+      moverParaLixeira: (copiaId: string, revisao: string) => invocarComDiagnostico('google-drive:mover-para-lixeira', copiaId, revisao),
   },
 
   wizard: {
