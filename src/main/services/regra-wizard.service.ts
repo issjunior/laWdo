@@ -1,7 +1,7 @@
 import { BaseService } from './base.service.js';
 import { RegraWizardRow, PecaRow } from '../types/database.js';
 import { getLogger } from '../utils/logger.js';
-import { executeQuery, executeNonQuery } from '../database/sqlite.js';
+import { executeQuery, executeNonQuery, withTransaction } from '../database/sqlite.js';
 import { randomUUID } from 'crypto';
 
 const log = getLogger('regra-wizard');
@@ -114,21 +114,18 @@ class RegraWizardService extends BaseService<RegraWizardRow> {
 
   async saveBatch(regras: Omit<RegraWizardRow, 'created_at'>[]): Promise<void> {
     const wizardId = regras[0]?.wizard_id;
-    if (wizardId) {
-      // Delete existing rules for this wizard and re-insert
-      await executeNonQuery('DELETE FROM regras_wizard WHERE wizard_id = ?', [wizardId]);
-    }
-
-    for (const regra of regras) {
-      const id = regra.id || randomUUID();
-      const now = new Date().toISOString();
-
-      await executeNonQuery(
-        `INSERT INTO regras_wizard (id, wizard_id, peca_id, secao_template_id, condicoes, ordem, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [id, regra.wizard_id, regra.peca_id, regra.secao_template_id || null, regra.condicoes, regra.ordem, now]
-      );
-    }
+    await withTransaction(async () => {
+      if (wizardId) await executeNonQuery('DELETE FROM regras_wizard WHERE wizard_id = ?', [wizardId]);
+      for (const regra of regras) {
+        const id = regra.id || randomUUID();
+        const now = new Date().toISOString();
+        await executeNonQuery(
+          `INSERT INTO regras_wizard (id, wizard_id, peca_id, secao_template_id, condicoes, ordem, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [id, regra.wizard_id, regra.peca_id, regra.secao_template_id || null, regra.condicoes, regra.ordem, now]
+        );
+      }
+    });
 
     log.info('Regras salvas em lote', { wizardId, count: regras.length });
   }

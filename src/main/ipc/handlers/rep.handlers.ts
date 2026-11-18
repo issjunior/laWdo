@@ -8,6 +8,8 @@ import { laudoService } from '../../services/laudo.service.js';
 import type { REPRow } from '../../types/database.js';
 import { ehRegistroB601, lerDadosB601 } from '../../../shared/types/b601.types.js';
 import { obterPendenciaPecaB601 } from '../../../shared/catalogos/b601.catalogo.js';
+import { normalizarDatasCivisRep, STATUS_REP } from '../../utils/data-civil.js';
+import { withTransaction } from '../../database/sqlite.js';
 
 type RepCreatePayload = Omit<REPRow, 'id' | 'created_at' | 'updated_at'> & { template_id?: string; perito_id?: string };
 type RepUpdatePayload = Partial<REPRow> & { template_id?: string; perito_id?: string };
@@ -70,32 +72,27 @@ export const registerRepHandlers = (): void => {
       if (data.observacoes) sanitizedData.observacoes = sanitizeInput(data.observacoes);
       if (data.prazo) sanitizedData.prazo = data.prazo;
       if (data.campos_especificos) sanitizedData.campos_especificos = data.campos_especificos;
+      Object.assign(sanitizedData, normalizarDatasCivisRep(sanitizedData as Record<string, unknown>));
 
-      const rep = await repService.create(sanitizedData as Omit<REPRow, 'id' | 'created_at' | 'updated_at'>);
-      logInfo('REP criada', { numero: data.numero, id: rep.id });
-
-      auditCicloVida('', 'rep', rep.id, 'criacao',         `Requisição ${data.numero} registrada`, null, {
-        numero: data.numero, status: 'Pendente',
-        solicitante_id: data.solicitante_id, tipo_exame_id: data.tipo_exame_id,
-      });
-
-      // Criar laudo automaticamente (exceto para template sistema "Não definido")
-      if (data.template_id && data.perito_id && data.template_id !== 'tpl-nao-definido') {
-        try {
+      let rep: REPRow | undefined;
+      await withTransaction(async () => {
+        rep = await repService.create(sanitizedData as Omit<REPRow, 'id' | 'created_at' | 'updated_at'>);
+        if (data.template_id && data.perito_id && data.template_id !== 'tpl-nao-definido') {
           await laudoService.criarLaudoInicial({
             rep_id: rep.id,
             perito_id: data.perito_id,
             template_id: data.template_id,
           });
-          logInfo('Laudo criado automaticamente para REP', { repId: rep.id });
-          auditCicloVida('', 'laudo', rep.id, 'criacao',
-            `Laudo da Requisição ${data.numero} iniciado automaticamente`,
-            null,
-            { rep_id: rep.id, perito_id: data.perito_id, template_id: data.template_id },
-          );
-        } catch (laudoError) {
-          logError('Erro ao criar laudo automático — REP criada sem laudo', laudoError);
         }
+      });
+      if (!rep) throw new Error('Não foi possível criar a REP.');
+      logInfo('REP criada', { numero: data.numero, id: rep.id });
+      auditCicloVida('', 'rep', rep.id, 'criacao', `Requisição ${data.numero} registrada`, null, {
+        numero: data.numero, status: 'Pendente', solicitante_id: data.solicitante_id, tipo_exame_id: data.tipo_exame_id,
+      });
+      if (data.template_id && data.perito_id && data.template_id !== 'tpl-nao-definido') {
+        auditCicloVida('', 'laudo', rep.id, 'criacao', `Laudo da Requisição ${data.numero} iniciado automaticamente`, null,
+          { rep_id: rep.id, perito_id: data.perito_id, template_id: data.template_id });
       }
 
       return { success: true, data: rep };
@@ -171,7 +168,10 @@ export const registerRepHandlers = (): void => {
       if (data.solicitante_id !== undefined) sanitizedData.solicitante_id = data.solicitante_id;
       if (data.tipo_exame_id !== undefined) sanitizedData.tipo_exame_id = data.tipo_exame_id;
       if (data.data_requisicao) sanitizedData.data_requisicao = data.data_requisicao;
-      if (data.status) sanitizedData.status = data.status;
+      if (data.status) {
+        if (!STATUS_REP.includes(data.status as typeof STATUS_REP[number])) throw new Error('Status inválido.');
+        sanitizedData.status = data.status;
+      }
       if (data.tipo_solicitacao !== undefined) sanitizedData.tipo_solicitacao = sanitizeInput(data.tipo_solicitacao);
       if (data.numero_documento !== undefined) sanitizedData.numero_documento = sanitizeInput(data.numero_documento);
       if (data.data_documento !== undefined) sanitizedData.data_documento = data.data_documento;
@@ -185,10 +185,29 @@ export const registerRepHandlers = (): void => {
       if (data.observacoes !== undefined) sanitizedData.observacoes = sanitizeInput(data.observacoes);
       if (data.prazo !== undefined) sanitizedData.prazo = data.prazo;
       if (data.campos_especificos !== undefined) sanitizedData.campos_especificos = data.campos_especificos;
+      Object.assign(sanitizedData, normalizarDatasCivisRep(sanitizedData as Record<string, unknown>));
 
       repAntes = await repService.findById(id);
       const statusAnterior = repAntes?.status;
-      const updated = await repService.update(id, sanitizedData);
+      const updated = await withTransaction(async () => {
+        const repAtualizada = await repService.update(id, sanitizedData);
+        if (data.template_id && data.template_id !== 'tpl-nao-definido') {
+          const laudoExistente = await laudoService.findByRepId(id);
+          if (!laudoExistente) {
+            if (!data.perito_id) throw new Error('Perito é obrigatório para criar o laudo da REP.');
+            await laudoService.criarLaudoInicial({
+              rep_id: id,
+              perito_id: data.perito_id,
+              template_id: data.template_id,
+            });
+          } else if (laudoExistente.template_id !== data.template_id) {
+            await laudoService.update(laudoExistente.id, { template_id: data.template_id });
+          } else {
+            await laudoService.sincronizarSecoesCondicionais(laudoExistente.id);
+          }
+        }
+        return repAtualizada;
+      });
 
       if (sanitizedData.status && sanitizedData.status !== statusAnterior) {
         auditCicloVida('', 'rep', id, 'transicao_status',
@@ -196,42 +215,6 @@ export const registerRepHandlers = (): void => {
           { status: statusAnterior },
           { status: sanitizedData.status },
         );
-      }
-
-      if (data.template_id && data.template_id !== 'tpl-nao-definido') {
-        const laudoExistente = await laudoService.findByRepId(id);
-        if (!laudoExistente) {
-          if (data.perito_id) {
-            try {
-                await laudoService.criarLaudoInicial({
-                  rep_id: id,
-                  perito_id: data.perito_id,
-                  template_id: data.template_id,
-                });
-                logInfo('Laudo criado automaticamente na atualização da REP', { repId: id });
-                auditCicloVida('', 'laudo', id, 'criacao',
-                  `Laudo da Requisição ${repAntes?.numero ?? id} iniciado automaticamente`,
-                  null,
-                  { rep_id: id, perito_id: data.perito_id, template_id: data.template_id },
-                );
-            } catch (laudoError) {
-              logError('Erro ao criar laudo automático na edição da REP', laudoError);
-            }
-          }
-        } else if (laudoExistente.template_id !== data.template_id) {
-          try {
-            await laudoService.update(laudoExistente.id, { template_id: data.template_id });
-            logInfo('Template do laudo atualizado na edição da REP', { repId: id, laudoId: laudoExistente.id });
-          } catch (laudoError) {
-            logError('Erro ao atualizar template do laudo', laudoError);
-          }
-        } else {
-          try {
-            await laudoService.sincronizarSecoesCondicionais(laudoExistente.id);
-          } catch (syncError) {
-            logError('Erro ao sincronizar seções condicionais', syncError);
-          }
-        }
       }
 
       return { success: true, data: updated };
@@ -254,9 +237,10 @@ export const registerRepHandlers = (): void => {
 
       rep = await repService.findById(id);
 
-      await laudoService.deletarPorRepId(id);
-
-      await repService.delete(id);
+      await withTransaction(async () => {
+        await laudoService.deletarPorRepId(id);
+        await repService.delete(id);
+      });
       logInfo('REP excluída', { id });
       auditDelete('', 'reps', id, `Requisição ${rep?.numero ?? id} removida`);
       return { success: true, message: 'REP excluída com sucesso!' };
@@ -276,8 +260,7 @@ export const registerRepHandlers = (): void => {
     let repAntes: REPRow | null = null;
     try {
       if (!id) return { success: false, error: 'ID inválido' };
-      const validStatuses = ['Pendente', 'Em Andamento', 'Concluído'];
-      if (!validStatuses.includes(status)) {
+      if (!STATUS_REP.includes(status as typeof STATUS_REP[number])) {
         return { success: false, error: 'Status inválido' };
       }
       repAntes = await repService.findById(id);

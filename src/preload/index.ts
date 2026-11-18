@@ -1,4 +1,4 @@
-import type { ApiBkpLaudo } from './types.js';
+import type { ApiBkpLaudo, ApiGoogleDrive } from './types.js';
 import type { ContextoWizardLaudo, PecaIncorporadaCalculada, RespostasIncorporadas } from '../shared/types/laudo-bkp.types.js';
 import type { ConsultaIdentificacaoRepGdl } from '../shared/gdl/natureza-exame.js';
 import type { AvisoReiteracaoGdl } from '../shared/gdl/reiteracao.js';
@@ -11,6 +11,7 @@ import type { ApiCorretor } from './types.js';
 import type { ProjetilPersonalizadoEntrada, ProjetilReferencia } from '../shared/types/projetil.types.js';
 import type { FalhaPdf } from '../shared/types/pdf.types.js';
 import type { FalhaImagemImpressao } from '../shared/types/imagem-laudo.types.js';
+import type { EstadoPainelFiguras } from '../shared/figura/painel.js';
 import type {
   AtualizacaoPainelIa,
   ContextoIa,
@@ -67,7 +68,6 @@ import type {
   ImagemPreparadaEditor,
   MiniaturaImagemLaudo,
   ResultadoReconciliacaoImagensLaudo,
-  ResultadoAtualizacaoFiguras,
   SalvarImagemLaudoEntrada,
 } from '../shared/types/imagem-laudo.types.js';
 import type { AutorizacaoReinicioAtualizacao, ProgressoAtualizacao, RespostaAtualizacao } from '../shared/atualizacao/atualizacao.types.js';
@@ -144,7 +144,7 @@ type PacoteTemplateResponse = { success: boolean; data?: IpcPayload; nome?: stri
 type BackupResponse = { success: boolean; path?: string; error?: string; canceled?: boolean };
 type TipoBackup = 'completo' | 'configuracao';
 type PreviaBackup = Record<string, unknown>;
-type ListaAuditoriaResponse = { success: boolean; data?: IpcPayload[]; total?: number; error?: string };
+type ListaAuditoriaResponse = { success: boolean; data?: IpcPayload[]; temProxima?: boolean; proximoCursor?: string; error?: string };
 type TimelineResponse = { success: boolean; data?: IpcPayload[]; error?: string };
 type ExportacaoLaudoParams = {
   laudoId: string;
@@ -361,6 +361,8 @@ export interface IpcAPI {
     sincronizarSecoes: (laudoId: string) => Promise<UserResponse>;
   };
 
+  googleDrive: Pick<ApiGoogleDrive, 'estadoRapido' | 'estado' | 'resumoCache' | 'resumo' | 'conectar' | 'desconectar' | 'definirEnvioAutomatico' | 'listarCopias' | 'listarLaudosConcluidos' | 'enviarLaudo' | 'verificar' | 'cancelarVerificacao' | 'onProgressoVerificacao' | 'prepararVisualizacao' | 'analisarRestauracao' | 'confirmarRestauracao' | 'cancelarRestauracao' | 'moverParaLixeira'>;
+
   // Wizard
   wizard: {
     findAll: () => Promise<UserResponse>;
@@ -514,10 +516,10 @@ export interface IpcAPI {
     atualizarOrdem: (laudoId: string, ordem: AtualizarOrdemImagemLaudoEntrada[]) => Promise<{ success: boolean; error?: string }>;
     openPanel: (laudoId: string, tituloLaudo?: string) => void;
     closePanel: () => void;
-    syncToPanel: (data: { figurasNoEditor: unknown[]; syncEnabled: boolean; figuraAtivaId: string | null; tema?: string; resultadoAtualizacao?: ResultadoAtualizacaoFiguras }) => void;
+    syncToPanel: (data: EstadoPainelFiguras) => void;
     sendAction: (action: string, ...args: unknown[]) => void;
     onPanelAction: (cb: (action: string, ...args: unknown[]) => void) => () => void;
-    onStateSync: (cb: (data: { figurasNoEditor: unknown[]; syncEnabled: boolean; figuraAtivaId: string | null; tema?: string; resultadoAtualizacao?: ResultadoAtualizacaoFiguras }) => void) => () => void;
+    onStateSync: (cb: (data: unknown) => void) => () => void;
     onPanelClosed: (cb: () => void) => () => void;
   };
 }
@@ -703,6 +705,22 @@ const ALLOWED_CHANNELS = new Set([
   'laudo:analisarBkp',
   'laudo:selecionarBkp',
   'laudo:exportarBkp',
+  'google-drive:estado',
+  'google-drive:estado-rapido',
+  'google-drive:resumo',
+  'google-drive:conectar',
+  'google-drive:desconectar',
+  'google-drive:definir-envio-automatico',
+  'google-drive:listar-copias',
+    'google-drive:listar-laudos-concluidos',
+    'google-drive:enviar-laudo',
+    'google-drive:verificar',
+    'google-drive:cancelar-verificacao',
+    'google-drive:preparar-visualizacao',
+    'google-drive:analisar-restauracao',
+    'google-drive:confirmar-restauracao',
+    'google-drive:cancelar-restauracao',
+    'google-drive:mover-para-lixeira',
   'laudo:contextoWizard',
   'laudo:calcularPecasWizard',
   'laudo:updateConteudo',
@@ -998,6 +1016,15 @@ const registrarEventoIpcDiagnostico = (dados: Record<string, unknown>): void => 
   ipcRenderer.send('diagnostico:registrar-evento', dados);
 };
 
+function diagnosticoGoogleDriveSeguro(resposta: unknown): Record<string, string> | undefined {
+  if (!resposta || typeof resposta !== 'object' || !('diagnostico' in resposta)) return undefined;
+  const diagnostico = resposta.diagnostico;
+  if (!diagnostico || typeof diagnostico !== 'object') return undefined;
+  const etapa = 'etapa' in diagnostico && typeof diagnostico.etapa === 'string' ? diagnostico.etapa : undefined;
+  const codigo = 'codigo' in diagnostico && typeof diagnostico.codigo === 'string' ? diagnostico.codigo : undefined;
+  return etapa && codigo ? { etapa, codigo } : undefined;
+}
+
 function descreverElementoDiagnostico(alvo: EventTarget | null): Record<string, unknown> {
   if (!(alvo instanceof HTMLElement)) return { tipoElemento: 'desconhecido' };
   return {
@@ -1222,8 +1249,10 @@ const invocarComDiagnostico = <T = IpcResult>(channel: string, ...args: IpcParam
         const falhaImagem = resultadoFuncional === 'falha' && channel === 'ilustracoes:obter-imagem-impressao'
           && resposta && typeof resposta === 'object' && 'falhaImagem' in resposta
           ? normalizarFalhaDiagnosticoImagem(resposta.falhaImagem) : undefined;
+        const diagnosticoGoogleDrive = resultadoFuncional === 'falha' && channel.startsWith('google-drive:')
+          ? diagnosticoGoogleDriveSeguro(resposta) : undefined;
         registrarEventoIpcDiagnostico({ fase, resultadoFuncional, canal: channel, correlacaoId, duracaoMs,
-          ...(falha ? { falha } : {}), ...(falhaImagem ? { falhaImagem } : {}) });
+          ...(falha ? { falha } : {}), ...(falhaImagem ? { falhaImagem } : {}), ...(diagnosticoGoogleDrive ? { diagnosticoGoogleDrive } : {}) });
         registrarIpcDesempenho(channel, duracaoMs, resultadoFuncional, args, resposta);
       }
       return resposta;
@@ -1776,6 +1805,36 @@ contextBridge.exposeInMainWorld('ipcAPI', {
     sincronizarSecoes: (laudoId: string) => invocarComDiagnostico('laudo:sincronizarSecoes', laudoId),
   },
 
+  googleDrive: {
+    estadoRapido: () => invocarComDiagnostico('google-drive:estado-rapido'),
+    estado: () => invocarComDiagnostico('google-drive:estado'),
+    resumoCache: () => invocarComDiagnostico('google-drive:resumo-cache'),
+    resumo: (forcarAtualizacao = false) => invocarComDiagnostico('google-drive:resumo', forcarAtualizacao),
+    conectar: () => invocarComDiagnostico('google-drive:conectar'),
+    desconectar: () => invocarComDiagnostico('google-drive:desconectar'),
+    definirEnvioAutomatico: (ativo: boolean) => invocarComDiagnostico('google-drive:definir-envio-automatico', ativo),
+    listarCopias: () => invocarComDiagnostico('google-drive:listar-copias'),
+      listarLaudosConcluidos: () => invocarComDiagnostico('google-drive:listar-laudos-concluidos'),
+      enviarLaudo: (laudoId: string, confirmarSubstituicao: boolean) => invocarComDiagnostico('google-drive:enviar-laudo', laudoId, confirmarSubstituicao),
+      verificar: (copiaId: string, operacaoId: string) => invocarComDiagnostico('google-drive:verificar', copiaId, operacaoId),
+      cancelarVerificacao: (operacaoId: string) => invocarComDiagnostico('google-drive:cancelar-verificacao', operacaoId),
+      onProgressoVerificacao: (callback) => {
+        const ouvinte = (_evento: Electron.IpcRendererEvent, progresso: unknown) => {
+          if (!progresso || typeof progresso !== 'object') return;
+          const dados = progresso as Record<string, unknown>;
+          if (typeof dados.operacaoId !== 'string' || typeof dados.recebidos !== 'number' || !Number.isFinite(dados.recebidos)) return;
+          callback({ operacaoId: dados.operacaoId, recebidos: dados.recebidos, total: typeof dados.total === 'number' && Number.isFinite(dados.total) ? dados.total : undefined });
+        };
+        ipcRenderer.on('google-drive:progresso-verificacao', ouvinte);
+        return () => ipcRenderer.removeListener('google-drive:progresso-verificacao', ouvinte);
+      },
+      prepararVisualizacao: (copiaId: string) => invocarComDiagnostico('google-drive:preparar-visualizacao', copiaId),
+      analisarRestauracao: (copiaId: string) => invocarComDiagnostico('google-drive:analisar-restauracao', copiaId),
+      confirmarRestauracao: (operacaoId: string, confirmarSubstituicao: boolean) => invocarComDiagnostico('google-drive:confirmar-restauracao', operacaoId, confirmarSubstituicao),
+      cancelarRestauracao: (operacaoId: string) => invocarComDiagnostico('google-drive:cancelar-restauracao', operacaoId),
+      moverParaLixeira: (copiaId: string, revisao: string) => invocarComDiagnostico('google-drive:mover-para-lixeira', copiaId, revisao),
+  },
+
   wizard: {
     findAll: () => invocarComDiagnostico('wizard:findAll'),
     findById: (id: string) => invocarComDiagnostico('wizard:findById', id),
@@ -2015,7 +2074,7 @@ contextBridge.exposeInMainWorld('ipcAPI', {
       return () => { ipcRenderer.removeListener('ilustracoes:panel-action', handler); };
     },
     onStateSync: (cb) => {
-      const handler = (_event: Electron.IpcRendererEvent, data: { figurasNoEditor: unknown[]; syncEnabled: boolean; figuraAtivaId: string | null }) => cb(data);
+      const handler = (_event: Electron.IpcRendererEvent, data: unknown) => cb(data);
       ipcRenderer.on('ilustracoes:state-sync', handler);
       return () => { ipcRenderer.removeListener('ilustracoes:state-sync', handler); };
     },

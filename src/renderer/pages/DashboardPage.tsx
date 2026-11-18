@@ -128,9 +128,9 @@ const normalizarConsulta = (valor: unknown): DashboardConsultaLaudosResultado | 
           .map(normalizarLaudo)
           .filter((item): item is DashboardLaudoConsulta => item !== null)
       : [],
-    total: numero(valor.total),
-    pagina: Math.max(1, numero(valor.pagina)),
     tamanhoPagina: Math.max(1, numero(valor.tamanhoPagina)),
+    proximoCursor: dataOpcional(valor.proximoCursor) ?? undefined,
+    temProxima: valor.temProxima === true,
     porStatus: Array.isArray(valor.porStatus)
       ? valor.porStatus
           .map(item =>
@@ -344,7 +344,6 @@ export function DashboardPage() {
   });
   const [filtros, setFiltros] = useState<DashboardConsultaLaudosEntrada>({
     tipoData: 'criacao',
-    pagina: 1,
     tamanhoPagina: 10,
   });
   const [consulta, setConsulta] = useState<DashboardConsultaLaudosResultado | null>(null);
@@ -353,6 +352,7 @@ export function DashboardPage() {
     useState<DashboardConsultaLaudosResultado | null>(null);
   const [consultando, setConsultando] = useState(false);
   const [erroConsulta, setErroConsulta] = useState<string | null>(null);
+  const [historicoCursoresConsulta, setHistoricoCursoresConsulta] = useState<Array<string | undefined>>([undefined]);
   const [erroProducao, setErroProducao] = useState<string | null>(null);
   const [erroCronologia, setErroCronologia] = useState<string | null>(null);
   const [carregandoProducao, setCarregandoProducao] = useState(false);
@@ -419,10 +419,10 @@ export function DashboardPage() {
     const temporizador = setTimeout(() => void carregarProducao(filtrosProducaoAplicados), restante);
     return () => clearTimeout(temporizador);
   }, [modalAberto, carregandoProducao, proximaAtualizacaoProducao, filtrosProducaoAplicados, carregarProducao]);
-  const consultar = async (pagina = 1) => {
+  const consultar = async (cursor?: string) => {
     setConsultando(true);
     setErroConsulta(null);
-    const entrada = { ...filtros, pagina };
+    const entrada = { ...filtros, cursor };
     try {
       const resposta = (await window.ipcAPI.dashboard.consultarLaudos(
         entrada
@@ -443,7 +443,6 @@ export function DashboardPage() {
       const resposta = (await window.ipcAPI.dashboard.consultarLaudos({
         tipoData: 'criacao',
         busca: buscaLaudo,
-        pagina: 1,
         tamanhoPagina: 10,
       })) as Resposta<unknown>;
       if (!resposta.success) throw new Error(resposta.error || 'Erro ao consultar laudos');
@@ -722,7 +721,7 @@ export function DashboardPage() {
                           </CardContent>
                         </Card>
                       </div>
-                      <Button onClick={() => void consultar()} disabled={consultando}>
+                      <Button onClick={() => { setHistoricoCursoresConsulta([undefined]); void consultar(); }} disabled={consultando}>
                         {consultando ? 'Consultando...' : 'Consultar'}
                       </Button>
                       {erroConsulta && <p className="text-sm text-destructive">{erroConsulta}</p>}
@@ -730,12 +729,12 @@ export function DashboardPage() {
                         <div className="space-y-3">
                           <div className="flex items-center justify-between">
                             <p className="text-sm text-muted-foreground">
-                              {consulta.total} resultado(s)
+                              {consulta.itens.length} resultado(s) nesta página
                             </p>
                             <Button
                               variant="outline"
                               size="sm"
-                              disabled={consulta.total === 0}
+                              disabled={consulta.itens.length === 0}
                               onClick={() => setGraficoConsultaAberto(true)}
                             >
                               Gerar gráfico
@@ -762,21 +761,27 @@ export function DashboardPage() {
                               Nenhum laudo encontrado para os filtros informados.
                             </p>
                           )}
-                          {consulta.total > consulta.tamanhoPagina && (
+                          {(historicoCursoresConsulta.length > 1 || consulta.temProxima) && (
                             <div className="flex gap-2">
                               <Button
                                 variant="outline"
-                                disabled={consulta.pagina === 1}
-                                onClick={() => void consultar(consulta.pagina - 1)}
+                                disabled={historicoCursoresConsulta.length === 1}
+                                onClick={() => {
+                                  const anterior = historicoCursoresConsulta.at(-2);
+                                  setHistoricoCursoresConsulta(atual => atual.slice(0, -1));
+                                  void consultar(anterior);
+                                }}
                               >
                                 Anterior
                               </Button>
                               <Button
                                 variant="outline"
-                                disabled={
-                                  consulta.pagina * consulta.tamanhoPagina >= consulta.total
-                                }
-                                onClick={() => void consultar(consulta.pagina + 1)}
+                                disabled={!consulta.temProxima || !consulta.proximoCursor}
+                                onClick={() => {
+                                  if (!consulta.proximoCursor) return;
+                                  setHistoricoCursoresConsulta(atual => [...atual, consulta.proximoCursor]);
+                                  void consultar(consulta.proximoCursor);
+                                }}
                               >
                                 Próxima
                               </Button>
@@ -834,7 +839,7 @@ export function DashboardPage() {
                     <p className="text-sm text-muted-foreground">
                       {rotuloTipoData[filtros.tipoData]} ·{' '}
                       {descreverPeriodo(filtros.dataInicial, filtros.dataFinal)} (
-                      {consulta?.total ?? 0} laudos)
+                      {consulta?.itens.length ?? 0} laudos nesta página)
                     </p>
                     <GraficoStatus
                       titulo="Resultado da consulta"

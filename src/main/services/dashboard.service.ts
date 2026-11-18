@@ -30,10 +30,30 @@ type LinhaProducao = {
   laudoDias: number | string;
 };
 type LinhaNatureza = { id: string; codigo: string | null; nome: string | null };
+type CursorConsulta = { data: string; id: string };
 
 const inteiro = (valor: unknown) =>
   Number.isFinite(Number(valor)) ? Math.round(Number(valor)) : 0;
 const numero = (valor: unknown) => (Number.isFinite(Number(valor)) ? Number(valor) : 0);
+const codificarCursor = (cursor: CursorConsulta): string => Buffer.from(JSON.stringify(cursor)).toString('base64url');
+const decodificarCursor = (valor: string | undefined): CursorConsulta | null => {
+  if (!valor) return null;
+  try {
+    const cursor: unknown = JSON.parse(Buffer.from(valor, 'base64url').toString('utf8'));
+    if (!cursor || typeof cursor !== 'object') throw new Error();
+    const dados = cursor as Record<string, unknown>;
+    if (typeof dados.data !== 'string' || typeof dados.id !== 'string') throw new Error();
+    return { data: dados.data, id: dados.id };
+  } catch {
+    throw new Error('Cursor de paginação inválido.');
+  }
+};
+const inicioDia = (data: string): string => data;
+const proximoDia = (data: string): string => {
+  const proximo = new Date(`${data}T00:00:00.000Z`);
+  proximo.setUTCDate(proximo.getUTCDate() + 1);
+  return proximo.toISOString().slice(0, 10);
+};
 const preencher = (linhas: LinhaContagem[], base: readonly string[]): DashboardKpiStatus[] => {
   const totais = new Map(linhas.map(linha => [linha.status, inteiro(linha.total)]));
   return base.map(status => ({ status, total: totais.get(status) ?? 0 }));
@@ -66,20 +86,23 @@ const resumirCiclo = (valores: number[]): DashboardIndicadorCicloProducao => {
 export class DashboardService {
   async obterResumo(): Promise<DashboardResumo> {
     try {
+      const hoje = new Date().toISOString().slice(0, 10);
+      const proximaSemana = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const seteDiasAtras = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
       const [reps, laudos, vencidas, proximas, aguardando, parados] = await Promise.all([
         executeQuery<LinhaContagem>('SELECT status, COUNT(*) AS total FROM reps GROUP BY status'),
         executeQuery<LinhaContagem>('SELECT status, COUNT(*) AS total FROM laudos GROUP BY status'),
         executeQuery<LinhaNumero>(
-          "SELECT COUNT(*) AS total FROM reps WHERE status IN ('Pendente', 'Em Andamento') AND prazo IS NOT NULL AND date(substr(prazo, 1, 10)) < date('now', 'localtime')"
+          "SELECT COUNT(*) AS total FROM reps WHERE status IN ('Pendente', 'Em Andamento') AND prazo IS NOT NULL AND prazo < ?", [hoje]
         ),
         executeQuery<LinhaNumero>(
-          "SELECT COUNT(*) AS total FROM reps WHERE status IN ('Pendente', 'Em Andamento') AND prazo IS NOT NULL AND date(substr(prazo, 1, 10)) BETWEEN date('now', 'localtime') AND date('now', 'localtime', '+7 days')"
+          "SELECT COUNT(*) AS total FROM reps WHERE status IN ('Pendente', 'Em Andamento') AND prazo IS NOT NULL AND prazo >= ? AND prazo <= ?", [hoje, proximaSemana]
         ),
         executeQuery<LinhaNumero>(
           "SELECT COUNT(*) AS total FROM laudos WHERE status = 'Concluído' AND data_entrega IS NULL"
         ),
         executeQuery<LinhaNumero>(
-          "SELECT COUNT(*) AS total FROM laudos WHERE status = 'Em andamento' AND julianday('now', 'localtime') - julianday(updated_at) >= 7"
+          "SELECT COUNT(*) AS total FROM laudos WHERE status = 'Em andamento' AND updated_at <= ?", [seteDiasAtras]
         ),
       ]);
       return {
@@ -99,7 +122,6 @@ export class DashboardService {
   async consultarLaudos(
     entrada: DashboardConsultaLaudosEntrada
   ): Promise<DashboardConsultaLaudosResultado> {
-    const pagina = Math.max(1, Math.floor(entrada.pagina ?? 1));
     const tamanhoPagina = Math.min(100, Math.max(1, Math.floor(entrada.tamanhoPagina ?? 10)));
     const coluna = {
       criacao: 'l.created_at',
@@ -114,30 +136,37 @@ export class DashboardService {
       parametros.push(...Array(3).fill(`%${entrada.busca.trim()}%`));
     }
     if (entrada.dataInicial) {
-      clausulas.push(`date(${coluna}) >= date(?)`);
-      parametros.push(entrada.dataInicial);
+      clausulas.push(`${coluna} >= ?`);
+      parametros.push(inicioDia(entrada.dataInicial));
     }
     if (entrada.dataFinal) {
-      clausulas.push(`date(${coluna}) <= date(?)`);
-      parametros.push(entrada.dataFinal);
+      clausulas.push(`${coluna} < ?`);
+      parametros.push(proximoDia(entrada.dataFinal));
+    }
+    const cursor = decodificarCursor(entrada.cursor);
+    if (cursor) {
+      clausulas.push(`(${coluna} < ? OR (${coluna} = ? AND l.id < ?))`);
+      parametros.push(cursor.data, cursor.data, cursor.id);
     }
     const de = `FROM laudos l JOIN reps r ON r.id = l.rep_id LEFT JOIN tipos_exame te ON te.id = r.tipo_exame_id WHERE ${clausulas.join(' AND ')}`;
-    const [itens, contagem, porStatus] = await Promise.all([
+    const [linhas, porStatus] = await Promise.all([
       executeQuery<DashboardLaudoConsulta>(
-        `SELECT l.id, l.rep_id AS repId, r.numero AS repNumero, te.id AS tipoExameId, te.codigo AS tipoExameCodigo, COALESCE(te.nome, 'Tipo de exame não informado') AS tipoExameNome, l.status, l.created_at AS createdAt, l.updated_at AS updatedAt, l.data_conclusao AS dataConclusao, l.data_entrega AS dataEntrega, ${coluna} AS dataOrdenacao ${de} ORDER BY datetime(${coluna}) DESC LIMIT ? OFFSET ?`,
-        [...parametros, String(tamanhoPagina), String((pagina - 1) * tamanhoPagina)]
+        `SELECT l.id, l.rep_id AS repId, r.numero AS repNumero, te.id AS tipoExameId, te.codigo AS tipoExameCodigo, COALESCE(te.nome, 'Tipo de exame não informado') AS tipoExameNome, l.status, l.created_at AS createdAt, l.updated_at AS updatedAt, l.data_conclusao AS dataConclusao, l.data_entrega AS dataEntrega, ${coluna} AS dataOrdenacao ${de} ORDER BY ${coluna} DESC, l.id DESC LIMIT ?`,
+        [...parametros, String(tamanhoPagina + 1)]
       ),
-      executeQuery<LinhaNumero>(`SELECT COUNT(*) AS total ${de}`, parametros),
       executeQuery<LinhaContagem>(
         `SELECT l.status, COUNT(*) AS total ${de} GROUP BY l.status`,
         parametros
       ),
     ]);
+    const temProxima = linhas.length > tamanhoPagina;
+    const itens = linhas.slice(0, tamanhoPagina);
+    const ultimo = itens.at(-1);
     return {
       itens,
-      total: inteiro(contagem[0]?.total),
-      pagina,
       tamanhoPagina,
+      temProxima,
+      proximoCursor: temProxima && ultimo?.dataOrdenacao ? codificarCursor({ data: ultimo.dataOrdenacao, id: ultimo.id }) : undefined,
       porStatus: preencher(porStatus, statusLaudo),
     };
   }
@@ -150,7 +179,7 @@ export class DashboardService {
     const laudo = itens[0];
     if (!laudo) return null;
     const linhas = await executeQuery<LinhaAuditoria>(
-      "SELECT created_at, dados_anteriores, dados_novos FROM logs_auditoria WHERE entidade_id = ? AND modulo IN ('laudo', 'laudos') AND tipo_acao = 'transicao_status' ORDER BY datetime(created_at) ASC",
+      "SELECT created_at, dados_anteriores, dados_novos FROM logs_auditoria WHERE entidade_id = ? AND modulo IN ('laudo', 'laudos') AND tipo_acao = 'transicao_status' ORDER BY created_at ASC, id ASC",
       [id]
     );
     return {
@@ -185,12 +214,12 @@ export class DashboardService {
       parametros.push(entrada.tipoExameId);
     }
     if (entrada.dataInicial) {
-      clausulas.push('date(l.data_conclusao) >= date(?)');
-      parametros.push(entrada.dataInicial);
+      clausulas.push('l.data_conclusao >= ?');
+      parametros.push(inicioDia(entrada.dataInicial));
     }
     if (entrada.dataFinal) {
-      clausulas.push('date(l.data_conclusao) <= date(?)');
-      parametros.push(entrada.dataFinal);
+      clausulas.push('l.data_conclusao < ?');
+      parametros.push(proximoDia(entrada.dataFinal));
     }
     const de = `FROM laudos l JOIN reps r ON r.id = l.rep_id JOIN tipos_exame te ON te.id = r.tipo_exame_id WHERE ${clausulas.join(' AND ')}`;
     const [naturezas, linhas] = await Promise.all([

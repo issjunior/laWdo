@@ -30,7 +30,7 @@ const DB_DIR = app.getPath('userData');
 const DB_PATH = path.join(DB_DIR, 'laudopericial.db');
 
 // Versão atual do schema
-export const CURRENT_SCHEMA_VERSION = 49;
+export const CURRENT_SCHEMA_VERSION = 51;
 
 interface ResultadoIntegridadeSchema {
   tabelasVerificadas: string[];
@@ -302,16 +302,16 @@ const createDatabaseSchema = async (): Promise<void> => {
         numero TEXT NOT NULL UNIQUE,
         solicitante_id TEXT,
         tipo_exame_id TEXT,
-        data_requisicao DATETIME NOT NULL,
-        prazo DATETIME,
-        status TEXT NOT NULL DEFAULT 'Pendente',
+        data_requisicao TEXT NOT NULL CHECK (length(data_requisicao) = 10 AND data_requisicao GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+        prazo TEXT CHECK (prazo IS NULL OR (length(prazo) = 10 AND prazo GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]')),
+        status TEXT NOT NULL DEFAULT 'Pendente' CHECK (status IN ('Pendente', 'Em Andamento', 'Concluído')),
         tipo_solicitacao TEXT,
         numero_documento TEXT,
-        data_documento DATETIME,
+        data_documento TEXT CHECK (data_documento IS NULL OR (length(data_documento) = 10 AND data_documento GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]')),
         autoridade_solicitante TEXT,
-        data_acionamento DATETIME,
-        data_chegada DATETIME,
-        data_saida DATETIME,
+        data_acionamento TEXT CHECK (data_acionamento IS NULL OR (length(data_acionamento) = 10 AND data_acionamento GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]')),
+        data_chegada TEXT CHECK (data_chegada IS NULL OR (length(data_chegada) = 10 AND data_chegada GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]')),
+        data_saida TEXT CHECK (data_saida IS NULL OR (length(data_saida) = 10 AND data_saida GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]')),
         local_fato TEXT,
         latitude REAL,
         longitude REAL,
@@ -338,7 +338,7 @@ const createDatabaseSchema = async (): Promise<void> => {
         perito_id TEXT NOT NULL,
         template_id TEXT NOT NULL,
         conteudo TEXT NOT NULL,
-        status TEXT NOT NULL DEFAULT 'Em andamento',
+        status TEXT NOT NULL DEFAULT 'Em andamento' CHECK (status IN ('Em andamento', 'Concluído', 'Entregue')),
         data_inicio DATETIME DEFAULT CURRENT_TIMESTAMP,
         data_conclusao DATETIME,
         data_entrega DATETIME,
@@ -571,6 +571,26 @@ const INDICES_OBRIGATORIOS = [
   'CREATE INDEX IF NOT EXISTS idx_wizards_tipo_exame ON wizards(tipo_exame_id)',
   'CREATE INDEX IF NOT EXISTS idx_pecas_categoria_id ON pecas(categoria_id)',
   'CREATE INDEX IF NOT EXISTS idx_categorias_pecas_parent ON categorias_pecas(parent_id)',
+  'CREATE INDEX IF NOT EXISTS idx_reps_tipo_exame ON reps(tipo_exame_id)',
+  'CREATE INDEX IF NOT EXISTS idx_reps_usuario ON reps(usuario_id)',
+  'CREATE INDEX IF NOT EXISTS idx_reps_status_prazo ON reps(status, prazo)',
+  'CREATE INDEX IF NOT EXISTS idx_laudos_perito ON laudos(perito_id)',
+  'CREATE INDEX IF NOT EXISTS idx_laudos_template ON laudos(template_id)',
+  'CREATE INDEX IF NOT EXISTS idx_laudos_wizard ON laudos(wizard_id)',
+  'CREATE INDEX IF NOT EXISTS idx_laudos_created_id ON laudos(created_at DESC, id DESC)',
+  'CREATE INDEX IF NOT EXISTS idx_laudos_updated_id ON laudos(updated_at DESC, id DESC)',
+  'CREATE INDEX IF NOT EXISTS idx_laudos_conclusao_id ON laudos(data_conclusao DESC, id DESC)',
+  'CREATE INDEX IF NOT EXISTS idx_laudos_entrega_id ON laudos(data_entrega DESC, id DESC)',
+  'CREATE INDEX IF NOT EXISTS idx_placeholders_categoria ON placeholders(categoria_id)',
+  'CREATE INDEX IF NOT EXISTS idx_wizards_template ON wizards(template_id)',
+  'CREATE INDEX IF NOT EXISTS idx_etapas_wizard_pai ON etapas_wizard(etapa_pai_id)',
+  'CREATE INDEX IF NOT EXISTS idx_opcoes_etapa_filha ON opcoes_etapa(etapa_filha_id)',
+  'CREATE INDEX IF NOT EXISTS idx_regras_wizard_peca ON regras_wizard(peca_id)',
+  'CREATE INDEX IF NOT EXISTS idx_regras_wizard_secao ON regras_wizard(secao_template_id)',
+  'CREATE INDEX IF NOT EXISTS idx_respostas_wizard_etapa ON respostas_wizard(etapa_id)',
+  'CREATE INDEX IF NOT EXISTS idx_respostas_wizard_opcao ON respostas_wizard(opcao_id)',
+  'CREATE INDEX IF NOT EXISTS idx_logs_auditoria_created_id ON logs_auditoria(created_at DESC, id DESC)',
+  'CREATE INDEX IF NOT EXISTS idx_logs_auditoria_timeline ON logs_auditoria(entidade_id, modulo, tipo_acao, created_at, id)',
 ] as const;
 
 const listarTabelas = async (): Promise<Set<string>> => {
@@ -694,6 +714,7 @@ const reconciliarSchemaFisico = async (): Promise<string[]> => {
   try {
     reparosAplicados = await withTransaction(async () => {
       const integridade = await garantirIntegridadeSchema();
+      await garantirNormalizacaoTimestampsTecnicos();
       const unicidadeAusente = !await possuiIndiceUnicoPorColuna('laudos', 'rep_id');
       await garantirLaudoUnicoPorRep();
       if (unicidadeAusente) integridade.reparosAplicados.push('laudos.rep_id com UNIQUE');
@@ -827,6 +848,128 @@ async function migrarTabelaImagensLaudoLegada(): Promise<void> {
 
   await executeNonQuery('DROP TABLE imagens_laudo_legado_v30');
   log.info('Migration v30: tabela de imagens legada convertida', { migradas, ignoradas });
+}
+
+const CAMPOS_DATA_CIVIL_REP = [
+  'data_requisicao', 'prazo', 'data_documento', 'data_acionamento', 'data_chegada', 'data_saida',
+] as const;
+
+const DATA_CIVIL = /^\d{4}-\d{2}-\d{2}$/;
+
+const validarDataCivilLegada = (valor: unknown, campo: string, repId: string): string | null => {
+  if (valor === null || valor === undefined || valor === '') return null;
+  if (typeof valor !== 'string') throw new Error(`SCHEMA_INCOMPATIVEL: REP ${repId} possui ${campo} em formato inválido.`);
+  const data = valor.slice(0, 10);
+  if (!DATA_CIVIL.test(data)) throw new Error(`SCHEMA_INCOMPATIVEL: REP ${repId} possui ${campo} em formato ambíguo.`);
+  const [ano, mes, dia] = data.split('-').map(Number);
+  const validada = new Date(Date.UTC(ano, mes - 1, dia));
+  if (validada.getUTCFullYear() !== ano || validada.getUTCMonth() !== mes - 1 || validada.getUTCDate() !== dia) {
+    throw new Error(`SCHEMA_INCOMPATIVEL: REP ${repId} possui ${campo} em data inválida.`);
+  }
+  return data;
+};
+
+async function normalizarDatasCivisReps(): Promise<void> {
+  type RepDataLegada = { id: string } & Record<(typeof CAMPOS_DATA_CIVIL_REP)[number], unknown>;
+  const reps = await executeQuery<RepDataLegada>(`SELECT id, ${CAMPOS_DATA_CIVIL_REP.join(', ')} FROM reps`);
+  for (const rep of reps) {
+    const valores = CAMPOS_DATA_CIVIL_REP.map(campo => validarDataCivilLegada(rep[campo], campo, rep.id));
+    await executeNonQuery(
+      `UPDATE reps SET ${CAMPOS_DATA_CIVIL_REP.map(campo => `${campo} = ?`).join(', ')} WHERE id = ?`,
+      [...valores, rep.id],
+    );
+  }
+}
+
+async function recriarTabelaComDefinicao(tabela: 'reps' | 'laudos', sufixo: string, transformar: (sql: string) => string): Promise<void> {
+  const [registro] = await executeQuery<{ sql: string }>("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?", [tabela]);
+  if (!registro?.sql) throw new Error(`SCHEMA_INCOMPATIVEL: tabela ${tabela} ausente.`);
+  const estruturas = await executeQuery<{ sql: string }>("SELECT sql FROM sqlite_master WHERE tbl_name = ? AND type IN ('index', 'trigger') AND sql IS NOT NULL", [tabela]);
+  const destino = `${tabela}_${sufixo}`;
+  const definicao = transformar(registro.sql)
+    .replace(new RegExp('^CREATE TABLE\\s+(?:"' + tabela + '"|\\[' + tabela + '\\]|`' + tabela + '`|' + tabela + ')', 'i'), `CREATE TABLE ${destino}`);
+  if (!definicao.startsWith(`CREATE TABLE ${destino}`)) throw new Error(`SCHEMA_INCOMPATIVEL: definição de ${tabela} incompatível.`);
+  await executeNonQuery(definicao);
+  await executeNonQuery(`INSERT INTO ${destino} SELECT * FROM ${tabela}`);
+  await executeNonQuery(`DROP TABLE ${tabela}`);
+  await executeNonQuery(`ALTER TABLE ${destino} RENAME TO ${tabela}`);
+  for (const estrutura of estruturas) await executeNonQuery(estrutura.sql);
+}
+
+async function aplicarConstraintsV50(): Promise<void> {
+  await garantirIntegridadeSchema();
+  await normalizarDatasCivisReps();
+  const camposNulos = CAMPOS_DATA_CIVIL_REP.filter(campo => campo !== 'data_requisicao');
+  await recriarTabelaComDefinicao('reps', 'v50', sql => {
+    let definicao = sql
+      .replace(/\bdata_requisicao\s+\w+\s+NOT\s+NULL/i, "data_requisicao TEXT NOT NULL CHECK (length(data_requisicao) = 10 AND data_requisicao GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]')")
+      .replace(/\bstatus\s+TEXT\s+NOT\s+NULL\s+DEFAULT\s+'Pendente'/i, "status TEXT NOT NULL DEFAULT 'Pendente' CHECK (status IN ('Pendente', 'Em Andamento', 'Concluído'))");
+    for (const campo of camposNulos) {
+      definicao = definicao.replace(new RegExp(`\\b${campo}\\s+\\w+`, 'i'), `${campo} TEXT CHECK (${campo} IS NULL OR (length(${campo}) = 10 AND ${campo} GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'))`);
+    }
+    return definicao;
+  });
+  await recriarTabelaComDefinicao('laudos', 'v50', sql => sql
+    .replace(/\bstatus\s+TEXT\s+NOT\s+NULL\s+DEFAULT\s+'Em andamento'/i, "status TEXT NOT NULL DEFAULT 'Em andamento' CHECK (status IN ('Em andamento', 'Concluído', 'Entregue'))"));
+  for (const indice of INDICES_OBRIGATORIOS) await executeNonQuery(indice);
+}
+
+const COLUNAS_TIMESTAMP_TECNICO = new Set([
+  'created_at', 'updated_at', 'data_inicio', 'data_conclusao', 'data_entrega', 'applied_at',
+  'data_criacao', 'data_atualizacao',
+]);
+
+const EXPRESSAO_TIMESTAMP_UTC = "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')";
+
+async function garantirNormalizacaoTimestampsTecnicos(): Promise<void> {
+  const tabelas = await executeQuery<{ name: string }>(
+    "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'",
+  );
+  for (const { name: tabela } of tabelas) {
+    if (!/^[a-z_]+$/.test(tabela)) continue;
+    const colunasTabela = await executeQuery<{ name: string }>(`PRAGMA table_info(${tabela})`);
+    const colunas = colunasTabela.map(coluna => coluna.name).filter(coluna => COLUNAS_TIMESTAMP_TECNICO.has(coluna));
+    if (colunas.length === 0) continue;
+    const atualizarInsercao = colunas.map(coluna =>
+      `${coluna} = CASE WHEN NEW.${coluna} IS NULL THEN NULL ELSE strftime('%Y-%m-%dT%H:%M:%fZ', NEW.${coluna}) END`,
+    ).join(', ');
+    const atualizarEdicao = colunas.map(coluna => coluna === 'updated_at' || coluna === 'data_atualizacao'
+      ? `${coluna} = ${EXPRESSAO_TIMESTAMP_UTC}`
+      : `${coluna} = CASE WHEN NEW.${coluna} IS NULL THEN NULL ELSE strftime('%Y-%m-%dT%H:%M:%fZ', NEW.${coluna}) END`,
+    ).join(', ');
+    await executeNonQuery(`
+      CREATE TRIGGER IF NOT EXISTS trg_${tabela}_timestamp_insercao
+      AFTER INSERT ON ${tabela}
+      BEGIN UPDATE ${tabela} SET ${atualizarInsercao} WHERE rowid = NEW.rowid; END
+    `);
+    await executeNonQuery(`
+      CREATE TRIGGER IF NOT EXISTS trg_${tabela}_timestamp_edicao
+      AFTER UPDATE ON ${tabela}
+      BEGIN UPDATE ${tabela} SET ${atualizarEdicao} WHERE rowid = NEW.rowid; END
+    `);
+  }
+}
+
+async function normalizarTimestampsTecnicosV51(): Promise<void> {
+  const tabelas = await executeQuery<{ name: string }>(
+    "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'",
+  );
+  for (const { name: tabela } of tabelas) {
+    if (!/^[a-z_]+$/.test(tabela)) continue;
+    const colunas = await executeQuery<{ name: string }>(`PRAGMA table_info(${tabela})`);
+    for (const { name: coluna } of colunas) {
+      if (!COLUNAS_TIMESTAMP_TECNICO.has(coluna)) continue;
+      const [invalido] = await executeQuery<{ rowid: number }>(
+        `SELECT rowid FROM ${tabela} WHERE ${coluna} IS NOT NULL AND strftime('%Y-%m-%dT%H:%M:%fZ', ${coluna}) IS NULL LIMIT 1`,
+      );
+      if (invalido) {
+        throw new Error(`SCHEMA_INCOMPATIVEL: ${tabela}.${coluna} possui timestamp não normalizável.`);
+      }
+      await executeNonQuery(
+        `UPDATE ${tabela} SET ${coluna} = strftime('%Y-%m-%dT%H:%M:%fZ', ${coluna}) WHERE ${coluna} IS NOT NULL AND ${coluna} <> strftime('%Y-%m-%dT%H:%M:%fZ', ${coluna})`,
+      );
+    }
+  }
 }
 
 const applyMigrations = async (fromVersion: number): Promise<void> => {
@@ -2502,6 +2645,23 @@ const applyMigrations = async (fromVersion: number): Promise<void> => {
     await garantirLaudoUnicoPorRep();
     await migrarEstruturaIncorporadaLaudo();
     log.info('Migration v49: estrutura incorporada para laudos portáveis.');
+  }
+
+  if (fromVersion < 50) {
+    await executeNonQuery('PRAGMA foreign_keys = OFF');
+    try {
+      await withTransaction(aplicarConstraintsV50);
+    } finally {
+      await executeNonQuery('PRAGMA foreign_keys = ON');
+    }
+    const violacoes = await executeQuery<unknown>('PRAGMA foreign_key_check');
+    if (violacoes.length > 0) throw new Error('SCHEMA_INCOMPATIVEL: referências inválidas após migration v50.');
+    log.info('Migration v50: datas civis, constraints e índices de desempenho aplicados.');
+  }
+
+  if (fromVersion < 51) {
+    await withTransaction(normalizarTimestampsTecnicosV51);
+    log.info('Migration v51: timestamps técnicos normalizados em UTC ISO 8601.');
   }
 
   log.debug(`Aplicadas migrations da versão ${fromVersion}`);

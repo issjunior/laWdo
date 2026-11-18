@@ -137,6 +137,8 @@ export const esquemaPacoteLaudo = z.object({
     data_inicio: z.string().min(1), data_conclusao: textoNulo, data_entrega: textoNulo,
     versao: z.number().int().positive(), tipo_criacao: z.enum(['template', 'wizard']),
     respostas: esquemaRespostasIncorporadas,
+    // Ausente nos BKPs legados; quando presente, preserva a apresentação original.
+    apresentacao_json: textoNulo,
   }),
   estrutura: esquemaEstruturaIncorporada,
   placeholders: z.array(z.object({ chave: z.string().regex(/^[a-zA-Z0-9_.-]+$/).max(200), valor: z.string(), descricao: textoNulo })).max(10000),

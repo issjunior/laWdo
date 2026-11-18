@@ -2,6 +2,7 @@ import { tipoExameService } from './tipo-exame.service.js'
 import { normalizarCodigoExame } from '../../shared/gdl/natureza-exame.js'
 import { templateService } from './template.service.js'
 import { randomUUID } from 'crypto'
+import { CAMPOS_DATA_CIVIL_REP, normalizarDataCivil } from '../utils/data-civil.js'
 import { withTransaction, executeNonQuery } from '../database/sqlite.js'
 import { converterRepGdl } from './gdl-adaptadores.service.js'
 import * as gdlService from './gdl.service.js'
@@ -133,7 +134,12 @@ class AtualizacaoRepGdlService {
     const novoCamposEspecificos = { ...camposEspecificos, [adaptador.chaveDados]: dadosAtualizados, integracaoGdl: operacao.importacao.metadadosIntegracaoGdl }
     const atualizacoes: Array<[string, unknown]> = []
     for (const [campo, valor] of Object.entries(operacao.importacao.camposGerais)) {
-      if (CAMPOS_REP.has(campo) && selecionados.has(`campo:${campo}`) && (valor.trim() || operacao.importacao.camposVaziosConfirmados?.some(item => item === campo))) atualizacoes.push([campo, valor])
+      if (CAMPOS_REP.has(campo) && selecionados.has(`campo:${campo}`) && (valor.trim() || operacao.importacao.camposVaziosConfirmados?.some(item => item === campo))) {
+        const dado = (CAMPOS_DATA_CIVIL_REP as readonly string[]).includes(campo)
+          ? normalizarDataCivil(valor, campo, campo === 'data_requisicao')
+          : valor
+        atualizacoes.push([campo, dado])
+      }
     }
     atualizacoes.push(['campos_especificos', JSON.stringify(novoCamposEspecificos)])
     await withTransaction(async () => {

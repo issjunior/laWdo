@@ -104,7 +104,7 @@ export const executeNonQuery = (sql: string, params: unknown[] = []): Promise<vo
 });
 
 export const withTransaction = <T>(fn: () => Promise<T>): Promise<T> => {
-  if (contexto.getStore()) return Promise.reject(new Error('Transações aninhadas não são permitidas.'));
+  if (contexto.getStore()) return fn();
   return enfileirar(async () => {
     const banco = await obterConexao();
     await executarSql(banco, 'BEGIN TRANSACTION');

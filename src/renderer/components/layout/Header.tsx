@@ -327,9 +327,13 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
                       </div>
                     </a>
                     <button
-                      onClick={() => {
-                        navigator.clipboard.writeText('izaias.santos@policiacientifica.pr.gov.br');
-                        toast.success('Email copiado!');
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText('izaias.santos@policiacientifica.pr.gov.br');
+                          toast.success('E-mail copiado!');
+                        } catch {
+                          toast.error('Não foi possível copiar o e-mail.');
+                        }
                       }}
                       className="flex items-center gap-3 p-2 rounded-md hover:bg-muted transition-colors group cursor-pointer w-full text-left"
                     >

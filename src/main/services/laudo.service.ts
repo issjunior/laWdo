@@ -10,6 +10,7 @@ import type { LaudoResumoLista } from '../../shared/types/laudo.types.js';
 import { getLogger } from '../utils/logger.js';
 import { executeQuery, executeNonQuery, withTransaction } from '../database/sqlite.js';
 import { randomUUID } from 'crypto';
+import { STATUS_LAUDO } from '../utils/data-civil.js';
 import { DomUtils, parseDocument } from 'htmlparser2';
 import { app } from 'electron';
 import path from 'path';
@@ -257,9 +258,8 @@ class LaudoService extends BaseService<LaudoRow> {
 
   async updateStatus(id: string, status: string): Promise<LaudoRow> {
     try {
-      const statusValidos = ['Em andamento', 'Concluído', 'Entregue'];
-      if (!statusValidos.includes(status)) {
-        throw new Error(`Status inválido. Use: ${statusValidos.join(', ')}`);
+      if (!STATUS_LAUDO.includes(status as typeof STATUS_LAUDO[number])) {
+        throw new Error(`Status inválido. Use: ${STATUS_LAUDO.join(', ')}`);
       }
 
       const now = new Date().toISOString();
@@ -339,6 +339,7 @@ class LaudoService extends BaseService<LaudoRow> {
     respostas: Record<string, string | string[]>;
     pecas_selecionadas?: string[];
   }): Promise<LaudoRow> {
+    return withTransaction(async () => {
     const laudo = await this.findById(params.laudo_id);
     if (!laudo) throw new Error('Laudo não encontrado');
 
@@ -392,12 +393,14 @@ class LaudoService extends BaseService<LaudoRow> {
 
     const [updated] = await executeQuery<LaudoRow>('SELECT * FROM laudos WHERE id = ?', [laudo.id]);
     return updated;
+    });
   }
 
   async salvarProgressoWizard(
     laudoId: string,
     respostas: Record<string, string | string[]>
   ): Promise<void> {
+    await withTransaction(async () => {
     const laudo = await this.findById(laudoId);
     if (!laudo) throw new Error('Laudo não encontrado');
 
@@ -421,6 +424,7 @@ class LaudoService extends BaseService<LaudoRow> {
         [randomUUID(), laudoId, etapaId, valorTexto, now]
       );
     }
+    });
   }
 
   async getRespostasWizard(laudoId: string): Promise<Record<string, string | string[]>> {

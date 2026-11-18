@@ -168,7 +168,9 @@ export function LogsPage() {
   const [aba, setAba] = useState<'sistema' | 'auditoria' | 'timeline' | 'desempenho'>('sistema');
   const [logsSistema, setLogsSistema] = useState<SystemLog[]>([]);
   const [logsAuditoria, setLogsAuditoria] = useState<AuditLog[]>([]);
-  const [totalAuditoria, setTotalAuditoria] = useState(0);
+  const [temProximaAuditoria, setTemProximaAuditoria] = useState(false);
+  const [proximoCursorAuditoria, setProximoCursorAuditoria] = useState<string | undefined>();
+  const [cursoresAuditoria, setCursoresAuditoria] = useState<(string | undefined)[]>([undefined]);
   const [clearDialogOpen, setClearDialogOpen] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [senha, setSenha] = useState('');
@@ -215,7 +217,7 @@ export function LogsPage() {
     }
   }, [filtroNivel, filtroModulo, dataInicio, dataFim]);
 
-  const carregarLogsAuditoria = useCallback(async () => {
+  const carregarLogsAuditoria = useCallback(async (cursor?: string) => {
     try {
       const filters: Record<string, unknown> = {};
       if (dataInicioAudit) filters.startDate = dataInicioAudit;
@@ -223,13 +225,15 @@ export function LogsPage() {
       if (filtroModuloAudit !== 'todos') filters.modulo = filtroModuloAudit;
       if (filtroTipoAcao !== 'todos') filters.tipo_acao = filtroTipoAcao;
       if (filtroNivelAudit !== 'todos') filters.nivel = filtroNivelAudit;
+      if (cursor) filters.cursor = cursor;
 
       const r = await window.ipcAPI.log.listarAuditoria(
         Object.keys(filters).length > 0 ? filters : undefined,
       );
       if (r.success && Array.isArray(r.data)) {
         setLogsAuditoria(r.data as unknown as AuditLog[]);
-        setTotalAuditoria(r.total ?? r.data.length);
+        setTemProximaAuditoria(r.temProxima === true);
+        setProximoCursorAuditoria(typeof r.proximoCursor === 'string' ? r.proximoCursor : undefined);
       }
     } catch {
       toast.error('Erro ao carregar logs de auditoria');
@@ -262,7 +266,8 @@ export function LogsPage() {
         }
         if (auditoria.success && Array.isArray(auditoria.data)) {
           setLogsAuditoria(auditoria.data as unknown as AuditLog[]);
-          setTotalAuditoria(auditoria.total ?? auditoria.data.length);
+          setTemProximaAuditoria(auditoria.temProxima === true);
+          setProximoCursorAuditoria(typeof auditoria.proximoCursor === 'string' ? auditoria.proximoCursor : undefined);
         }
         if (contagens.success && contagens.data) {
           setContagemSistema(contagens.data.sistema);
@@ -297,6 +302,7 @@ export function LogsPage() {
     setFiltroNivelAudit('todos');
     setDataInicioAudit('');
     setDataFimAudit('');
+    setCursoresAuditoria([undefined]);
   };
 
   const handleBuscarTimeline = async () => {
@@ -376,7 +382,9 @@ export function LogsPage() {
         );
         setLogsSistema([]);
         setLogsAuditoria([]);
-        setTotalAuditoria(0);
+        setTemProximaAuditoria(false);
+        setProximoCursorAuditoria(undefined);
+        setCursoresAuditoria([undefined]);
         setContagemSistema(0);
         setContagemAuditoria(0);
         setClearDialogOpen(false);
@@ -652,11 +660,11 @@ export function LogsPage() {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm">Resumo da consulta</CardTitle>
-              <CardDescription>A tabela mostra os 200 registros mais recentes dentre os resultados encontrados.</CardDescription>
+              <CardDescription>A tabela mostra uma página estável de até 200 registros, ordenada do mais recente para o mais antigo.</CardDescription>
             </CardHeader>
             <CardContent className="grid grid-cols-2 gap-3 sm:grid-cols-2">
-              <div><p className="text-2xl font-bold">{totalAuditoria}</p><p className="text-xs text-muted-foreground">Registros encontrados</p></div>
               <div><p className="text-2xl font-bold">{logsAuditoria.length}</p><p className="text-xs text-muted-foreground">Registros carregados</p></div>
+              <div><p className="text-2xl font-bold">{contagemAuditoria}</p><p className="text-xs text-muted-foreground">Total global</p></div>
             </CardContent>
           </Card>
           <Card>
@@ -703,7 +711,10 @@ export function LogsPage() {
                 <Button variant="outline" size="sm" onClick={limparFiltrosAuditoria}>
                   <RotateCcw className="mr-2 h-4 w-4" />Limpar Filtros
                 </Button>
-                <Button size="sm" onClick={carregarLogsAuditoria}>
+                <Button size="sm" onClick={() => {
+                  setCursoresAuditoria([undefined]);
+                  void carregarLogsAuditoria();
+                }}>
                   <Search className="mr-2 h-4 w-4" />Filtrar
                 </Button>
               </div>
@@ -729,6 +740,33 @@ export function LogsPage() {
                 searchColumn="acao"
                 searchPlaceholder="Buscar na descrição..."
               />
+              <div className="mt-4 flex items-center justify-end gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={cursoresAuditoria.length <= 1}
+                  onClick={() => {
+                    const anterior = cursoresAuditoria.at(-2);
+                    setCursoresAuditoria(historico => historico.slice(0, -1));
+                    void carregarLogsAuditoria(anterior);
+                  }}
+                >
+                  Anterior
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={!temProximaAuditoria}
+                  onClick={() => {
+                    const cursor = proximoCursorAuditoria;
+                    if (!cursor) return;
+                    setCursoresAuditoria(historico => [...historico, cursor]);
+                    void carregarLogsAuditoria(cursor);
+                  }}
+                >
+                  Próxima
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

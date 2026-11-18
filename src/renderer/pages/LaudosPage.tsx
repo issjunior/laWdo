@@ -1,5 +1,6 @@
 import { normalizarCodigoExame } from '@shared/gdl/natureza-exame';
 import { ImportarBkpLaudo } from '@/components/laudo/ImportarBkpLaudo';
+import { EnviarCopiaGoogleDriveDialog } from '@/components/google-drive/EnviarCopiaGoogleDriveDialog';
 import { permiteEdicaoCampo } from '@/lib/politica-edicao-conteudo';
 import { materializarEdicaoPontual } from '@/lib/adaptadores-conteudo-laudo';
 import { useConfirmacaoConteudo } from '@/components/editor/ConfirmacaoConteudo';
@@ -31,7 +32,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Edit, ChevronDown, Eye, FileText, Trash2, Send, ShieldAlert, Lock, CheckCircle, RotateCcw, Clock, Wand2, Download, CircleAlert, RefreshCw, Loader2 } from 'lucide-react';
+import { Edit, ChevronDown, Eye, FileText, Trash2, Send, ShieldAlert, Lock, CheckCircle, RotateCcw, Clock, Wand2, Download, CircleAlert, RefreshCw, Loader2, Upload } from 'lucide-react';
 import { lerUsuarioSessao } from '@/lib/usuario-sessao';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { DefinicaoColunaTabela } from '@/components/data-table/data-table-features';
@@ -87,9 +88,10 @@ import { prepararInicializacaoEditorLaudo, lerConteudoAtualEditorLaudo, sincroni
 import { normalizarConteudoComparavel } from '@/lib/conteudo-comparavel-laudo';
 import { capturaProblemaLaudoAtiva, registrarDiagnosticoEditorLaudo } from '@/lib/diagnostico-editor-laudo';
 import type { SolicitacaoIdentificacaoProjetilB601 } from '@/lib/b601-campos-projetil';
-import { atualizarNumeroFigura, centralizarFigurasSozinhas, centralizarFigurasSozinhasHtml, corrigirMolduraVaziaLocalNecropsia, definirAjusteVisualParFiguras, definirAlturaParFiguras, extrairDescricaoFigura, legendaFiguraAusente, localizarFiguraPorIndice, normalizarParesFiguras, observarEstruturaFiguras, obterAjusteVisualParFigura, obterAlturaParFigura, removerFiguraEReorganizarPar, renumerarFigurasNosEditores, restaurarLegendaFigura } from '@/lib/figuras';
+import { aplicarAjustePar, atualizarNumeroFigura, centralizarFigurasSozinhasHtml, corrigirMolduraVaziaLocalNecropsia, extrairDescricaoFigura, legendaFiguraAusente, observarEstruturaFiguras, renumerarFigurasNasSecoes, renumerarFigurasNosEditores, restaurarLegendaFigura } from '@/lib/figuras';
 import { ajusteVisualParFigurasValido, alturaParFigurasValida, type AjusteVisualParFiguras } from '@shared/figura/enquadramento';
-import type { ResultadoAtualizacaoFiguras } from '@shared/types/imagem-laudo.types';
+import { ehImagemLaudoPainel as isImagemLaudo } from '@shared/figura/painel';
+import type { ResultadoAtualizacaoFiguras, ResultadoInsercaoFiguras, ResultadoOperacaoPainelFiguras } from '@shared/types/imagem-laudo.types';
 import type { LaudoConteudo, LaudoResumoLista } from '@shared/types/laudo.types';
 import {
   Dialog,
@@ -165,18 +167,11 @@ import {
 } from '@/lib/pendencias-conclusao-laudo';
 import { toast } from 'sonner';
 import { obterNomeArquivoLaudo } from '@shared/utils/nomes-documentos-rep';
-import { criarHtmlFigura } from '@/lib/figura-html';
+import { atualizarOrigemImagemFigura, criarFigurasLaudoHtml, prepararIdentidadesFigurasHtml } from '@/features/figuras/documento';
+import { extrairFigurasDoHtml } from '@/features/figuras/extracao';
+import { useControleFigurasLaudo } from '@/features/figuras/useControleFigurasLaudo';
 import { ErroPreparacaoImagemPdf, resolverImagensImpressaoLaudo } from '@/lib/imagens-impressao-laudo';
 import { conteudoHtmlEhVazio, removerIlustracoesVazias } from '@/lib/ilustracoes-secoes';
-
-function buildFigureHtml(url: string, id: string, legenda: string, previa = false): string {
-  const html = criarHtmlFigura(url, id, legenda);
-  return (previa ? html.replace('<figure ', '<figure data-imagem-previa="true" ') : html) + '<br>';
-}
-
-function buildFiguresHtml(imagens: Array<{ url: string; id: string; legenda: string; previa?: boolean }>): string {
-  return imagens.map(img => buildFigureHtml(img.url, img.id, img.legenda, img.previa)).join('');
-}
 
 interface Placeholder {
   id: string;
@@ -316,15 +311,7 @@ const isString = (valor: unknown): valor is string => typeof valor === 'string';
 
 const isBoolean = (valor: unknown): valor is boolean => typeof valor === 'boolean';
 
-const isImagemLaudoArray = (valor: unknown): valor is ImagemLaudo[] => Array.isArray(valor);
-
-const isImagemLaudo = (valor: unknown): valor is ImagemLaudo => (
-  isRecord(valor)
-  && isString(valor.id)
-  && isString(valor.url)
-  && isString(valor.thumbnailUrl)
-  && isString(valor.legenda)
-);
+const isImagemLaudoArray = (valor: unknown): valor is ImagemLaudo[] => Array.isArray(valor) && valor.every(isImagemLaudo);
 
 const isLaudoConteudo = (valor: unknown): valor is LaudoConteudo => (
   isRecord(valor) && isString(valor.id) && isString(valor.conteudo)
@@ -510,45 +497,13 @@ interface FallbackModeloIaPendente {
   modeloRecomendado: string | null;
 }
 
-/** Extrai figuras do HTML de um editor (modo multi ou single) */
-const extrairFigurasDoHtml = (html: string): ImagemLaudo[] => {
-  if (!html) return [];
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(html, 'text/html');
-  return extrairFigurasDaRaiz(doc);
-};
-
-const extrairFigurasDaRaiz = (raiz: ParentNode): ImagemLaudo[] => {
-  const figures = raiz.querySelectorAll('.laudo-figure');
-  return Array.from(figures)
-    .map((fig, idx) => {
-      const id = fig.getAttribute('data-image-id') || '';
-      const dummy = fig.getAttribute('data-dummy') === 'true';
-      const img = fig.querySelector('img');
-      const figcaption = fig.querySelector('figcaption');
-      return {
-        id,
-        url: img?.getAttribute('src') || '',
-        thumbnailUrl: img?.getAttribute('src') || '',
-        legenda: figcaption?.textContent?.replace(/^Fig(?:ura|\.)\s*(?:\d+|XX)[:\s]*\s*/i, '').trim() || '',
-        numero_figura: idx + 1,
-        sequencia: idx + 1,
-        created_at: '',
-        dummy,
-        imagemOrigemId: fig.getAttribute('data-image-original-id') || undefined,
-        alturaParPercentual: obterAlturaParFigura(fig),
-        ajusteVisualPar: obterAjusteVisualParFigura(fig),
-      };
-    })
-    .filter(f => f.id && f.url);
-};
-
 export const LaudosPage: React.FC = () => {
   const { confirmar: confirmarConteudo, dialogo: dialogoConteudo } = useConfirmacaoConteudo();
   const navigate = useNavigate();
   const location = useLocation();
   const { setTemporariamenteRecolhida } = useSidebar();
   const [laudos, setLaudos] = useState<LaudoItem[]>([]);
+  const [laudoParaEnviarDrive, setLaudoParaEnviarDrive] = useState<LaudoItem | null>(null);
   const filtroDashboard = useMemo(() => new URLSearchParams(location.search), [location.search]);
   const laudosFiltradosDashboard = useMemo(() => {
     const status = filtroDashboard.get('status');
@@ -602,6 +557,8 @@ export const LaudosPage: React.FC = () => {
     temAlteracaoPendente,
   } = useGerenciadorAlteracoesLaudo(() => ({ montagem: versaoMontagemEditor, modo: editorMode }));
   const sessaoEditor = obterSessao();
+  const editoresFigurasAlteradosRef = useRef(new Set<string>());
+  const { extrairFigurasDoEditor, obterAlvoFigura, obterImagensProtegidas, obterFigurasDevolvidas, consumirFigurasDevolvidas, inserirFiguraNaSelecao, inserirFigurasDocumentoUnico, inserirFigurasEmEditor, substituirFigura, atualizarLegendaFigura, ajustarParFigura: ajustarParNoControle, removerFiguraDocumentoUnico, removerFiguraSecao, iniciarProcessamentoImagem, haOperacoesPendentes, executarOperacaoFigura } = useControleFigurasLaudo({ editorMode, singleEditorHtml, secoes, secoesAtuaisRef, sessaoEditor, obterSessao, sessaoAtual, obterEditor: obterEditorTinyMce, editoresFigurasAlteradosRef });
   const registrarEventoPagina = useCallback((evento: 'visualizacao_aplicada' | 'tabelas_corrigidas' | 'editor_pronto', dados: { ocultosAtual?: number; previasAtual?: number; atualTamanho?: number } = {}) => {
     registrarDiagnosticoEditorLaudo({ evento, sessao: obterSessao(), montagem: versaoMontagemEditor, modo: editorMode, origem: 'automatica', ...dados });
   }, [editorMode, obterSessao, versaoMontagemEditor]);
@@ -678,6 +635,7 @@ export const LaudosPage: React.FC = () => {
   const [panelCollapsed, setPanelCollapsed] = useState(false);
   const [panelPoppedOut, setPanelPoppedOut] = useState(false);
   const [figuraSubstituicaoSolicitada, setFiguraSubstituicaoSolicitada] = useState<string | null>(null);
+  const [ocorrenciaSubstituicaoSolicitada, setOcorrenciaSubstituicaoSolicitada] = useState<string | null>(null);
   const [insercaoNoCursorSolicitada, setInsercaoNoCursorSolicitada] = useState<number | null>(null);
   const alvoInsercaoFiguraRef = useRef<{ editor: TinyMceEditorInstance; bookmark: BookmarkTinyMce } | null>(null);
   const [dialogoCampoReservadoAberto, setDialogoCampoReservadoAberto] = useState(false);
@@ -780,6 +738,7 @@ export const LaudosPage: React.FC = () => {
 
   const [syncEnabled, setSyncEnabled] = useState(true);
   const [figuraAtivaId, setFiguraAtivaId] = useState<string | null>(null);
+  const [figuraAtivaOcorrenciaId, setFiguraAtivaOcorrenciaId] = useState<string | null>(null);
   const [imagemSelecionadaIaId, setImagemSelecionadaIaId] = useState<string | null>(null);
 
   const [ilustracoesKey, setIlustracoesKey] = useState(0);
@@ -982,7 +941,11 @@ export const LaudosPage: React.FC = () => {
     origem: OrigemAlteracaoLaudo = 'usuario',
   ) => {
     registrarAlteracao(origem);
+    if (secoesAtuaisRef.current[idx]) {
+      secoesAtuaisRef.current = secoesAtuaisRef.current.map((secao, indice) => indice === idx ? { ...secao, conteudo: novoConteudo } : secao);
+    }
     setSecoes(prev => {
+      if (!prev[idx]) return prev;
       const novas = [...prev];
       novas[idx] = { ...novas[idx], conteudo: novoConteudo };
       return novas;
@@ -997,7 +960,7 @@ export const LaudosPage: React.FC = () => {
       return parseSingleHtmlToSecoes(latestHtml, secoes);
     }
 
-    return secoes.map((secao, idx) => {
+    return secoesAtuaisRef.current.map((secao, idx) => {
       const editor = obterEditorTinyMce(`secao-${idx}`);
       const conteudo = editor ? lerConteudoAtualEditorLaudo(editor) : secao.conteudo;
       return { ...secao, conteudo };
@@ -1112,6 +1075,10 @@ export const LaudosPage: React.FC = () => {
 
   const handleEditorModeChange = useCallback((nextMode: 'multi' | 'single') => {
     if (nextMode === editorMode) return;
+    if (haOperacoesPendentes()) {
+      toast.info('Aguarde a conclusão das operações de figuras antes de trocar o modo.');
+      return;
+    }
     const idsEditores = editorMode === 'single' ? ['laudo-single-editor'] : secoes.map((_, indice) => `secao-${indice}`);
     if (idsEditores.some(id => obterEditorTinyMce(id)?.getBody()?.querySelector('[data-imagem-processando="true"]'))) {
       toast.info('Aguarde a preparação das imagens antes de trocar o modo do editor.');
@@ -1129,7 +1096,7 @@ export const LaudosPage: React.FC = () => {
       setSecoesMontadas(new Set());
     }
     setEditorMode(nextMode);
-  }, [buildSingleHtmlFromSecoes, editorMode, obterSecoesAtuaisDoEditor, secoes]);
+  }, [buildSingleHtmlFromSecoes, editorMode, haOperacoesPendentes, obterSecoesAtuaisDoEditor, secoes]);
 
   const carregarPlaceholders = useCallback(async () => {
     const rCat = await window.ipcAPI.categoria.findAll();
@@ -1173,10 +1140,11 @@ export const LaudosPage: React.FC = () => {
   useEffect(() => {
     if (!syncEnabled || !editando) {
       setFiguraAtivaId(null);
+      setFiguraAtivaOcorrenciaId(null);
       return;
     }
 
-    const ratios = new Map<string, number>();
+    const ratios = new Map<string, { imagemId: string; ocorrenciaId: string | null; proporcao: number }>();
     const observers: IntersectionObserver[] = [];
 
     const timeout = setTimeout(() => {
@@ -1192,15 +1160,19 @@ export const LaudosPage: React.FC = () => {
         const observer = new win.IntersectionObserver(
           (entries: IntersectionObserverEntry[]) => {
             for (const entry of entries) {
-              const id = (entry.target as HTMLElement).getAttribute('data-image-id') || '';
-              ratios.set(id, entry.intersectionRatio);
+              const figura = entry.target as HTMLElement;
+              const imagemId = figura.getAttribute('data-image-id') || '';
+              const ocorrenciaId = figura.getAttribute('data-figure-id');
+              ratios.set(ocorrenciaId || imagemId, { imagemId, ocorrenciaId, proporcao: entry.intersectionRatio });
             }
             let bestId: string | null = null;
+            let bestOcorrenciaId: string | null = null;
             let bestRatio = 0;
-            ratios.forEach((r, id) => {
-              if (r > bestRatio) { bestRatio = r; bestId = id; }
+            ratios.forEach(atual => {
+              if (atual.proporcao > bestRatio) { bestRatio = atual.proporcao; bestId = atual.imagemId; bestOcorrenciaId = atual.ocorrenciaId; }
             });
             setFiguraAtivaId(bestId);
+            setFiguraAtivaOcorrenciaId(bestOcorrenciaId);
           },
           { threshold: [0, 0.25, 0.5, 0.75, 1] }
         );
@@ -1237,9 +1209,14 @@ export const LaudosPage: React.FC = () => {
    * Verifica e cria a seção "ILUSTRAÇÕES" no modo multi-seção.
    * Retorna o índice da seção de ilustrações.
    */
-  const garantirSecaoIlustracoes = useCallback((): { idx: number; secoes: SecaoEditor[] } => {
-    const idxExistente = secoes.findIndex(s => s.titulo.trim().toUpperCase() === 'ILUSTRAÇÕES');
-    if (idxExistente >= 0) return { idx: idxExistente, secoes };
+  const garantirSecaoIlustracoes = useCallback((): { idx: number; secoes: SecaoEditor[]; criada: boolean } => {
+    const secoesAtuais = secoesAtuaisRef.current;
+    const idxExistente = secoesAtuais.findIndex(s => s.titulo.trim().toUpperCase() === 'ILUSTRAÇÕES');
+    if (idxExistente >= 0) {
+      setSecoesColapsadas(prev => prev[idxExistente] === false ? prev : { ...prev, [idxExistente]: false });
+      setSecoesMontadas(prev => prev.has(idxExistente) ? prev : new Set(prev).add(idxExistente));
+      return { idx: idxExistente, secoes: secoesAtuais, criada: false };
+    }
 
     const novaSecao: SecaoEditor = {
       nivel: 2,
@@ -1247,9 +1224,9 @@ export const LaudosPage: React.FC = () => {
       conteudo: '<p>&nbsp;</p>',
     };
 
-    const titulosUpper = secoes.map(s => s.titulo.trim().toUpperCase());
+    const titulosUpper = secoesAtuais.map(s => s.titulo.trim().toUpperCase());
     let idx: number;
-    const novas: SecaoEditor[] = [...secoes];
+    const novas: SecaoEditor[] = [...secoesAtuais];
 
     const idxConsideracoes = titulosUpper.indexOf('CONSIDERAÇÕES FINAIS');
     if (idxConsideracoes >= 0) {
@@ -1272,50 +1249,34 @@ export const LaudosPage: React.FC = () => {
       }
     }
 
+    secoesAtuaisRef.current = novas;
     setSecoes(novas);
-    setSecoesColapsadas(prev => ({ ...prev, [idx]: false }));
-    return { idx, secoes: novas };
-  }, [secoes]);
+    setSecoesColapsadas(prev => ({ ...Object.fromEntries(Object.entries(prev).map(([chave, valor]) => [Number(chave) >= idx ? Number(chave) + 1 : Number(chave), valor])), [idx]: false }));
+    setSecoesMontadas(prev => new Set([...Array.from(prev, indice => indice >= idx ? indice + 1 : indice), idx]));
+    return { idx, secoes: novas, criada: true };
+  }, []);
 
   const [revisaoFiguras, setRevisaoFiguras] = useState(0);
-  const editoresFigurasAlteradosRef = useRef(new Set<string>());
-  const cacheFigurasRef = useRef<Array<{ html: string; raiz: HTMLElement | null; figuras: ImagemLaudo[] }>>([]);
-  const extrairFigurasDoEditor = useCallback((): ImagemLaudo[] => {
-    const fontes = editorMode === 'single' ? [singleEditorHtml] : secoes.map(secao => secao.conteudo);
-    const anteriores = cacheFigurasRef.current;
-    cacheFigurasRef.current = fontes.map((html, indice) => {
-      const id = editorMode === 'single' ? 'laudo-single-editor' : `secao-${indice}`;
-      const raiz = obterEditorTinyMce(id)?.getBody() ?? null;
-      const anterior = anteriores[indice];
-      const alterado = editoresFigurasAlteradosRef.current.delete(id);
-      if (anterior && anterior.raiz === raiz && !alterado && (raiz || anterior.html === html)) return anterior;
-      const figuras = raiz ? extrairFigurasDaRaiz(raiz) : html.includes('laudo-figure') ? extrairFigurasDoHtml(html) : [];
-      return { html: raiz ? '' : html, raiz, figuras };
-    });
-    return cacheFigurasRef.current.flatMap(item => item.figuras)
-      .map((figura, indice) => ({ ...figura, numero_figura: indice + 1, sequencia: indice + 1 }));
-  }, [editorMode, singleEditorHtml, secoes]);
-
-  useEffect(() => {
-    cacheFigurasRef.current = [];
-    editoresFigurasAlteradosRef.current.clear();
-  }, [sessaoEditor]);
 
   const sincronizarNumeracaoFigurasEditores = () => {
-    const ids = editorMode === 'single'
-      ? ['laudo-single-editor']
-      : secoes.map((_, indice) => `secao-${indice}`);
-    const editores = ids.map(obterEditorTinyMce).filter((editor): editor is TinyMceEditorInstance => Boolean(editor));
-    if (!medirOperacaoEditorLaudo('numerar_figuras_editores', () => renumerarFigurasNosEditores(editores), {
-      quantidade: editores.length, incremental: false, modoUnico: editorMode === 'single',
-    })) return;
     if (editorMode === 'single') {
       const editor = obterEditorTinyMce('laudo-single-editor');
-      if (editor) setSingleEditorHtml(editor.getContent());
+      if (editor && medirOperacaoEditorLaudo('numerar_figuras_editores', () => renumerarFigurasNosEditores([editor]), {
+        quantidade: 1, incremental: false, modoUnico: true,
+      })) setSingleEditorHtml(editor.getContent());
     } else {
+      const secoesAnalisadas = secoesAtuaisRef.current;
+      const fontes = secoesAnalisadas.map((secao, indice) => ({ editor: obterEditorTinyMce(`secao-${indice}`), html: secao.conteudo }));
+      const conteudos = medirOperacaoEditorLaudo('numerar_figuras_editores', () => renumerarFigurasNasSecoes(fontes), {
+        quantidade: fontes.length, incremental: false, modoUnico: false,
+      });
+      if (!conteudos.some(conteudo => conteudo !== null)) return;
       setSecoes(atuais => atuais.map((secao, indice) => {
-        const editor = obterEditorTinyMce(`secao-${indice}`);
-        return editor ? { ...secao, conteudo: editor.getContent() } : secao;
+        const anterior = secoesAnalisadas[indice];
+        const conteudo = conteudos[indice];
+        if (!anterior || anterior.id !== secao.id || conteudo === null || conteudo === undefined) return secao;
+        if (!fontes[indice].editor && secao.conteudo !== anterior.conteudo) return secao;
+        return { ...secao, conteudo };
       }));
     }
   };
@@ -1381,7 +1342,7 @@ export const LaudosPage: React.FC = () => {
         let dataUri = imagem?.getAttribute('src') || '';
         if (dataUri.startsWith('blob:')) {
           dataUri = await converterBlobImagemParaDataUri(dataUri);
-          imagem?.setAttribute('src', dataUri);
+          if (imagem) atualizarOrigemImagemFigura(imagem, dataUri);
         }
         if (!imagemId || !/^data:image\/(?:jpeg|png|gif|bmp|webp);base64,/i.test(dataUri)) continue;
 
@@ -1426,20 +1387,57 @@ export const LaudosPage: React.FC = () => {
     }));
   }, [editando?.id, editorMode, parseSingleHtmlToSecoes, secoes]);
 
-  const handleScrollToFigure = useCallback((imageId: string) => {
-    const editorIds = editorMode === 'single'
-      ? ['laudo-single-editor']
-      : secoes.map((_, i) => `secao-${i}`);
-    for (const editorId of editorIds) {
-      const editor = obterEditorTinyMce(editorId);
-      if (!editor) continue;
-      const figure = editor.getBody()?.querySelector(`.laudo-figure[data-image-id="${imageId}"]`);
-      if (figure) {
-        figure.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        break;
-      }
-    }
-  }, [editorMode, secoes]);
+  const temporizadorLocalizacaoFiguraRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const animacaoLocalizacaoFiguraRef = useRef<Animation | null>(null);
+  useEffect(() => () => {
+    if (temporizadorLocalizacaoFiguraRef.current !== null) clearTimeout(temporizadorLocalizacaoFiguraRef.current);
+    temporizadorLocalizacaoFiguraRef.current = null;
+    animacaoLocalizacaoFiguraRef.current?.cancel();
+    animacaoLocalizacaoFiguraRef.current = null;
+  }, [sessaoEditor, editorMode]);
+  const handleScrollToFigure = useCallback((imageId: string, ocorrenciaId?: string) => {
+    if (temporizadorLocalizacaoFiguraRef.current !== null) clearTimeout(temporizadorLocalizacaoFiguraRef.current);
+    temporizadorLocalizacaoFiguraRef.current = null;
+    animacaoLocalizacaoFiguraRef.current?.cancel();
+    animacaoLocalizacaoFiguraRef.current = null;
+    const localizarNoEditor = (editor: TinyMceEditorInstance | null): boolean => {
+      const figura = Array.from(editor?.getBody()?.querySelectorAll<HTMLElement>('.laudo-figure[data-image-id]') || [])
+        .find(item => item.getAttribute('data-image-id') === imageId && (!ocorrenciaId || item.getAttribute('data-figure-id') === ocorrenciaId));
+      const imagem = figura?.querySelector<HTMLImageElement>('img');
+      if (!editor || !figura || !imagem) return false;
+      editor.focus();
+      editor.selection.select(imagem);
+      editor.nodeChanged();
+      setFiguraAtivaId(imageId);
+      setFiguraAtivaOcorrenciaId(figura.getAttribute('data-figure-id'));
+      figura.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const moldura = imagem.parentElement?.hasAttribute('data-conteiner-quadro-figura')
+        ? imagem.parentElement : imagem;
+      animacaoLocalizacaoFiguraRef.current = moldura.animate(
+        [{ outline: '4px solid #1a55e0', outlineOffset: '-4px' }],
+        { duration: 1, fill: 'forwards' },
+      );
+      return true;
+    };
+    const editorIds = editorMode === 'single' ? ['laudo-single-editor'] : secoesAtuaisRef.current.map((_, indice) => `secao-${indice}`);
+    if (editorIds.some(id => localizarNoEditor(obterEditorTinyMce(id)))) return;
+    if (editorMode !== 'multi' || !ocorrenciaId) return;
+    const alvo = obterAlvoFigura(-1, ocorrenciaId);
+    if (!alvo || alvo.indiceSecao === null || alvo.figura.getAttribute('data-image-id') !== imageId) return;
+    const indice = alvo.indiceSecao;
+    const sessao = obterSessao();
+    setSecoesColapsadas(atuais => ({ ...atuais, [indice]: false }));
+    setSecoesMontadas(atuais => new Set(atuais).add(indice));
+    let tentativas = 0;
+    const aguardarEditor = () => {
+      temporizadorLocalizacaoFiguraRef.current = null;
+      if (!sessaoAtual(sessao) || editorModeAtualRef.current !== 'multi') return;
+      if (localizarNoEditor(obterEditorTinyMce(`secao-${indice}`))) return;
+      if (++tentativas < 50) temporizadorLocalizacaoFiguraRef.current = setTimeout(aguardarEditor, 100);
+      else toast.error('Não foi possível localizar a figura no editor.');
+    };
+    temporizadorLocalizacaoFiguraRef.current = setTimeout(aguardarEditor, 100);
+  }, [editorMode, obterAlvoFigura, obterSessao, sessaoAtual]);
 
   const obterEditorIlustracoes = useCallback((): {
     editorId: string;
@@ -1451,42 +1449,31 @@ export const LaudosPage: React.FC = () => {
       const editor = obterEditorTinyMce('laudo-single-editor');
       return { editorId: 'laudo-single-editor', idx: -1, editor, secoesAtuais: secoes };
     }
-    const { idx, secoes: secoesAtuais } = garantirSecaoIlustracoes();
-    const editor = obterEditorTinyMce(`secao-${idx}`);
+    const { idx, secoes: secoesAtuais, criada } = garantirSecaoIlustracoes();
+    const secaoRenderizada = secoes[idx];
+    const secaoAtual = secoesAtuais[idx];
+    const editor = criada || !secaoRenderizada || secaoRenderizada.id !== secaoAtual.id || secaoRenderizada.titulo !== secaoAtual.titulo
+      ? null : obterEditorTinyMce(`secao-${idx}`);
     return { editorId: `secao-${idx}`, idx, editor, secoesAtuais };
   }, [editorMode, secoes, garantirSecaoIlustracoes]);
 
   const aplicarFigurasNoEditor = useCallback((
     operacao: string,
     imagens: Array<{ url: string; id: string; legenda: string; previa?: boolean }>,
-    substituirConteudo: boolean = false,
-  ): { metodo: 'execCommand' | 'remount'; count: number } => {
-    const { editorId, idx, editor } = obterEditorIlustracoes();
+  ): { metodo: 'execCommand' | 'remount'; idsAplicados: string[]; falhas: ResultadoInsercaoFiguras['falhas'] } => {
+    const { editorId, idx, editor, secoesAtuais } = obterEditorIlustracoes();
 
-      if (editor && editor.initialized && editor.getBody()) {
-        if (substituirConteudo) {
-          const body = editor.getBody();
-          Array.from(body.querySelectorAll('.laudo-figure') as NodeListOf<Element>).forEach((fig) => {
-            const next = fig.nextElementSibling;
-            fig.remove();
-            if (next && (next.tagName === 'BR' || next.tagName === 'P')) next.remove();
-        });
-      }
-      for (const img of imagens) {
-        editor.execCommand('insertLaudoImage', false, {
-          url: img.url, id: img.id, legenda: img.legenda, previa: img.previa
-        });
-      }
-      return { metodo: 'execCommand', count: imagens.length };
+    if (editor && editor.initialized && editor.getBody()) {
+      return { metodo: 'execCommand', ...inserirFigurasEmEditor(editor, imagens) };
     }
 
-    const secaoIlus = secoes.find(s => s.titulo.trim().toUpperCase() === 'ILUSTRAÇÕES');
+    const secaoIlus = secoesAtuais[idx];
     const isNewOrEmpty = !secaoIlus || secaoIlus.conteudo === '<p>&nbsp;</p>';
-    const baseContent = (substituirConteudo || isNewOrEmpty)
+    const baseContent = isNewOrEmpty
       ? ''
       : (secaoIlus?.conteudo || '');
 
-    atualizarConteudoSecao(idx, baseContent + buildFiguresHtml(imagens));
+    atualizarConteudoSecao(idx, baseContent + criarFigurasLaudoHtml(imagens));
 
     if (editor?.getBody()) {
       scrollRestoreRef.current = editor.getBody().parentElement?.scrollTop || 0;
@@ -1504,8 +1491,8 @@ export const LaudosPage: React.FC = () => {
 
     const status = editor ? 'loaded-without-body' : 'not-loaded';
     console.warn(`[ilustracoes] ${operacao}: remount ${editorId} (editor: ${status}) ${imagens.length} figs`);
-    return { metodo: 'remount', count: imagens.length };
-  }, [secoes, obterEditorIlustracoes, atualizarConteudoSecao]);
+    return { metodo: 'remount', idsAplicados: imagens.map(imagem => imagem.id), falhas: [] };
+  }, [obterEditorIlustracoes, atualizarConteudoSecao, inserirFigurasEmEditor]);
 
   const handleIlustracoesEditorInit = useCallback((editor: TinyMceEditorInstance) => {
     if (scrollRestoreRef.current !== null && editor.getBody()) {
@@ -1520,46 +1507,91 @@ export const LaudosPage: React.FC = () => {
 
   const panelCallbacksRef = useRef<{
     onInsertImage: (url: string, id: string, legenda: string) => Promise<boolean> | boolean;
-    onDeleteImage: (imageId: string, indice?: number) => void;
-    onUpdateLegenda: (id: string, legenda: string) => void;
+    onDeleteImage: (imageId: string, indice?: number, ocorrenciaId?: string) => Promise<boolean>;
+    onExcluirArquivo: (imageId: string) => Promise<void>;
+    onUpdateLegenda: (id: string, legenda: string, ocorrenciaId?: string) => Promise<void> | void;
     onReorder: (imagens: ImagemLaudo[]) => void;
     onRefreshHtml: (restaurarLegendas?: boolean) => Promise<ResultadoAtualizacaoFiguras>;
-    onInsertAll: (imagens: ImagemLaudo[]) => Promise<string[]>;
+    onInsertAll: (imagens: ImagemLaudo[]) => Promise<ResultadoInsercaoFiguras>;
     onSyncToggle: (enabled: boolean) => void;
-    onScrollToFigure: (imageId: string) => void;
+    onScrollToFigure: (imageId: string, ocorrenciaId?: string) => void;
     onReplaceImage: (imageId: string, imagem: ImagemLaudo, indice?: number) => Promise<boolean> | boolean;
     onEditImage: (indice: number, imagem: ImagemLaudo, imagemOrigemId: string, imagemAnteriorId: string) => Promise<void> | void;
-    onPrevisualizarAlturaPar: (indice: number, alturaPercentual: number) => void;
-    onConfirmarAlturaPar: (indice: number, alturaPercentual: number) => void;
-    onCancelarAlturaPar: (indice: number) => void;
-    onDefinirAjusteVisualPar: (indice: number, ajusteVisual: AjusteVisualParFiguras) => void;
+    onPrevisualizarAlturaPar: (indice: number, alturaPercentual: number, ocorrenciaId?: string) => void;
+    onConfirmarAlturaPar: (indice: number, alturaPercentual: number, ocorrenciaId?: string) => Promise<boolean> | boolean;
+    onCancelarAlturaPar: (indice: number, ocorrenciaId?: string) => void;
+    onDefinirAjusteVisualPar: (indice: number, ajusteVisual: AjusteVisualParFiguras, ocorrenciaId?: string) => Promise<boolean> | boolean;
     onGerarLegenda: (imageId: string) => Promise<string | null>;
-    syncCurrentState: (resultadoAtualizacao?: ResultadoAtualizacaoFiguras) => void;
+    syncCurrentState: (resultadoAtualizacao?: ResultadoAtualizacaoFiguras, resultadoOperacao?: ResultadoOperacaoPainelFiguras) => void;
   }>({
     onInsertImage: () => false,
-    onDeleteImage: () => {},
+    onDeleteImage: async () => false,
+    onExcluirArquivo: async () => {},
     onUpdateLegenda: () => {},
     onReorder: () => {},
     onRefreshHtml: async () => ({ restauradas: 0, semDescricao: 0, falhasConsulta: 0 }),
-    onInsertAll: async () => [],
+    onInsertAll: async () => ({ inseridas: [], falhas: [] }),
     onSyncToggle: () => {},
     onScrollToFigure: () => {},
     onReplaceImage: () => false,
     onEditImage: () => {},
     onPrevisualizarAlturaPar: () => {},
-    onConfirmarAlturaPar: () => {},
+    onConfirmarAlturaPar: () => false,
     onCancelarAlturaPar: () => {},
-    onDefinirAjusteVisualPar: () => {},
+    onDefinirAjusteVisualPar: () => false,
     onGerarLegenda: async () => null,
     syncCurrentState: () => {},
   });
 
+  const ajustarParFigura = (indice: number, ocorrenciaId: string | undefined, ajuste: Parameters<typeof aplicarAjustePar>[2]): boolean => {
+    const resultado = ajustarParNoControle(indice, ocorrenciaId, ajuste);
+    if (!resultado) return false;
+    if (resultado.alterou) {
+      if (resultado.indiceSecao === null) {
+        setSingleEditorHtml(resultado.html);
+        setSecoes(parseSingleHtmlToSecoes(resultado.html, secoesAtuaisRef.current));
+      } else atualizarConteudoSecao(resultado.indiceSecao, resultado.html);
+      setRevisaoFiguras(revisao => revisao + 1);
+      registrarAlteracao('usuario');
+    }
+    return true;
+  };
+
+  const substituirFiguraNoDocumento = (imagemAnteriorId: string, imagem: ImagemLaudo, previa: string, indice?: number, exigirFiguraReal = false, legenda?: string): boolean => {
+    const resultado = substituirFigura(imagemAnteriorId, imagem, previa, indice, exigirFiguraReal, legenda);
+    if (!resultado) return false;
+    consumirFigurasDevolvidas([imagem.id, ...(imagem.imagemOrigemId ? [imagem.imagemOrigemId] : [])]);
+    if (resultado.indiceSecao === null) {
+      setSingleEditorHtml(resultado.html);
+      setSecoes(parseSingleHtmlToSecoes(resultado.html, secoesAtuaisRef.current));
+    } else atualizarConteudoSecao(resultado.indiceSecao, resultado.html);
+    setRevisaoFiguras(revisao => revisao + 1);
+    registrarAlteracao('usuario');
+    return true;
+  };
+
   panelCallbacksRef.current = {
+    onExcluirArquivo: async imageId => {
+      if (!editando?.id) throw new Error('O laudo não está mais aberto.');
+      const sessao = obterSessao();
+      const idsEditores = editorMode === 'single' ? ['laudo-single-editor'] : secoesAtuaisRef.current.map((_, indice) => `secao-${indice}`);
+      for (const id of idsEditores) editoresFigurasAlteradosRef.current.add(id);
+      extrairFigurasDoEditor();
+      if (obterImagensProtegidas().includes(imageId)) throw new Error('Esta imagem faz parte do histórico de edição do laudo e não pode ser excluída nesta sessão.');
+      const exclusao = await window.ipcAPI.ilustracoes.excluirImagem(editando.id, imageId);
+      if (!exclusao.success) throw new Error(exclusao.error || 'Não foi possível excluir a imagem.');
+      if (!sessaoAtual(sessao)) throw new Error('A sessão do laudo foi encerrada.');
+      const descarte = await window.ipcAPI.ilustracoes.descartarEstagio(editando.id, imageId);
+      if (!descarte.success) throw new Error(descarte.error || 'Não foi possível descartar a imagem temporária.');
+    },
     onInsertImage: async (_url, id, legenda) => {
       if (!editando?.id) return false;
-      const editorDestino = editorMode === 'single' ? obterEditorTinyMce('laudo-single-editor') : obterEditorIlustracoes().editor;
+      const sessaoInicial = obterSessao();
+      const indiceIlustracoes = secoesAtuaisRef.current.findIndex(secao => secao.titulo.trim().toUpperCase() === 'ILUSTRAÇÕES');
+      const editorDestino = editorMode === 'single' ? obterEditorTinyMce('laudo-single-editor') : indiceIlustracoes >= 0 ? obterEditorTinyMce(`secao-${indiceIlustracoes}`) : null;
       const largura = Math.max(1, editorDestino?.getBody()?.clientWidth || 800);
       const preparacao = await window.ipcAPI.ilustracoes.prepararInsercao(editando.id, id, largura, largura * 0.75, window.devicePixelRatio || 1);
+      if (!sessaoAtual(sessaoInicial) || laudoAtualRef.current !== editando.id || editorModeAtualRef.current !== editorMode) return false;
       if (!preparacao.success || !preparacao.data) {
         toast.error(preparacao.error || 'Não foi possível preparar a imagem.');
         return false;
@@ -1572,34 +1604,17 @@ export const LaudosPage: React.FC = () => {
           toast.error('Editor não encontrado. Tente recarregar a página.');
           return false;
         }
-        const secoesAtualizadas = parseSingleHtmlToSecoes(editor.getContent(), secoes);
-        let idxIlus = secoesAtualizadas.findIndex(s => s.titulo.trim().toUpperCase() === 'ILUSTRAÇÕES');
-        const secoesComIlus = [...secoesAtualizadas];
-        if (idxIlus < 0) {
-          const titulos = secoesAtualizadas.map(s => s.titulo.trim().toUpperCase());
-          const idxRef = titulos.indexOf('CONSIDERAÇÕES FINAIS');
-          if (idxRef >= 0) { idxIlus = idxRef; }
-          else {
-            const idxEnc = titulos.indexOf('ENCERRAMENTO');
-            if (idxEnc >= 0) { idxIlus = idxEnc; }
-            else {
-              const idxConcl = titulos.indexOf('CONCLUSÃO');
-              idxIlus = idxConcl >= 0 ? idxConcl : secoesAtualizadas.length;
-            }
-          }
-          secoesComIlus.splice(idxIlus, 0, { nivel: 2, titulo: 'ILUSTRAÇÕES', conteudo: '<p>&nbsp;</p>' });
-        }
-        const secaoIlus = secoesComIlus[idxIlus];
-        const baseContent = secaoIlus.conteudo === '<p>&nbsp;</p>' ? '' : secaoIlus.conteudo;
-        secoesComIlus[idxIlus] = { ...secaoIlus, conteudo: baseContent + buildFigureHtml(url, id, legenda, true) };
-        setSecoes(secoesComIlus);
-        const novoHtml = buildSingleHtmlFromSecoes(secoesComIlus);
-        setSingleEditorHtml(novoHtml);
-        editor.setContent(novoHtml);
+        const aplicacao = inserirFigurasDocumentoUnico(editor, [{ url, id, legenda, previa: true }], secoes, parseSingleHtmlToSecoes, buildSingleHtmlFromSecoes);
+        if (!aplicacao.idsAplicados.includes(id)) return false;
+        consumirFigurasDevolvidas([id]);
+        setSingleEditorHtml(aplicacao.html);
+        setSecoes(parseSingleHtmlToSecoes(aplicacao.html, aplicacao.secoes));
         toast.success('Imagem inserida na seção ILUSTRAÇÕES');
         return true;
       }
       const r = aplicarFigurasNoEditor('insertImage', [{ url, id, legenda, previa: true }]);
+      if (!r.idsAplicados.includes(id)) return false;
+      consumirFigurasDevolvidas([id]);
       if (r.metodo === 'execCommand') {
         toast.success('Imagem inserida na seção ILUSTRAÇÕES');
       } else {
@@ -1607,130 +1622,141 @@ export const LaudosPage: React.FC = () => {
       }
       return true;
     },
-    onDeleteImage: (imageId, indiceFigura) => {
+    onDeleteImage: async (imageId, indiceFigura, ocorrenciaId) => {
+      if (!editando?.id) return false;
+      const figurasAtuais = extrairFigurasDoEditor();
+      if (!ocorrenciaId && indiceFigura === undefined && figurasAtuais.filter(figura => figura.id === imageId).length !== 1) return false;
+      const alvo = ocorrenciaId ? figurasAtuais.find(figura => figura.ocorrenciaId === ocorrenciaId)
+        : indiceFigura !== undefined ? figurasAtuais[indiceFigura] : figurasAtuais.find(figura => figura.id === imageId);
+      if (!alvo || alvo.id !== imageId) return false;
+      const ocorrenciaAlvo = alvo.ocorrenciaId || ocorrenciaId;
+      const sessaoInicial = obterSessao();
+      if (!alvo.dummy) {
+        const resultado = await window.ipcAPI.ilustracoes.disponibilizarImagem(editando.id, imageId);
+        if (!resultado.success) throw new Error(resultado.error || 'Não foi possível disponibilizar a imagem no painel.');
+      }
+      if (!sessaoAtual(sessaoInicial) || laudoAtualRef.current !== editando.id || editorModeAtualRef.current !== editorMode) return false;
       setImagemSelecionadaIaId(atual => atual === imageId ? null : atual);
       if (editorMode === 'single') {
-        const editor = obterEditorTinyMce('laudo-single-editor');
-        if (!editor) return;
-        const figura = indiceFigura === undefined
-          ? Array.from(editor.getBody().querySelectorAll<HTMLElement>('.laudo-figure[data-image-id]'))
-            .find(elemento => elemento.getAttribute('data-image-id') === imageId)
-          : localizarFiguraPorIndice([editor], indiceFigura)?.figura;
-        if (!figura || figura.getAttribute('data-image-id') !== imageId) return;
-        editor.undoManager.transact(() => {
-          const secao = figura?.closest<HTMLElement>('section[data-laudo-secao="true"]');
-          editor.execCommand('removeLaudoImage', false, { id: imageId, figureElement: figura });
+        const novoHtml = removerFiguraDocumentoUnico(imageId, indiceFigura, ocorrenciaAlvo, secao => {
           if (secao?.querySelector('[data-laudo-secao-header="true"]')?.getAttribute('data-titulo-base')?.replace(/^\s*\d+(?:\.\d+)?\.?\s*/, '').trim().toUpperCase() === 'ILUSTRAÇÕES') {
             const conteudo = secao.querySelector<HTMLElement>('[data-laudo-secao-content="true"]');
             if (conteudo && conteudoHtmlEhVazio(conteudo.innerHTML) && !secao.querySelector('[data-laudo-subsecoes="true"]')) secao.remove();
           }
         });
-        const novoHtml = editor.getContent();
+        if (novoHtml === null) return false;
         setSingleEditorHtml(novoHtml);
-        setSecoes(parseSingleHtmlToSecoes(novoHtml, secoes));
-        return;
+        setSecoes(parseSingleHtmlToSecoes(novoHtml, secoesAtuaisRef.current));
+        registrarAlteracao('usuario');
+        return true;
       }
       let indice = -1;
       let indiceNaSecao = -1;
       let quantidadeAnterior = 0;
-      for (let indiceSecao = 0; indiceSecao < secoes.length; indiceSecao++) {
-        const secao = secoes[indiceSecao];
+      const secoesAtuais = secoesAtuaisRef.current;
+      for (let indiceSecao = 0; indiceSecao < secoesAtuais.length; indiceSecao++) {
+        const secao = secoesAtuais[indiceSecao];
         const html = obterEditorTinyMce(`secao-${indiceSecao}`)?.getContent() || secao.conteudo;
         const figuras = extrairFigurasDoHtml(html);
-        const indiceLocal = indiceFigura === undefined
+        const indiceLocal = ocorrenciaAlvo
+          ? figuras.findIndex(figura => figura.ocorrenciaId === ocorrenciaAlvo)
+          : indiceFigura === undefined
           ? figuras.findIndex(figura => figura.id === imageId)
           : indiceFigura - quantidadeAnterior;
         if (indiceLocal >= 0 && indiceLocal < figuras.length) {
-          if (figuras[indiceLocal].id !== imageId) return;
+          if (figuras[indiceLocal].id !== imageId) return false;
           indice = indiceSecao;
           indiceNaSecao = indiceLocal;
           break;
         }
         quantidadeAnterior += figuras.length;
       }
-      if (indice < 0 || indiceNaSecao < 0) return;
-      const editor = obterEditorTinyMce(`secao-${indice}`);
-      const secaoAnterior = { ...secoes[indice], conteudo: editor?.getContent() || secoes[indice].conteudo };
-      let conteudo: string;
-      if (editor?.getBody()) {
-        const figura = localizarFiguraPorIndice([editor], indiceNaSecao)?.figura;
-        if (!figura || figura.getAttribute('data-image-id') !== imageId) return;
-        editor.undoManager.transact(() => editor.execCommand('removeLaudoImage', false, { id: imageId, figureElement: figura }));
-        conteudo = editor.getContent();
-      } else {
-        const doc = new DOMParser().parseFromString(secoes[indice].conteudo, 'text/html');
-        const figura = doc.querySelectorAll<HTMLElement>('.laudo-figure[data-image-id]')[indiceNaSecao];
-        if (!figura || figura.getAttribute('data-image-id') !== imageId) return;
-        if (!removerFiguraEReorganizarPar(figura)) {
-          figura.remove();
-          centralizarFigurasSozinhas(doc.body);
-        }
-        conteudo = doc.body.innerHTML;
-      }
+      if (indice < 0 || indiceNaSecao < 0) return false;
+      const resultado = removerFiguraSecao(indice, indiceNaSecao, quantidadeAnterior, imageId, ocorrenciaAlvo);
+      if (!resultado) return false;
+      const secaoAnterior = { ...secoesAtuais[indice], conteudo: resultado.anterior };
+      const conteudo = resultado.atual;
       const removerSecao = secaoAnterior.titulo.trim().toUpperCase() === 'ILUSTRAÇÕES'
         && conteudoHtmlEhVazio(conteudo)
-        && !secoes.some(secao => secao.parentId && secao.parentId === secaoAnterior.id);
-      setSecoes(prev => {
+        && !secoesAtuais.some(secao => secao.parentId && secao.parentId === secaoAnterior.id);
+      const secaoEstavaMontada = secoesMontadas.has(indice);
+      const secaoEstavaRecolhida = secoesColapsadas[indice] ?? false;
+      const conteudosAtuais = new Map<number, string>();
+      if (removerSecao) {
+        for (let indiceAtual = 0; indiceAtual < secoesAtuais.length; indiceAtual++) {
+          if (indiceAtual === indice) continue;
+          const editorAtual = obterEditorTinyMce(`secao-${indiceAtual}`);
+          if (editorAtual?.getBody()) conteudosAtuais.set(indiceAtual, editorAtual.getContent());
+        }
+      }
+      const atualizarSecoesAposExclusao = (prev: SecaoEditor[]) => {
+        if (!prev[indice] || prev[indice].id !== secaoAnterior.id || prev[indice].titulo !== secaoAnterior.titulo) return prev;
+        if (removerSecao) return prev.flatMap((secao, indiceAtual) => {
+          if (indiceAtual === indice) return [];
+          const anterior = secoesAtuais[indiceAtual];
+          const html = conteudosAtuais.get(indiceAtual);
+          return [anterior && secao.id === anterior.id && secao.titulo === anterior.titulo && html !== undefined ? { ...secao, conteudo: html } : secao];
+        });
         const novas = [...prev];
         novas[indice] = { ...novas[indice], conteudo };
-        return removerIlustracoesVazias(novas);
-      });
+        return novas;
+      };
+      secoesAtuaisRef.current = atualizarSecoesAposExclusao(secoesAtuaisRef.current);
+      setSecoes(atualizarSecoesAposExclusao);
+      registrarAlteracao('usuario');
       if (removerSecao) {
         setSecoesColapsadas(atuais => Object.fromEntries(Object.entries(atuais)
           .flatMap(([chave, valor]) => Number(chave) === indice ? [] : [[Number(chave) > indice ? Number(chave) - 1 : Number(chave), valor]])));
+        setSecoesMontadas(atuais => new Set(Array.from(atuais).flatMap(indiceAtual => indiceAtual === indice ? [] : [indiceAtual > indice ? indiceAtual - 1 : indiceAtual])));
         toast.success('Seção ILUSTRAÇÕES removida', {
           action: {
             label: 'Desfazer',
             onClick: () => {
-              setSecoes(atuais => {
-                const restauradas = [...atuais];
+              if (!sessaoAtual(sessaoInicial) || laudoAtualRef.current !== editando.id) return;
+              if (secoesAtuaisRef.current.some(secao => secao.titulo.trim().toUpperCase() === 'ILUSTRAÇÕES')) {
+                toast.error('A seção ILUSTRAÇÕES já foi recriada. A exclusão anterior não pode ser desfeita automaticamente.');
+                return;
+              }
+              const secoesAntesDaRestauracao = secoesAtuaisRef.current;
+              const conteudosAntesDaRestauracao = new Map<number, string>();
+              for (let indiceAtual = 0; indiceAtual < secoesAntesDaRestauracao.length; indiceAtual++) {
+                const editorAtual = obterEditorTinyMce(`secao-${indiceAtual}`);
+                if (editorAtual?.getBody()) conteudosAntesDaRestauracao.set(indiceAtual, editorAtual.getContent());
+              }
+              const restaurarSecao = (atuais: SecaoEditor[]) => {
+                const restauradas = atuais.map((secao, indiceAtual) => {
+                  const anterior = secoesAntesDaRestauracao[indiceAtual];
+                  const html = conteudosAntesDaRestauracao.get(indiceAtual);
+                  return anterior && secao.id === anterior.id && secao.titulo === anterior.titulo && html !== undefined ? { ...secao, conteudo: html } : secao;
+                });
                 restauradas.splice(Math.min(indice, restauradas.length), 0, secaoAnterior);
                 return restauradas;
+              };
+              secoesAtuaisRef.current = restaurarSecao(secoesAtuaisRef.current);
+              setSecoes(restaurarSecao);
+              setSecoesColapsadas(atuais => ({ ...Object.fromEntries(Object.entries(atuais)
+                .map(([chave, valor]) => [Number(chave) >= indice ? Number(chave) + 1 : Number(chave), valor])), [indice]: secaoEstavaRecolhida }));
+              setSecoesMontadas(atuais => {
+                const restauradas = new Set(Array.from(atuais, indiceAtual => indiceAtual >= indice ? indiceAtual + 1 : indiceAtual));
+                if (secaoEstavaMontada) restauradas.add(indice);
+                return restauradas;
               });
-              setSecoesColapsadas(atuais => Object.fromEntries(Object.entries(atuais)
-                .map(([chave, valor]) => [Number(chave) >= indice ? Number(chave) + 1 : Number(chave), valor])));
               if (editando?.id) void window.ipcAPI.ilustracoes.arquivarImagem(editando.id, imageId);
             },
           },
         });
       }
+      return true;
     },
-    onUpdateLegenda: (id, legenda) => {
-      const atualizarFigcaption = (editor: TinyMceEditorInstance) => {
-        const figure = editor.getBody()?.querySelector(`.laudo-figure[data-image-id="${id}"]`);
-        if (figure) {
-          const figcaption = figure.querySelector('figcaption');
-          if (figcaption) {
-            const legendaAtual = figcaption.textContent || '';
-            const match = legendaAtual.match(/Fig(?:ura|\.)\s*(\d+|XX)/i);
-            const num = match ? match[1] : '';
-            const numFormatado = num === 'XX' ? 'XX' : (num ? num.padStart(2, '0') : 'XX');
-            figcaption.textContent = legenda
-              ? `Figura ${numFormatado}: ${legenda}`
-              : `Figura ${numFormatado}`;
-            const img = figure.querySelector('img');
-            if (img) img.alt = figcaption.textContent;
-          }
-          return true;
-        }
-        return false;
-      };
-      if (editorMode === 'single') {
-        const editor = obterEditorTinyMce('laudo-single-editor');
-        if (editor && atualizarFigcaption(editor)) {
-          const novoHtml = editor.getContent();
-          setSingleEditorHtml(novoHtml);
-          setSecoes(parseSingleHtmlToSecoes(novoHtml, secoes));
-        }
-        return;
-      }
-      for (let idx = 0; idx < secoes.length; idx++) {
-        const editor = obterEditorTinyMce(`secao-${idx}`);
-        if (editor && atualizarFigcaption(editor)) {
-          atualizarConteudoSecao(idx, editor.getContent());
-          break;
-        }
-      }
+    onUpdateLegenda: (id, legenda, ocorrenciaId) => {
+      const resultado = atualizarLegendaFigura(id, legenda, ocorrenciaId);
+      if (!resultado) throw new Error('A legenda da figura não está mais disponível.');
+      if (!resultado.alterou) return;
+      if (resultado.indiceSecao === null) {
+        setSingleEditorHtml(resultado.html);
+        setSecoes(parseSingleHtmlToSecoes(resultado.html, secoesAtuaisRef.current));
+      } else atualizarConteudoSecao(resultado.indiceSecao, resultado.html);
+      registrarAlteracao();
     },
     onReorder: () => {},
     onRefreshHtml: async (restaurarLegendas = false) => {
@@ -1834,355 +1860,250 @@ export const LaudosPage: React.FC = () => {
       return resultado;
     },
     onInsertAll: async (imagens) => {
-      if (!editando?.id || imagens.length === 0) return [];
-      const editorDestino = editorMode === 'single' ? obterEditorTinyMce('laudo-single-editor') : obterEditorIlustracoes().editor;
+      if (!editando?.id) throw new Error('O laudo não está mais aberto.');
+      const resultado: ResultadoInsercaoFiguras = { inseridas: [], falhas: [] };
+      if (imagens.length === 0) return resultado;
+      const sessaoInicial = obterSessao();
+      const indiceIlustracoes = secoesAtuaisRef.current.findIndex(secao => secao.titulo.trim().toUpperCase() === 'ILUSTRAÇÕES');
+      const editorDestino = editorMode === 'single' ? obterEditorTinyMce('laudo-single-editor') : indiceIlustracoes >= 0 ? obterEditorTinyMce(`secao-${indiceIlustracoes}`) : null;
       const largura = Math.max(1, editorDestino?.getBody()?.clientWidth || 800);
       const preparadas: Array<{ url: string; id: string; legenda: string; previa: true }> = [];
       for (const imagem of imagens) {
-        const resposta = await window.ipcAPI.ilustracoes.prepararInsercao(editando.id, imagem.id, largura, largura * 0.75, window.devicePixelRatio || 1);
+        let resposta;
+        try {
+          resposta = await window.ipcAPI.ilustracoes.prepararInsercao(editando.id, imagem.id, largura, largura * 0.75, window.devicePixelRatio || 1);
+        } catch (erro: unknown) {
+          if (!sessaoAtual(sessaoInicial)) throw new Error('A sessão do laudo foi encerrada.');
+          resultado.falhas.push({ imagemId: imagem.id, mensagem: obterMensagemErro(erro, 'Não foi possível preparar a imagem.') });
+          continue;
+        }
+        if (!sessaoAtual(sessaoInicial) || laudoAtualRef.current !== editando.id || editorModeAtualRef.current !== editorMode) throw new Error('A sessão ou o modo de edição do laudo mudou.');
         if (!resposta.success || !resposta.data) {
-          toast.error(resposta.error || `Não foi possível preparar ${imagem.nomeArquivo || 'uma imagem'}.`);
+          resultado.falhas.push({ imagemId: imagem.id, mensagem: resposta.error || 'Não foi possível preparar a imagem.' });
           continue;
         }
         preparadas.push({ url: resposta.data.previaDataUri, id: imagem.id, legenda: imagem.legenda, previa: true });
       }
-      if (preparadas.length === 0) return [];
+      if (preparadas.length === 0) return resultado;
+      let idsAplicados: string[];
       if (editorMode === 'single') {
         const editor = obterEditorTinyMce('laudo-single-editor');
-        if (!editor) return [];
-        const secoesAtualizadas = parseSingleHtmlToSecoes(editor.getContent(), secoes);
-        let idxIlus = secoesAtualizadas.findIndex(secao => secao.titulo.trim().toUpperCase() === 'ILUSTRAÇÕES');
-        if (idxIlus < 0) {
-          idxIlus = secoesAtualizadas.findIndex(secao => ['CONSIDERAÇÕES FINAIS', 'ENCERRAMENTO', 'CONCLUSÃO'].includes(secao.titulo.trim().toUpperCase()));
-          if (idxIlus < 0) idxIlus = secoesAtualizadas.length;
-          secoesAtualizadas.splice(idxIlus, 0, { nivel: 2, titulo: 'ILUSTRAÇÕES', conteudo: '<p>&nbsp;</p>' });
+        if (!editor) {
+          resultado.falhas.push(...preparadas.map(imagem => ({ imagemId: imagem.id, mensagem: 'Editor não encontrado.' })));
+          return resultado;
         }
-        const secao = secoesAtualizadas[idxIlus];
-        secoesAtualizadas[idxIlus] = { ...secao, conteudo: (secao.conteudo === '<p>&nbsp;</p>' ? '' : secao.conteudo) + buildFiguresHtml(preparadas) };
-        const novoHtml = buildSingleHtmlFromSecoes(secoesAtualizadas);
-        setSecoes(secoesAtualizadas);
-        setSingleEditorHtml(novoHtml);
-        editor.setContent(novoHtml);
+        const aplicacao = inserirFigurasDocumentoUnico(editor, preparadas, secoes, parseSingleHtmlToSecoes, buildSingleHtmlFromSecoes);
+        idsAplicados = aplicacao.idsAplicados;
+        resultado.falhas.push(...preparadas.filter(imagem => !idsAplicados.includes(imagem.id)).map(imagem => ({ imagemId: imagem.id, mensagem: 'O editor não confirmou a inserção.' })));
+        if (idsAplicados.length > 0) {
+          setSingleEditorHtml(aplicacao.html);
+          setSecoes(parseSingleHtmlToSecoes(aplicacao.html, aplicacao.secoes));
+        }
       } else {
-        aplicarFigurasNoEditor('insertAll', preparadas);
+        const aplicacao = aplicarFigurasNoEditor('insertAll', preparadas);
+        idsAplicados = aplicacao.idsAplicados;
+        resultado.falhas.push(...aplicacao.falhas);
       }
-      toast.success(`${preparadas.length} imagem(ns) inserida(s) na seção ILUSTRAÇÕES`);
-      return preparadas.map(imagem => imagem.id);
+      if (idsAplicados.length > 0) toast.success(`${idsAplicados.length} imagem(ns) inserida(s) na seção ILUSTRAÇÕES`);
+      consumirFigurasDevolvidas(idsAplicados);
+      resultado.inseridas = idsAplicados;
+      return resultado;
     },
     onSyncToggle: (enabled) => { setSyncEnabled(enabled); },
-    onScrollToFigure: (imageId) => { handleScrollToFigure(imageId); },
+    onScrollToFigure: (imageId, ocorrenciaId) => { handleScrollToFigure(imageId, ocorrenciaId); },
     onGerarLegenda: (imageId) => gerarLegendaImagemIaRef.current(imageId),
     onReplaceImage: async (imageId, imagem, indice) => {
       if (!editando?.id) return false;
+      const sessaoInicial = obterSessao();
       const preparacao = await window.ipcAPI.ilustracoes.prepararInsercao(editando.id, imagem.id, 800, 600, window.devicePixelRatio || 1);
+      if (!sessaoAtual(sessaoInicial) || laudoAtualRef.current !== editando.id || editorModeAtualRef.current !== editorMode) return false;
       if (!preparacao.success || !preparacao.data) {
         toast.error(preparacao.error || 'Não foi possível gerar a prévia da figura.');
         return false;
       }
-      const previa = preparacao.data.previaDataUri;
-      setImagemSelecionadaIaId(atual => atual === imageId ? null : atual);
-      const executarReplace = (): boolean => {
-        const substituirEmSecaoNaoMontada = (indiceSecao: number, indiceFigura?: number): boolean => {
-          const raiz = new DOMParser().parseFromString(secoes[indiceSecao].conteudo, 'text/html').body;
-          const figuras = Array.from(raiz.querySelectorAll<HTMLElement>('.laudo-figure'));
-          const figura = indiceFigura === undefined
-            ? figuras.find(item => item.getAttribute('data-image-id') === imageId)
-            : figuras[indiceFigura];
-          if (!figura || figura.getAttribute('data-image-id') !== imageId) return false;
-          const elemento = figura.querySelector('img');
-          if (!elemento) return false;
-          elemento.setAttribute('src', previa);
-          figura.setAttribute('data-image-id', imagem.id);
-          figura.setAttribute('data-imagem-previa', 'true');
-          if (imagem.imagemOrigemId) figura.setAttribute('data-image-original-id', imagem.imagemOrigemId);
-          else figura.removeAttribute('data-image-original-id');
-          figura.removeAttribute('data-dummy');
-          normalizarParesFiguras(raiz);
-          atualizarConteudoSecao(indiceSecao, raiz.innerHTML);
-          return true;
-        };
-        if (indice !== undefined) {
-          if (editorMode === 'multi') {
-            let inicio = 0;
-            for (let indiceSecao = 0; indiceSecao < secoes.length; indiceSecao++) {
-              const editor = obterEditorTinyMce(`secao-${indiceSecao}`);
-              const raiz = editor?.getBody() || new DOMParser().parseFromString(secoes[indiceSecao].conteudo, 'text/html').body;
-              const figuras = Array.from(raiz.querySelectorAll<HTMLElement>('.laudo-figure'));
-              const quantidade = figuras.length;
-              if (indice < inicio + quantidade) {
-                if (!editor) return substituirEmSecaoNaoMontada(indiceSecao, indice - inicio);
-                const figura = figuras[indice - inicio];
-                if (figura.getAttribute('data-image-id') !== imageId) return false;
-                editor.execCommand('replaceLaudoImage', false, { figureElement: figura, newImageId: imagem.id, newUrl: previa, imagemOrigemId: imagem.imagemOrigemId, previa: true });
-                atualizarConteudoSecao(indiceSecao, editor.getContent());
-                return true;
-              }
-              inicio += quantidade;
-            }
-            return false;
-          }
-          const alvo = localizarFiguraPorIndice([obterEditorTinyMce('laudo-single-editor')].filter((editor): editor is TinyMceEditorInstance => Boolean(editor)), indice);
-          if (!alvo || alvo.figura.getAttribute('data-image-id') !== imageId) return false;
-          alvo.editor.execCommand('replaceLaudoImage', false, { figureElement: alvo.figura, newImageId: imagem.id, newUrl: previa, imagemOrigemId: imagem.imagemOrigemId, previa: true });
-          const html = alvo.editor.getContent();
-          setSingleEditorHtml(html);
-          setSecoes(parseSingleHtmlToSecoes(html, secoes));
-          return true;
-        }
-        if (editorMode === 'single') {
-          const editor = obterEditorTinyMce('laudo-single-editor');
-          if (editor?.getBody()?.querySelector(`.laudo-figure[data-image-id="${imageId}"]`)) {
-            editor.execCommand('replaceLaudoImage', false, { imageId, newImageId: imagem.id, newUrl: previa, imagemOrigemId: imagem.imagemOrigemId, previa: true });
-            const novoHtml = editor.getContent();
-            setSingleEditorHtml(novoHtml);
-            setSecoes(parseSingleHtmlToSecoes(novoHtml, secoes));
-          } else return false;
-        } else {
-          let substituida = false;
-          for (let idx = 0; idx < secoes.length; idx++) {
-            const editor = obterEditorTinyMce(`secao-${idx}`);
-            if (editor) {
-              const figure = editor.getBody()?.querySelector(`.laudo-figure[data-image-id="${imageId}"]`);
-              if (figure) {
-                editor.execCommand('replaceLaudoImage', false, { imageId, newImageId: imagem.id, newUrl: previa, imagemOrigemId: imagem.imagemOrigemId, previa: true });
-                atualizarConteudoSecao(idx, editor.getContent());
-                substituida = true;
-                break;
-              }
-            } else if (substituirEmSecaoNaoMontada(idx)) {
-              substituida = true;
-              break;
-            }
-          }
-          if (!substituida) return false;
-        }
-        toast.success('Figura substituída');
-        return true;
-      };
-      return executarReplace();
+      const substituida = substituirFiguraNoDocumento(imageId, imagem, preparacao.data.previaDataUri, indice, false, imagem.legendaSubstituicao);
+      if (substituida) setImagemSelecionadaIaId(atual => atual === imageId ? null : atual);
+      return substituida;
     },
     onEditImage: async (indice, imagem, imagemOrigemId, imagemAnteriorId) => {
       if (!editando?.id) throw new Error('Laudo não está aberto.');
+      const sessaoInicial = obterSessao();
       const preparacao = await window.ipcAPI.ilustracoes.prepararInsercao(editando.id, imagem.id, 800, 600, window.devicePixelRatio || 1);
+      if (!sessaoAtual(sessaoInicial) || laudoAtualRef.current !== editando.id || editorModeAtualRef.current !== editorMode) {
+        throw new Error('A sessão ou o modo de edição do laudo mudou.');
+      }
       if (!preparacao.success || !preparacao.data) throw new Error(preparacao.error || 'Não foi possível preparar a prévia da imagem editada.');
-      const previa = preparacao.data.previaDataUri;
-      if (editorMode === 'multi') {
-        let inicio = 0;
-        for (let indiceSecao = 0; indiceSecao < secoes.length; indiceSecao++) {
-          const editor = obterEditorTinyMce(`secao-${indiceSecao}`);
-          const raiz = editor?.getBody() || new DOMParser().parseFromString(secoes[indiceSecao].conteudo, 'text/html').body;
-          const figuras = Array.from(raiz.querySelectorAll<HTMLElement>('.laudo-figure'));
-          if (indice >= inicio + figuras.length) {
-            inicio += figuras.length;
-            continue;
-          }
-          const figura = figuras[indice - inicio];
-          if (figura?.getAttribute('data-dummy') === 'true' || figura?.getAttribute('data-image-id') !== imagemAnteriorId) {
-            throw new Error('A figura mudou desde que a edição foi aberta. Abra a edição novamente.');
-          }
-          if (editor) {
-            editor.execCommand('replaceLaudoImage', false, { figureElement: figura, newImageId: imagem.id, newUrl: previa, imagemOrigemId, previa: true });
-            atualizarConteudoSecao(indiceSecao, editor.getContent());
-          } else {
-            figura.querySelector('img')?.setAttribute('src', previa);
-            figura.setAttribute('data-image-id', imagem.id);
-            figura.setAttribute('data-image-original-id', imagemOrigemId);
-            figura.setAttribute('data-imagem-previa', 'true');
-            normalizarParesFiguras(raiz);
-            atualizarConteudoSecao(indiceSecao, raiz.innerHTML);
-          }
-          registrarAlteracao();
-          return;
-        }
-        throw new Error('A figura selecionada não está mais disponível.');
-      }
-      const ids = editorMode === 'single' ? ['laudo-single-editor'] : secoes.map((_, indiceSecao) => `secao-${indiceSecao}`);
-      const alvo = localizarFiguraPorIndice(ids.map(obterEditorTinyMce).filter((editor): editor is TinyMceEditorInstance => Boolean(editor)), indice);
-      if (!alvo || alvo.figura.getAttribute('data-dummy') === 'true' || alvo.figura.getAttribute('data-image-id') !== imagemAnteriorId) {
-        throw new Error('A figura mudou desde que a edição foi aberta. Abra a edição novamente.');
-      }
-      alvo.editor.execCommand('replaceLaudoImage', false, {
-        figureElement: alvo.figura, newImageId: imagem.id, newUrl: previa, imagemOrigemId, previa: true,
-      });
-      const html = alvo.editor.getContent();
-      if (editorMode === 'single') {
-        setSingleEditorHtml(html);
-        setSecoes(parseSingleHtmlToSecoes(html, secoes));
-      } else {
-        const indiceSecao = Number(alvo.editor.id.replace('secao-', ''));
-        if (Number.isInteger(indiceSecao)) atualizarConteudoSecao(indiceSecao, html);
-      }
-      registrarAlteracao();
-    },
-    onPrevisualizarAlturaPar: (indice, alturaPercentual) => {
-      if (!alturaParFigurasValida(alturaPercentual)) return;
-      if (editorMode === 'single') {
-        const editor = obterEditorTinyMce('laudo-single-editor');
-        const figura = editor ? localizarFiguraPorIndice([editor], indice)?.figura : undefined;
-        if (editor && figura) {
-          editor.execCommand('previsualizarAlturaParFiguras', false, { figureElement: figura, alturaPercentual });
-        }
-        return;
-      }
-      let inicio = 0;
-      for (let indiceSecao = 0; indiceSecao < secoes.length; indiceSecao++) {
-        const editor = obterEditorTinyMce(`secao-${indiceSecao}`);
-        const quantidade = editor
-          ? editor.getBody().querySelectorAll('.laudo-figure').length
-          : extrairFigurasDoHtml(secoes[indiceSecao].conteudo).length;
-        if (indice >= inicio + quantidade) {
-          inicio += quantidade;
-          continue;
-        }
-        if (editor) {
-          const figura = Array.from(editor.getBody().querySelectorAll<HTMLElement>('.laudo-figure'))[indice - inicio];
-          if (figura) editor.execCommand('previsualizarAlturaParFiguras', false, { figureElement: figura, alturaPercentual });
-        }
-        return;
+      if (!substituirFiguraNoDocumento(imagemAnteriorId, { ...imagem, imagemOrigemId }, preparacao.data.previaDataUri, indice, true)) {
+        throw new Error('A figura mudou ou não está mais disponível. Abra a edição novamente.');
       }
     },
-    onConfirmarAlturaPar: (indice, alturaPercentual) => {
-      if (!alturaParFigurasValida(alturaPercentual)) return;
-      const aplicarNoEditor = (editor: TinyMceEditorInstance, figura: HTMLElement, indiceSecao?: number): boolean => {
-        const alturaAnterior = obterAlturaParFigura(figura);
-        editor.execCommand('confirmarAlturaParFiguras', false, { figureElement: figura, alturaPercentual });
-        if (obterAlturaParFigura(figura) === alturaAnterior) return false;
-        const html = editor.getContent();
-        editoresFigurasAlteradosRef.current.add(editor.id);
-        if (editorMode === 'single') {
-          setSingleEditorHtml(html);
-          setSecoes(parseSingleHtmlToSecoes(html, secoes));
-        } else if (indiceSecao !== undefined) atualizarConteudoSecao(indiceSecao, html);
-        return true;
-      };
-      let alterou = false;
-      if (editorMode === 'single') {
-        const editor = obterEditorTinyMce('laudo-single-editor');
-        const figura = editor ? localizarFiguraPorIndice([editor], indice)?.figura : undefined;
-        if (editor && figura) alterou = aplicarNoEditor(editor, figura);
-      } else {
-        let inicio = 0;
-        for (let indiceSecao = 0; indiceSecao < secoes.length; indiceSecao++) {
-          const editor = obterEditorTinyMce(`secao-${indiceSecao}`);
-          const raiz = editor?.getBody() || new DOMParser().parseFromString(secoes[indiceSecao].conteudo, 'text/html').body;
-          const figuras = Array.from(raiz.querySelectorAll<HTMLElement>('.laudo-figure'));
-          if (indice >= inicio + figuras.length) {
-            inicio += figuras.length;
-            continue;
-          }
-          const figura = figuras[indice - inicio];
-          if (editor) alterou = aplicarNoEditor(editor, figura, indiceSecao);
-          else {
-            const resultado = definirAlturaParFiguras(figura, alturaPercentual);
-            if (resultado.alterou) {
-              atualizarConteudoSecao(indiceSecao, raiz.innerHTML);
-              alterou = true;
-            }
-          }
-          break;
-        }
-      }
-      if (!alterou) return;
-      setRevisaoFiguras(revisao => revisao + 1);
-      registrarAlteracao('usuario');
+    onPrevisualizarAlturaPar: (indice, alturaPercentual, ocorrenciaId) => {
+      if (haOperacoesPendentes() || !alturaParFigurasValida(alturaPercentual)) return;
+      const alvo = obterAlvoFigura(indice, ocorrenciaId);
+      alvo?.editor?.execCommand('previsualizarAlturaParFiguras', false, { figureElement: alvo.figura, alturaPercentual });
     },
-    onDefinirAjusteVisualPar: (indice, ajusteVisual) => {
-      const aplicarNoEditor = (editor: TinyMceEditorInstance, figura: HTMLElement, indiceSecao?: number): boolean => {
-        const ajusteAnterior = obterAjusteVisualParFigura(figura);
-        editor.execCommand('definirAjusteVisualParFiguras', false, { figureElement: figura, ajusteVisual });
-        if (obterAjusteVisualParFigura(figura) === ajusteAnterior) return false;
-        const html = editor.getContent();
-        editoresFigurasAlteradosRef.current.add(editor.id);
-        if (editorMode === 'single') {
-          setSingleEditorHtml(html);
-          setSecoes(parseSingleHtmlToSecoes(html, secoes));
-        } else if (indiceSecao !== undefined) atualizarConteudoSecao(indiceSecao, html);
-        return true;
-      };
-      let alterou = false;
-      if (editorMode === 'single') {
-        const editor = obterEditorTinyMce('laudo-single-editor');
-        const figura = editor ? localizarFiguraPorIndice([editor], indice)?.figura : undefined;
-        if (editor && figura) alterou = aplicarNoEditor(editor, figura);
-      } else {
-        let inicio = 0;
-        for (let indiceSecao = 0; indiceSecao < secoes.length; indiceSecao++) {
-          const editor = obterEditorTinyMce(`secao-${indiceSecao}`);
-          const raiz = editor?.getBody() || new DOMParser().parseFromString(secoes[indiceSecao].conteudo, 'text/html').body;
-          const figuras = Array.from(raiz.querySelectorAll<HTMLElement>('.laudo-figure'));
-          if (indice >= inicio + figuras.length) {
-            inicio += figuras.length;
-            continue;
-          }
-          const figura = figuras[indice - inicio];
-          if (editor) alterou = aplicarNoEditor(editor, figura, indiceSecao);
-          else {
-            const resultado = definirAjusteVisualParFiguras(figura, ajusteVisual);
-            if (resultado.alterou) {
-              atualizarConteudoSecao(indiceSecao, raiz.innerHTML);
-              alterou = true;
-            }
-          }
-          break;
-        }
-      }
-      if (!alterou) return;
-      setRevisaoFiguras(revisao => revisao + 1);
-      registrarAlteracao('usuario');
+    onConfirmarAlturaPar: (indice, alturaPercentual, ocorrenciaId) => {
+      if (!alturaParFigurasValida(alturaPercentual)) return false;
+      return ajustarParFigura(indice, ocorrenciaId, { tipo: 'altura', valor: alturaPercentual });
     },
-    onCancelarAlturaPar: indice => {
-      if (editorMode === 'single') {
-        const editor = obterEditorTinyMce('laudo-single-editor');
-        const figura = editor ? localizarFiguraPorIndice([editor], indice)?.figura : undefined;
-        if (editor && figura) editor.execCommand('cancelarPrevisualizacaoAlturaParFiguras', false, { figureElement: figura });
-        return;
-      }
-      let inicio = 0;
-      for (let indiceSecao = 0; indiceSecao < secoes.length; indiceSecao++) {
-        const editor = obterEditorTinyMce(`secao-${indiceSecao}`);
-        const quantidade = editor
-          ? editor.getBody().querySelectorAll('.laudo-figure').length
-          : extrairFigurasDoHtml(secoes[indiceSecao].conteudo).length;
-        if (indice >= inicio + quantidade) {
-          inicio += quantidade;
-          continue;
-        }
-        if (editor) {
-          const figura = Array.from(editor.getBody().querySelectorAll<HTMLElement>('.laudo-figure'))[indice - inicio];
-          if (figura) editor.execCommand('cancelarPrevisualizacaoAlturaParFiguras', false, { figureElement: figura });
-        }
-        return;
-      }
+    onDefinirAjusteVisualPar: (indice, ajusteVisual, ocorrenciaId) => {
+      if (!ajusteVisualParFigurasValido(ajusteVisual)) return false;
+      return ajustarParFigura(indice, ocorrenciaId, { tipo: 'visual', valor: ajusteVisual });
     },
-    syncCurrentState: (resultadoAtualizacao) => {
+    onCancelarAlturaPar: (indice, ocorrenciaId) => {
+      const alvo = obterAlvoFigura(indice, ocorrenciaId);
+      alvo?.editor?.execCommand('cancelarPrevisualizacaoAlturaParFiguras', false, { figureElement: alvo.figura });
+    },
+    syncCurrentState: (resultadoAtualizacao, resultadoOperacao) => {
       window.ipcAPI.ilustracoes.syncToPanel({
+        sessaoId: sessaoEditor,
         figurasNoEditor: extrairFigurasDoEditor(),
+        figurasDevolvidas: obterFigurasDevolvidas(),
+        imagensProtegidas: obterImagensProtegidas(),
         syncEnabled,
         figuraAtivaId,
+        figuraAtivaOcorrenciaId,
         tema: document.body.classList.contains('dark') ? 'dark' : 'light',
         resultadoAtualizacao,
+        resultadoOperacao,
       });
     },
+  };
+
+  const operacoesFigurasRef = useRef(panelCallbacksRef.current);
+  operacoesFigurasRef.current = { ...panelCallbacksRef.current };
+  const callbacksFiguras = panelCallbacksRef.current;
+  callbacksFiguras.onExcluirArquivo = (...args) => {
+    const sessao = obterSessao();
+    return executarOperacaoFigura(async () => {
+      if (!sessaoAtual(sessao)) throw new Error('A sessão do laudo foi encerrada.');
+      await operacoesFigurasRef.current.onExcluirArquivo(...args);
+    });
+  };
+  callbacksFiguras.onInsertImage = (...args) => {
+    const sessao = obterSessao();
+    return executarOperacaoFigura(async () => sessaoAtual(sessao) && await operacoesFigurasRef.current.onInsertImage(...args));
+  };
+  callbacksFiguras.onInsertAll = (...args) => {
+    const sessao = obterSessao();
+    return executarOperacaoFigura(async () => {
+      if (!sessaoAtual(sessao)) throw new Error('A sessão do laudo foi encerrada.');
+      return await operacoesFigurasRef.current.onInsertAll(...args);
+    });
+  };
+  callbacksFiguras.onDeleteImage = (...args) => {
+    const sessao = obterSessao();
+    return executarOperacaoFigura(async () => sessaoAtual(sessao) && await operacoesFigurasRef.current.onDeleteImage(...args));
+  };
+  callbacksFiguras.onReplaceImage = (...args) => {
+    const sessao = sessaoEditor;
+    return executarOperacaoFigura(async () => sessaoAtual(sessao) && await operacoesFigurasRef.current.onReplaceImage(...args));
+  };
+  callbacksFiguras.onEditImage = (...args) => {
+    const sessao = sessaoEditor;
+    return executarOperacaoFigura(async () => {
+      if (!sessaoAtual(sessao)) throw new Error('A sessão do laudo foi encerrada.');
+      await operacoesFigurasRef.current.onEditImage(...args);
+    });
+  };
+  callbacksFiguras.onUpdateLegenda = (...args) => {
+    const sessao = obterSessao();
+    return executarOperacaoFigura(async () => {
+      if (!sessaoAtual(sessao)) throw new Error('A sessão do laudo foi encerrada.');
+      await operacoesFigurasRef.current.onUpdateLegenda(...args);
+    });
+  };
+  callbacksFiguras.onRefreshHtml = (...args) => {
+    const sessao = obterSessao();
+    return executarOperacaoFigura(async () => {
+      if (!sessaoAtual(sessao)) return { restauradas: 0, semDescricao: 0, falhasConsulta: 0, erro: 'A sessão do laudo foi encerrada.' };
+      return await operacoesFigurasRef.current.onRefreshHtml(...args);
+    });
+  };
+  callbacksFiguras.onConfirmarAlturaPar = (...args) => {
+    const sessao = obterSessao();
+    return executarOperacaoFigura(async () => sessaoAtual(sessao) && await operacoesFigurasRef.current.onConfirmarAlturaPar(...args));
+  };
+  callbacksFiguras.onDefinirAjusteVisualPar = (...args) => {
+    const sessao = obterSessao();
+    return executarOperacaoFigura(async () => sessaoAtual(sessao) && await operacoesFigurasRef.current.onDefinirAjusteVisualPar(...args));
+  };
+
+  const solicitarExclusaoFigura = (imagemId: string, ocorrenciaId: string) => {
+    if (!window.confirm('Deseja remover esta figura do laudo?')) return;
+    void panelCallbacksRef.current.onDeleteImage(imagemId, undefined, ocorrenciaId).then(removida => {
+      if (!removida) toast.error('A figura não está mais disponível no documento.');
+    }).catch((erro: unknown) => toast.error(obterMensagemErro(erro, 'Não foi possível remover a figura.')));
   };
 
   useEffect(() => {
     if (!panelPoppedOut) return;
     const timer = setTimeout(() => {
       window.ipcAPI.ilustracoes.syncToPanel({
+        sessaoId: sessaoEditor,
         figurasNoEditor: extrairFigurasDoEditor(),
+        figurasDevolvidas: obterFigurasDevolvidas(),
+        imagensProtegidas: obterImagensProtegidas(),
         syncEnabled,
         figuraAtivaId,
+        figuraAtivaOcorrenciaId,
         tema: document.body.classList.contains('dark') ? 'dark' : 'light',
       });
     }, 100);
     return () => clearTimeout(timer);
-  }, [panelPoppedOut, extrairFigurasDoEditor, syncEnabled, figuraAtivaId, revisaoFiguras]);
+  }, [panelPoppedOut, sessaoEditor, extrairFigurasDoEditor, obterFigurasDevolvidas, obterImagensProtegidas, syncEnabled, figuraAtivaId, figuraAtivaOcorrenciaId, revisaoFiguras]);
 
   useEffect(() => {
     if (!panelPoppedOut) return;
     return window.ipcAPI.ilustracoes.onPanelAction((action: string, ...args: unknown[]) => {
       const cbs = panelCallbacksRef.current;
       switch (action) {
+        case 'solicitarOperacao': {
+          const [solicitacaoId, laudoId, sessaoId, operacao, ...parametros] = args;
+          if (!isString(solicitacaoId) || !isString(laudoId) || typeof sessaoId !== 'number' || !isString(operacao)) break;
+          const executar = async (): Promise<ResultadoOperacaoPainelFiguras['valor']> => {
+            if (laudoAtualRef.current !== laudoId || !sessaoAtual(sessaoId)) throw new Error('A sessão do laudo foi encerrada.');
+            if (operacao === 'insertImage' && isString(parametros[0]) && isString(parametros[1]) && isString(parametros[2])) {
+              return await cbs.onInsertImage(parametros[0], parametros[1], parametros[2]);
+            }
+            if (operacao === 'insertAll' && Array.isArray(parametros[0]) && parametros[0].every(isImagemLaudo)) {
+              return await cbs.onInsertAll(parametros[0]);
+            }
+            if (operacao === 'deleteImage' && isString(parametros[0])) {
+              return await cbs.onDeleteImage(parametros[0], typeof parametros[1] === 'number' ? parametros[1] : undefined, isString(parametros[2]) ? parametros[2] : undefined);
+            }
+            if (operacao === 'deleteFile' && isString(parametros[0])) {
+              await cbs.onExcluirArquivo(parametros[0]);
+              return true;
+            }
+            if (operacao === 'updateLegenda' && isString(parametros[0]) && isString(parametros[1])) {
+              await cbs.onUpdateLegenda(parametros[0], parametros[1], isString(parametros[2]) ? parametros[2] : undefined);
+              return true;
+            }
+            if (operacao === 'replaceImage' && isString(parametros[0]) && isImagemLaudo(parametros[1])) {
+              return await cbs.onReplaceImage(parametros[0], parametros[1], typeof parametros[2] === 'number' ? parametros[2] : undefined);
+            }
+            if (operacao === 'editImage' && typeof parametros[0] === 'number' && isImagemLaudo(parametros[1]) && isString(parametros[2]) && isString(parametros[3])) {
+              await cbs.onEditImage(parametros[0], parametros[1], parametros[2], parametros[3]);
+              return true;
+            }
+            if (operacao === 'generateCaption' && isString(parametros[0])) return await cbs.onGerarLegenda(parametros[0]);
+            if (operacao === 'refreshHtml' && typeof parametros[0] === 'boolean') return await cbs.onRefreshHtml(parametros[0]);
+            if (operacao === 'commitPairHeight' && typeof parametros[0] === 'number' && Number.isInteger(parametros[0]) && alturaParFigurasValida(parametros[1])) {
+              return await cbs.onConfirmarAlturaPar(parametros[0], parametros[1], isString(parametros[2]) ? parametros[2] : undefined);
+            }
+            if (operacao === 'setPairVisualMode' && typeof parametros[0] === 'number' && Number.isInteger(parametros[0]) && ajusteVisualParFigurasValido(parametros[1])) {
+              return await cbs.onDefinirAjusteVisualPar(parametros[0], parametros[1], isString(parametros[2]) ? parametros[2] : undefined);
+            }
+            throw new Error('Operação de figura inválida.');
+          };
+          void executar().then(valor => {
+            panelCallbacksRef.current.syncCurrentState(undefined, { solicitacaoId, sucesso: true, valor });
+          }).catch((erro: unknown) => {
+            panelCallbacksRef.current.syncCurrentState(undefined, { solicitacaoId, sucesso: false, erro: obterMensagemErro(erro, 'Não foi possível aplicar a operação no editor.') });
+          });
+          break;
+        }
         case 'insertImage':
           if (isString(args[0]) && isString(args[1]) && isString(args[2])) {
             void Promise.resolve(cbs.onInsertImage(args[0], args[1], args[2]))
@@ -2190,10 +2111,10 @@ export const LaudosPage: React.FC = () => {
           }
           break;
         case 'deleteImage':
-          if (isString(args[0])) cbs.onDeleteImage(args[0], typeof args[1] === 'number' ? args[1] : undefined);
+          if (isString(args[0])) void cbs.onDeleteImage(args[0], typeof args[1] === 'number' ? args[1] : undefined, isString(args[2]) ? args[2] : undefined);
           break;
         case 'updateLegenda':
-          if (isString(args[0]) && isString(args[1])) cbs.onUpdateLegenda(args[0], args[1]);
+          if (isString(args[0]) && isString(args[1])) void Promise.resolve(cbs.onUpdateLegenda(args[0], args[1], isString(args[2]) ? args[2] : undefined)).catch((erro: unknown) => toast.error(obterMensagemErro(erro, 'Não foi possível atualizar a legenda.')));
           break;
         case 'reorder':
           if (isImagemLaudoArray(args[0])) cbs.onReorder(args[0]);
@@ -2218,24 +2139,24 @@ export const LaudosPage: React.FC = () => {
           break;
         case 'previewPairHeight':
           if (typeof args[0] === 'number' && alturaParFigurasValida(args[1])) {
-            cbs.onPrevisualizarAlturaPar(args[0], args[1]);
+            cbs.onPrevisualizarAlturaPar(args[0], args[1], isString(args[2]) ? args[2] : undefined);
           }
           break;
         case 'commitPairHeight':
           if (typeof args[0] === 'number' && alturaParFigurasValida(args[1])) {
-            cbs.onConfirmarAlturaPar(args[0], args[1]);
+            void Promise.resolve(cbs.onConfirmarAlturaPar(args[0], args[1], isString(args[2]) ? args[2] : undefined)).catch((erro: unknown) => toast.error(obterMensagemErro(erro, 'Não foi possível ajustar as figuras.')));
           }
           break;
         case 'cancelPairHeight':
-          if (typeof args[0] === 'number') cbs.onCancelarAlturaPar(args[0]);
+          if (typeof args[0] === 'number') cbs.onCancelarAlturaPar(args[0], isString(args[1]) ? args[1] : undefined);
           break;
         case 'setPairVisualMode':
           if (typeof args[0] === 'number' && ajusteVisualParFigurasValido(args[1])) {
-            cbs.onDefinirAjusteVisualPar(args[0], args[1]);
+            void Promise.resolve(cbs.onDefinirAjusteVisualPar(args[0], args[1], isString(args[2]) ? args[2] : undefined)).catch((erro: unknown) => toast.error(obterMensagemErro(erro, 'Não foi possível ajustar as figuras.')));
           }
           break;
         case 'scrollToFigure':
-          if (isString(args[0])) cbs.onScrollToFigure(args[0]);
+          if (isString(args[0])) cbs.onScrollToFigure(args[0], isString(args[1]) ? args[1] : undefined);
           break;
         case 'replaceImage':
           if (isString(args[0]) && isImagemLaudo(args[1])) {
@@ -2262,7 +2183,7 @@ export const LaudosPage: React.FC = () => {
           break;
       }
     });
-  }, [panelPoppedOut]);
+  }, [panelPoppedOut, sessaoAtual]);
 
   useEffect(() => {
     if (!panelPoppedOut) return;
@@ -2319,7 +2240,7 @@ export const LaudosPage: React.FC = () => {
       setPreviewOpen(false);
       if (previewBlobUrl) URL.revokeObjectURL(previewBlobUrl);
       setPreviewBlobUrl('');
-      const secoesAtuais = conferirTabelasEditores(true);
+      const secoesAtuais = editorMode === 'multi' ? obterSecoesAtuaisDoEditor() : conferirTabelasEditores(true);
       
       // 1. Buscar dados da REP para placeholders
       const rRep = await window.ipcAPI.rep.findById(editando.rep_id);
@@ -2576,7 +2497,7 @@ export const LaudosPage: React.FC = () => {
         estrito: formato === 'pdf',
       });
 
-      const secoesAtuais = conferirTabelasEditores(true);
+      const secoesAtuais = editorMode === 'multi' ? obterSecoesAtuaisDoEditor() : conferirTabelasEditores(true);
       let html = ocultarTitulosSecoesNaSaida(montarHtmlEstruturalAtual(secoesAtuais));
 
       if (cabecalhoPrimeiraPagina) {
@@ -2681,7 +2602,7 @@ export const LaudosPage: React.FC = () => {
     if (aberturaLaudoRef.current !== abertura) return;
     const conteudoOriginal = laudoCompleto.conteudo || '';
     const conteudoCorrigido = corrigirMolduraVaziaLocalNecropsia(conteudoOriginal);
-    const conteudoInicial = centralizarFigurasSozinhasHtml(conteudoCorrigido === conteudoOriginal ? conteudoOriginal : reindexarFiguras(conteudoCorrigido));
+    const conteudoInicial = prepararIdentidadesFigurasHtml(centralizarFigurasSozinhasHtml(conteudoCorrigido === conteudoOriginal ? conteudoOriginal : reindexarFiguras(conteudoCorrigido)));
     const parsedSecoes = removerIlustracoesVazias(parsearSecoesEstruturais(
       reindexarHtmlEstrutural(
         limparIndicadoresCondicionais(converterPlaceholdersTextuais(conteudoInicial, placeholderChaves))
@@ -3100,6 +3021,10 @@ export const LaudosPage: React.FC = () => {
   }, []);
 
   const handleSalvar = async (): Promise<boolean> => {
+    if (haOperacoesPendentes()) {
+      toast.info('Aguarde a conclusão das operações de figuras antes de salvar.');
+      return false;
+    }
     const idsEditores = editorMode === 'single' ? ['laudo-single-editor'] : secoes.map((_, indice) => `secao-${indice}`);
     if (idsEditores.some(id => obterEditorTinyMce(id)?.getBody()?.querySelector('[data-imagem-processando="true"]'))) {
       toast.info('Aguarde a preparação das imagens antes de salvar.');
@@ -3299,6 +3224,7 @@ export const LaudosPage: React.FC = () => {
       if (imagemId) {
         setImagemSelecionadaIaId(imagemId);
         setFiguraAtivaId(imagemId);
+        setFiguraAtivaOcorrenciaId(figura?.getAttribute('data-figure-id') || null);
       }
     });
   };
@@ -4375,6 +4301,15 @@ export const LaudosPage: React.FC = () => {
               </Tooltip>
             )}
 
+            {(isReadonly || laudo.status === 'Em andamento') && <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="sm" onClick={() => setLaudoParaEnviarDrive(laudo)} aria-label={`Enviar cópia da REP ${laudo.rep_numero} ao Google Drive`}>
+                  <Upload size={14} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Enviar cópia ao Google Drive</TooltipContent>
+            </Tooltip>}
+
             {/* Visualizar PDF */}
             <Tooltip>
               <TooltipTrigger asChild>
@@ -4493,13 +4428,17 @@ export const LaudosPage: React.FC = () => {
         laudoId={editando.id}
         onInsertImage={panelCallbacksRef.current.onInsertImage}
         onDeleteImage={panelCallbacksRef.current.onDeleteImage}
+        onExcluirArquivo={panelCallbacksRef.current.onExcluirArquivo}
         onRefreshHtml={panelCallbacksRef.current.onRefreshHtml}
         onInsertAll={panelCallbacksRef.current.onInsertAll}
         figurasNoEditor={extrairFigurasDoEditor()}
+        figurasDevolvidas={obterFigurasDevolvidas()}
+        imagensProtegidas={obterImagensProtegidas()}
         onUpdateLegendaInEditor={panelCallbacksRef.current.onUpdateLegenda}
         onReorder={panelCallbacksRef.current.onReorder}
         syncEnabled={syncEnabled}
         figuraAtivaId={figuraAtivaId}
+        figuraAtivaOcorrenciaId={figuraAtivaOcorrenciaId}
         onSyncToggle={panelCallbacksRef.current.onSyncToggle}
         onScrollToFigure={panelCallbacksRef.current.onScrollToFigure}
         onPrevisualizarAlturaPar={panelCallbacksRef.current.onPrevisualizarAlturaPar}
@@ -4513,10 +4452,15 @@ export const LaudosPage: React.FC = () => {
         onEditImage={panelCallbacksRef.current.onEditImage}
         onGerarLegenda={gerarLegendaImagemIa}
         figuraSubstituicaoSolicitada={figuraSubstituicaoSolicitada}
-        onFiguraSubstituicaoSolicitadaConsumida={() => setFiguraSubstituicaoSolicitada(null)}
+        ocorrenciaSubstituicaoSolicitada={ocorrenciaSubstituicaoSolicitada}
+        onFiguraSubstituicaoSolicitadaConsumida={() => { setFiguraSubstituicaoSolicitada(null); setOcorrenciaSubstituicaoSolicitada(null); }}
         insercaoNoCursorSolicitada={insercaoNoCursorSolicitada}
         onInsercaoNoCursorConsumida={() => setInsercaoNoCursorSolicitada(null)}
-        onInserirNoCursor={async imagem => {
+        onIniciarProcessamentoImagem={() => iniciarProcessamentoImagem(sessaoEditor)}
+        onInserirNoCursor={imagem => {
+          const sessao = sessaoEditor;
+          return executarOperacaoFigura(async () => {
+          if (!sessaoAtual(sessao)) return false;
           const alvo = alvoInsercaoFiguraRef.current;
           const editor = alvo ? obterEditorTinyMce(alvo.editor.id) : null;
           if (!alvo || !editor?.getBody() || editor !== alvo.editor) return false;
@@ -4528,11 +4472,18 @@ export const LaudosPage: React.FC = () => {
             const noSelecionado = editor.selection.getNode();
             if (!editor.getBody().contains(noSelecionado)
               || (editorMode === 'single' && !noSelecionado.closest('[data-laudo-secao-content="true"]'))) return false;
+            const intervalo = editor.selection.getRng().cloneRange();
+            const ancoraInicial = intervalo.startContainer;
+            const ancoraFinal = intervalo.endContainer;
             if (!editando?.id) return false;
             const preparacao = await window.ipcAPI.ilustracoes.prepararInsercao(editando.id, imagem.id, Math.max(1, editor.getBody().clientWidth || 800), 600, window.devicePixelRatio || 1);
             if (!preparacao.success || !preparacao.data) throw new Error(preparacao.error || 'Não foi possível preparar a figura.');
-            const previa = preparacao.data.previaDataUri;
-            editor.undoManager.transact(() => editor.insertContent(buildFigureHtml(previa, imagem.id, imagem.legenda, true)));
+            if (!sessaoAtual(sessao) || laudoAtualRef.current !== editando.id || editorModeAtualRef.current !== editorMode
+              || alvoInsercaoFiguraRef.current !== alvo || obterEditorTinyMce(editor.id) !== editor || editor.removed || editor.destroyed
+              || !editor.getBody().contains(ancoraInicial) || !editor.getBody().contains(ancoraFinal)
+              || !editor.getBody().contains(intervalo.startContainer) || !editor.getBody().contains(intervalo.endContainer)) return false;
+            if (!inserirFiguraNaSelecao(editor, intervalo, imagem, preparacao.data.previaDataUri)) return false;
+            consumirFigurasDevolvidas([imagem.id, ...(imagem.imagemOrigemId ? [imagem.imagemOrigemId] : [])]);
             const html = editor.getContent();
             if (editorMode === 'single') {
               setSingleEditorHtml(html);
@@ -4546,6 +4497,7 @@ export const LaudosPage: React.FC = () => {
           } catch {
             return false;
           }
+          });
         }}
       />
     ) : null;
@@ -4674,6 +4626,10 @@ export const LaudosPage: React.FC = () => {
                         placeholder="Edite o laudo completo..."
                         laudoId={editando.id}
                         repNumero={editando.rep_numero}
+                        onIniciarProcessamentoImagem={() => iniciarProcessamentoImagem(sessaoEditor)}
+                        onExecutarOperacaoFigura={operacao => executarOperacaoFigura(async () => {
+                          if (sessaoAtual(sessaoEditor)) await operacao();
+                        })}
                         onImageInserted={() => {
                           void reconciliarImagensDoEditor().catch(error => {
                             toast.error(obterMensagemErro(error, 'Não foi possível vincular a imagem inserida ao laudo.'));
@@ -4687,6 +4643,7 @@ export const LaudosPage: React.FC = () => {
                           setIlustracoesPanelOpen(true);
                           setPanelCollapsed(false);
                         }}
+                        onSolicitarExclusaoFigura={solicitarExclusaoFigura}
                         placeholderChaves={placeholderChaves}
                         condToggles={exameToggles}
                         onFalhaInicializacao={() => {
@@ -4717,11 +4674,10 @@ export const LaudosPage: React.FC = () => {
                         onSolicitarBusca={buscaLaudo.abrir}
                         onSolicitarSalvar={salvarPeloAtalho}
                         onSolicitarIdentificacaoProjetil={solicitarIdentificacaoProjetil}
-                        onDummyFigureClick={(imageId) => {
+                        onDummyFigureClick={(imageId, ocorrenciaId) => {
                           setFiguraSubstituicaoSolicitada(imageId);
-                          setIaSheetOpen(false);
-                          setIlustracoesPanelOpen(true);
-                          setPanelCollapsed(false);
+                          setOcorrenciaSubstituicaoSolicitada(ocorrenciaId || null);
+                          abrirPainelIlustracoes();
                         }}
                       />
                     </PlaceholderContextMenu>
@@ -4744,10 +4700,13 @@ export const LaudosPage: React.FC = () => {
                         const tituloVisual = secao.nivel === 2 ? 'Seção principal' : 'Subseção';
                         const filhas = secao.id ? filhosPorPai.get(secao.id) || [] : [];
                         const exibirEditor = filhas.length === 0 || !conteudoHtmlEhVazio(secao.conteudo);
+                        const repeticao = secoes.slice(0, idx).filter(anterior => anterior.nivel === secao.nivel
+                          && anterior.parentId === secao.parentId && anterior.titulo === secao.titulo).length;
+                        const chaveSecao = secao.id || `legado-${secao.nivel}-${secao.parentId || ''}-${secao.titulo}-${repeticao}`;
 
                         return (
                           <Collapsible
-                            key={isIlustracoes ? `ilus-${ilustracoesKey}` : idx}
+                            key={isIlustracoes ? `ilus-${chaveSecao}-${ilustracoesKey}` : chaveSecao}
                             open={!secoesColapsadas[idx]}
                             onOpenChange={(open) => {
                               setSecoesColapsadas(prev => ({ ...prev, [idx]: !open }));
@@ -4813,6 +4772,10 @@ export const LaudosPage: React.FC = () => {
                                     alturaAutomatica
                                     laudoId={editando.id}
                                     repNumero={editando.rep_numero}
+                                    onIniciarProcessamentoImagem={() => iniciarProcessamentoImagem(sessaoEditor)}
+                                    onExecutarOperacaoFigura={operacao => executarOperacaoFigura(async () => {
+                                      if (sessaoAtual(sessaoEditor)) await operacao();
+                                    })}
                                     onImageInserted={() => {
                                       void reconciliarImagensDoEditor().catch(error => {
                                         toast.error(obterMensagemErro(error, 'Não foi possível vincular a imagem inserida ao laudo.'));
@@ -4826,6 +4789,7 @@ export const LaudosPage: React.FC = () => {
                                       setIlustracoesPanelOpen(true);
                                       setPanelCollapsed(false);
                                     }}
+                                    onSolicitarExclusaoFigura={solicitarExclusaoFigura}
                                     placeholderChaves={placeholderChaves}
                                     onEditorInit={async (editor) => {
                                       if (!await prepararConteudoEditor(editor, sessaoEditor)) return;
@@ -4842,11 +4806,10 @@ export const LaudosPage: React.FC = () => {
                                     onSolicitarBusca={buscaLaudo.abrir}
                                     onSolicitarSalvar={salvarPeloAtalho}
                                     onSolicitarIdentificacaoProjetil={solicitarIdentificacaoProjetil}
-                                    onDummyFigureClick={(imageId) => {
+                                    onDummyFigureClick={(imageId, ocorrenciaId) => {
                                       setFiguraSubstituicaoSolicitada(imageId);
-                                      setIaSheetOpen(false);
-                                      setIlustracoesPanelOpen(true);
-                                      setPanelCollapsed(false);
+                                      setOcorrenciaSubstituicaoSolicitada(ocorrenciaId || null);
+                                      abrirPainelIlustracoes();
                                     }}
                                   />
 
@@ -5371,6 +5334,11 @@ export const LaudosPage: React.FC = () => {
             ? 'Estrutura do laudo reconciliada com os dados locais.'
             : 'REP atualizada com as informações do GDL.');
         }}
+      />
+      <EnviarCopiaGoogleDriveDialog
+        aberto={laudoParaEnviarDrive !== null}
+        laudoId={laudoParaEnviarDrive?.id ?? null}
+        onAbertoChange={aberto => { if (!aberto) setLaudoParaEnviarDrive(null); }}
       />
 
     </div>

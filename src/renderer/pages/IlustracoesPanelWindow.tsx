@@ -2,18 +2,10 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router';
 import { IlustracoesPanel, type ImagemLaudo } from '@/components/laudo/IlustracoesPanel';
 import type { AjusteVisualParFiguras } from '@shared/figura/enquadramento';
+import { ehEstadoPainelFiguras, ehResultadoAtualizacaoFiguras, ehResultadoInsercaoFiguras } from '@shared/figura/painel';
 import { Button } from '@/components/ui/button';
 import { PanelRightOpen } from 'lucide-react';
-import { toast } from 'sonner';
-import type { ResultadoAtualizacaoFiguras } from '@shared/types/imagem-laudo.types';
-
-interface SyncState {
-  figurasNoEditor: ImagemLaudo[];
-  syncEnabled: boolean;
-  figuraAtivaId: string | null;
-  tema?: string;
-  resultadoAtualizacao?: ResultadoAtualizacaoFiguras;
-}
+import type { OperacaoPainelFiguras, ResultadoAtualizacaoFiguras, ResultadoOperacaoPainelFiguras } from '@shared/types/imagem-laudo.types';
 
 const IlustracoesPanelWindow: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -21,25 +13,40 @@ const IlustracoesPanelWindow: React.FC = () => {
   const tituloLaudo = searchParams.get('titulo') || '';
 
   const [figurasNoEditor, setFigurasNoEditor] = useState<ImagemLaudo[]>([]);
+  const [figurasDevolvidas, setFigurasDevolvidas] = useState<ImagemLaudo[]>([]);
+  const [sessaoId, setSessaoId] = useState<number | null>(null);
+  const [imagensProtegidas, setImagensProtegidas] = useState<string[]>([]);
   const [syncEnabled, setSyncEnabled] = useState(true);
   const [figuraAtivaId, setFiguraAtivaId] = useState<string | null>(null);
+  const [figuraAtivaOcorrenciaId, setFiguraAtivaOcorrenciaId] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
-  const atualizacaoPendenteRef = useRef<{
-    resolver: (resultado: ResultadoAtualizacaoFiguras) => void;
+  const operacoesPendentesRef = useRef(new Map<string, {
+    resolver: (valor: ResultadoOperacaoPainelFiguras['valor']) => void;
     rejeitar: (erro: Error) => void;
     temporizador: ReturnType<typeof setTimeout>;
-  } | null>(null);
+  }>());
 
   useEffect(() => {
-    const unsubState = window.ipcAPI.ilustracoes.onStateSync((data: SyncState) => {
-      setFigurasNoEditor(data.figurasNoEditor || []);
+    const operacoesPendentes = operacoesPendentesRef.current;
+    const unsubState = window.ipcAPI.ilustracoes.onStateSync((data: unknown) => {
+      if (!ehEstadoPainelFiguras(data)) return;
+      setFigurasNoEditor(data.figurasNoEditor);
+      setFigurasDevolvidas(data.figurasDevolvidas ?? []);
+      setSessaoId(data.sessaoId ?? null);
+      setImagensProtegidas(Array.isArray(data.imagensProtegidas) ? data.imagensProtegidas.filter((id): id is string => typeof id === 'string') : []);
       setSyncEnabled(data.syncEnabled ?? true);
       setFiguraAtivaId(data.figuraAtivaId ?? null);
+      setFiguraAtivaOcorrenciaId(data.figuraAtivaOcorrenciaId ?? null);
       setReady(true);
-      if (data.resultadoAtualizacao && atualizacaoPendenteRef.current) {
-        clearTimeout(atualizacaoPendenteRef.current.temporizador);
-        atualizacaoPendenteRef.current.resolver(data.resultadoAtualizacao);
-        atualizacaoPendenteRef.current = null;
+      const resultado = data.resultadoOperacao;
+      if (resultado && typeof resultado.solicitacaoId === 'string' && typeof resultado.sucesso === 'boolean') {
+        const pendente = operacoesPendentesRef.current.get(resultado.solicitacaoId);
+        if (pendente) {
+          clearTimeout(pendente.temporizador);
+          operacoesPendentesRef.current.delete(resultado.solicitacaoId);
+          if (resultado.sucesso) pendente.resolver(resultado.valor);
+          else pendente.rejeitar(new Error(resultado.erro || 'Não foi possível aplicar a operação no editor.'));
+        }
       }
 
       if (data.tema === 'dark') {
@@ -48,14 +55,15 @@ const IlustracoesPanelWindow: React.FC = () => {
         document.body.classList.remove('dark');
       }
     });
+    window.ipcAPI.ilustracoes.sendAction('ready');
 
     return () => {
       unsubState();
-      if (atualizacaoPendenteRef.current) {
-        clearTimeout(atualizacaoPendenteRef.current.temporizador);
-        atualizacaoPendenteRef.current.rejeitar(new Error('A janela do painel foi fechada.'));
-        atualizacaoPendenteRef.current = null;
+      for (const pendente of operacoesPendentes.values()) {
+        clearTimeout(pendente.temporizador);
+        pendente.rejeitar(new Error('A janela do painel foi fechada.'));
       }
+      operacoesPendentes.clear();
     };
   }, []);
 
@@ -63,96 +71,92 @@ const IlustracoesPanelWindow: React.FC = () => {
     window.ipcAPI.ilustracoes.sendAction(action, ...args);
   }, []);
 
+  const solicitarOperacao = useCallback((operacao: OperacaoPainelFiguras, ...args: unknown[]): Promise<ResultadoOperacaoPainelFiguras['valor']> => (
+    new Promise((resolver, rejeitar) => {
+      if (sessaoId === null) {
+        rejeitar(new Error('O editor ainda não confirmou a sessão do laudo.'));
+        return;
+      }
+      const solicitacaoId = crypto.randomUUID();
+      const temporizador = setTimeout(() => {
+        operacoesPendentesRef.current.delete(solicitacaoId);
+        rejeitar(new Error('O editor não confirmou a operação. Confira o documento antes de tentar novamente.'));
+      }, 60000);
+      operacoesPendentesRef.current.set(solicitacaoId, { resolver, rejeitar, temporizador });
+      sendAction('solicitarOperacao', solicitacaoId, laudoId, sessaoId, operacao, ...args);
+    })
+  ), [laudoId, sessaoId, sendAction]);
+
   const handleInsertImage = useCallback(async (_url: string, id: string, legenda: string) => {
-    const preparada = await window.ipcAPI.ilustracoes.prepararInsercao(laudoId, id, 800, 600, window.devicePixelRatio || 1);
-    if (!preparada.success) {
-      toast.error(preparada.error || 'Não foi possível preparar a imagem.');
-      return false;
-    }
-    sendAction('insertImage', '', id, legenda);
-    return true;
-  }, [laudoId, sendAction]);
+    return await solicitarOperacao('insertImage', '', id, legenda) === true;
+  }, [solicitarOperacao]);
 
   const handleInsertAll = useCallback(async (imagens: ImagemLaudo[]) => {
-    const preparadas: ImagemLaudo[] = [];
-    for (const imagem of imagens) {
-      const resposta = await window.ipcAPI.ilustracoes.prepararInsercao(laudoId, imagem.id, 800, 600, window.devicePixelRatio || 1);
-      if (resposta.success) preparadas.push(imagem);
-      else toast.error(resposta.error || 'Não foi possível preparar a imagem.');
-    }
-    if (preparadas.length > 0) sendAction('insertAll', preparadas);
-    return preparadas.map(imagem => imagem.id);
-  }, [laudoId, sendAction]);
+    const resultado = await solicitarOperacao('insertAll', imagens);
+    if (!ehResultadoInsercaoFiguras(resultado, imagens.map(imagem => imagem.id))) throw new Error('Resposta inválida do editor.');
+    return resultado;
+  }, [solicitarOperacao]);
 
-  const handleDeleteImage = useCallback((imageId: string, indice?: number) => {
-    sendAction('deleteImage', imageId, indice);
-  }, [sendAction]);
+  const handleDeleteImage = useCallback(async (imageId: string, indice?: number, ocorrenciaId?: string) => (
+    await solicitarOperacao('deleteImage', imageId, indice, ocorrenciaId) === true
+  ), [solicitarOperacao]);
 
-  const handleUpdateLegenda = useCallback((id: string, legenda: string) => {
-    sendAction('updateLegenda', id, legenda);
-  }, [sendAction]);
+  const handleExcluirArquivo = useCallback(async (imageId: string) => {
+    if (await solicitarOperacao('deleteFile', imageId) !== true) throw new Error('O editor não confirmou a exclusão da imagem.');
+  }, [solicitarOperacao]);
+
+  const handleUpdateLegenda = useCallback(async (id: string, legenda: string, ocorrenciaId?: string) => {
+    await solicitarOperacao('updateLegenda', id, legenda, ocorrenciaId);
+  }, [solicitarOperacao]);
 
   const handleReorder = useCallback((imagens: ImagemLaudo[]) => {
     sendAction('reorder', imagens);
   }, [sendAction]);
 
-  const handleRefreshHtml = useCallback((restaurarLegendas = false): Promise<ResultadoAtualizacaoFiguras> => {
-    if (!restaurarLegendas) {
-      sendAction('refreshHtml', false);
-      return Promise.resolve({ restauradas: 0, semDescricao: 0, falhasConsulta: 0 });
-    }
-    return new Promise((resolver, rejeitar) => {
-      const temporizador = setTimeout(() => {
-        atualizacaoPendenteRef.current = null;
-        rejeitar(new Error('O editor não respondeu à atualização das figuras.'));
-      }, 15000);
-      atualizacaoPendenteRef.current = { resolver, rejeitar, temporizador };
-      sendAction('refreshHtml', true);
-    });
-  }, [sendAction]);
+  const handleRefreshHtml = useCallback(async (restaurarLegendas = false): Promise<ResultadoAtualizacaoFiguras> => {
+    const resultado = await solicitarOperacao('refreshHtml', restaurarLegendas);
+    if (!ehResultadoAtualizacaoFiguras(resultado)) throw new Error('Resposta inválida do editor.');
+    if (resultado.erro) throw new Error(resultado.erro);
+    return resultado;
+  }, [solicitarOperacao]);
 
   const handleSyncToggle = useCallback((enabled: boolean) => {
     sendAction('syncToggle', enabled);
   }, [sendAction]);
 
-  const handleScrollToFigure = useCallback((imageId: string) => {
-    sendAction('scrollToFigure', imageId);
+  const handleScrollToFigure = useCallback((imageId: string, ocorrenciaId?: string) => {
+    if (ocorrenciaId) sendAction('scrollToFigure', imageId, ocorrenciaId);
+    else sendAction('scrollToFigure', imageId);
   }, [sendAction]);
 
-  const handlePrevisualizarAlturaPar = useCallback((indice: number, alturaPercentual: number) => {
-    sendAction('previewPairHeight', indice, alturaPercentual);
+  const handlePrevisualizarAlturaPar = useCallback((indice: number, alturaPercentual: number, ocorrenciaId?: string) => {
+    sendAction('previewPairHeight', indice, alturaPercentual, ocorrenciaId);
   }, [sendAction]);
 
-  const handleConfirmarAlturaPar = useCallback((indice: number, alturaPercentual: number) => {
-    sendAction('commitPairHeight', indice, alturaPercentual);
+  const handleConfirmarAlturaPar = useCallback(async (indice: number, alturaPercentual: number, ocorrenciaId?: string) => (
+    await solicitarOperacao('commitPairHeight', indice, alturaPercentual, ocorrenciaId) === true
+  ), [solicitarOperacao]);
+
+  const handleCancelarAlturaPar = useCallback((indice: number, ocorrenciaId?: string) => {
+    sendAction('cancelPairHeight', indice, ocorrenciaId);
   }, [sendAction]);
 
-  const handleCancelarAlturaPar = useCallback((indice: number) => {
-    sendAction('cancelPairHeight', indice);
-  }, [sendAction]);
-
-  const handleDefinirAjusteVisualPar = useCallback((indice: number, ajusteVisual: AjusteVisualParFiguras) => {
-    sendAction('setPairVisualMode', indice, ajusteVisual);
-  }, [sendAction]);
+  const handleDefinirAjusteVisualPar = useCallback(async (indice: number, ajusteVisual: AjusteVisualParFiguras, ocorrenciaId?: string) => (
+    await solicitarOperacao('setPairVisualMode', indice, ajusteVisual, ocorrenciaId) === true
+  ), [solicitarOperacao]);
 
   const handleReplaceImage = useCallback(async (imageId: string, imagem: ImagemLaudo, indice?: number) => {
-    const preparada = await window.ipcAPI.ilustracoes.prepararInsercao(laudoId, imagem.id, 800, 600, window.devicePixelRatio || 1);
-    if (!preparada.success) {
-      toast.error(preparada.error || 'Não foi possível preparar a imagem.');
-      return false;
-    }
-    sendAction('replaceImage', imageId, imagem, indice);
-    return true;
-  }, [laudoId, sendAction]);
+    return await solicitarOperacao('replaceImage', imageId, imagem, indice) === true;
+  }, [solicitarOperacao]);
 
-  const handleEditImage = useCallback((indice: number, imagem: ImagemLaudo, imagemOrigemId: string, imagemAnteriorId: string) => {
-    sendAction('editImage', indice, imagem, imagemOrigemId, imagemAnteriorId);
-  }, [sendAction]);
+  const handleEditImage = useCallback(async (indice: number, imagem: ImagemLaudo, imagemOrigemId: string, imagemAnteriorId: string) => {
+    await solicitarOperacao('editImage', indice, imagem, imagemOrigemId, imagemAnteriorId);
+  }, [solicitarOperacao]);
 
   const handleGerarLegenda = useCallback(async (imageId: string): Promise<string | null> => {
-    sendAction('generateCaption', imageId);
-    return null;
-  }, [sendAction]);
+    const resultado = await solicitarOperacao('generateCaption', imageId);
+    return typeof resultado === 'string' ? resultado : null;
+  }, [solicitarOperacao]);
 
   const handleReintegrarAoEditor = () => {
     window.ipcAPI.ilustracoes.sendAction('popIn');
@@ -191,6 +195,7 @@ const IlustracoesPanelWindow: React.FC = () => {
             onInsertImage={handleInsertImage}
             onInsertAll={handleInsertAll}
             onDeleteImage={handleDeleteImage}
+            onExcluirArquivo={handleExcluirArquivo}
             onUpdateLegendaInEditor={handleUpdateLegenda}
             onReorder={handleReorder}
             onRefreshHtml={handleRefreshHtml}
@@ -204,8 +209,11 @@ const IlustracoesPanelWindow: React.FC = () => {
             onEditImage={handleEditImage}
             onGerarLegenda={handleGerarLegenda}
             figurasNoEditor={figurasNoEditor}
+            figurasDevolvidas={figurasDevolvidas}
+            imagensProtegidas={imagensProtegidas}
             syncEnabled={syncEnabled}
             figuraAtivaId={figuraAtivaId}
+            figuraAtivaOcorrenciaId={figuraAtivaOcorrenciaId}
           />
         )}
       </div>

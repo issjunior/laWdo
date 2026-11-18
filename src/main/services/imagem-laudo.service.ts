@@ -402,18 +402,29 @@ export async function concluirImagensLaudo(laudoIdEntrada: string,
   const { preparados, registros } = dados
   const ids = new Set(dados.ids)
   const laudo = { conteudo: dados.conteudo }
-  for (const item of preparados) {
-    await gravarImagemAtomica(caminhoAbsoluto(item.caminhoRelativo), item.bytes)
-    await executeNonQuery(`UPDATE imagens_laudo SET caminho_relativo = ?, mime_type = ?, tamanho = ?, sha256 = ?,
-      imagem_origem_id = NULL, ajustes_json = NULL, disponivel_painel = 0, temporaria_sessao = 0 WHERE id = ? AND laudo_id = ?`,
-    [item.caminhoRelativo, item.mimeType, item.bytes.length, item.sha256, item.registro.id, laudoId])
-  }
-  for (const registro of registros) {
-    if (!ids.has(registro.id)) await executeNonQuery('DELETE FROM imagens_laudo WHERE id = ? AND laudo_id = ?', [registro.id, laudoId])
-  }
-  const conteudoSemVinculos = laudo.conteudo.replace(/\sdata-image-original-id\s*=\s*(?:"[^"]*"|'[^']*')/gi, '')
-  if (conteudoSemVinculos !== laudo.conteudo) {
-    await executeNonQuery('UPDATE laudos SET conteudo = ? WHERE id = ?', [conteudoSemVinculos, laudoId])
+  const caminhosPreparados = new Set<string>()
+  try {
+    for (const item of preparados) {
+      await gravarImagemAtomica(caminhoAbsoluto(item.caminhoRelativo), item.bytes)
+      caminhosPreparados.add(item.caminhoRelativo)
+    }
+    await withTransaction(async () => {
+      for (const item of preparados) {
+        await executeNonQuery(`UPDATE imagens_laudo SET caminho_relativo = ?, mime_type = ?, tamanho = ?, sha256 = ?,
+          imagem_origem_id = NULL, ajustes_json = NULL, disponivel_painel = 0, temporaria_sessao = 0 WHERE id = ? AND laudo_id = ?`,
+        [item.caminhoRelativo, item.mimeType, item.bytes.length, item.sha256, item.registro.id, laudoId])
+      }
+      for (const registro of registros) {
+        if (!ids.has(registro.id)) await executeNonQuery('DELETE FROM imagens_laudo WHERE id = ? AND laudo_id = ?', [registro.id, laudoId])
+      }
+      const conteudoSemVinculos = laudo.conteudo.replace(/\sdata-image-original-id\s*=\s*(?:"[^"]*"|'[^']*')/gi, '')
+      if (conteudoSemVinculos !== laudo.conteudo) {
+        await executeNonQuery('UPDATE laudos SET conteudo = ? WHERE id = ?', [conteudoSemVinculos, laudoId])
+      }
+    })
+  } catch (erro) {
+    for (const caminho of caminhosPreparados) await removerArquivoSemReferencias(caminho)
+    throw erro
   }
   return [...new Set(registros.map(registro => registro.caminho_relativo))]
 }
@@ -654,11 +665,11 @@ export async function salvarImagemLaudoPorBytes(
 }
 
 async function removerArquivoSemReferencias(caminhoRelativo: string): Promise<void> {
-  const [{ quantidade }] = await executeQuery<{ quantidade: number }>(
-    'SELECT COUNT(*) AS quantidade FROM imagens_laudo WHERE caminho_relativo = ?',
+  const referencias = await executeQuery<{ existe: number }>(
+    'SELECT 1 AS existe FROM imagens_laudo WHERE caminho_relativo = ? LIMIT 1',
     [caminhoRelativo],
   )
-  if (quantidade === 0) {
+  if (referencias.length === 0) {
     const caminho = caminhoAbsoluto(caminhoRelativo)
     await rm(caminho, { force: true })
   }
@@ -669,6 +680,10 @@ export async function excluirImagemLaudo(laudoIdEntrada: string, imagemIdEntrada
   const imagemId = validarIdentificador(imagemIdEntrada, 'Imagem')
   const registro = (await executeQuery<ImagemLaudoRow>('SELECT * FROM imagens_laudo WHERE id = ? AND laudo_id = ?', [imagemId, laudoId]))[0]
   if (!registro) return
+  const laudo = (await executeQuery<{ conteudo: string }>('SELECT conteudo FROM laudos WHERE id = ?', [laudoId]))[0]
+  if (laudo && extrairIdsDeImagemDoConteudo(laudo.conteudo || '').has(imagemId)) {
+    throw new Error('Esta imagem está no laudo salvo e não pode ser excluída permanentemente.')
+  }
   const derivados = await executeQuery<{ id: string }>('SELECT id FROM imagens_laudo WHERE imagem_origem_id = ? AND laudo_id = ? LIMIT 1', [imagemId, laudoId])
   if (derivados.length > 0) throw new Error('Esta imagem é a base de uma figura editada e não pode ser excluída.')
   await executeNonQuery('DELETE FROM imagens_laudo WHERE id = ? AND laudo_id = ?', [imagemId, laudoId])

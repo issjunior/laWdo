@@ -162,12 +162,34 @@ export interface AuditFilters {
   endDate?: string;
   search?: string;
   limit?: number;
-  offset?: number;
+  cursor?: string;
 }
+
+type CursorAuditoria = { criadoEm: string; id: number };
+const proximoDia = (data: string): string => {
+  const proximo = new Date(`${data}T00:00:00.000Z`);
+  proximo.setUTCDate(proximo.getUTCDate() + 1);
+  return proximo.toISOString().slice(0, 10);
+};
+const codificarCursorAuditoria = (cursor: CursorAuditoria): string => Buffer.from(JSON.stringify(cursor)).toString('base64url');
+const decodificarCursorAuditoria = (valor: string | undefined): CursorAuditoria | null => {
+  if (!valor) return null;
+  try {
+    const cursor: unknown = JSON.parse(Buffer.from(valor, 'base64url').toString('utf8'));
+    if (!cursor || typeof cursor !== 'object') throw new Error();
+    const dados = cursor as Record<string, unknown>;
+    const criadoEm = dados.criadoEm;
+    const id = dados.id;
+    if (typeof criadoEm !== 'string' || typeof id !== 'number' || !Number.isInteger(id)) throw new Error();
+    return { criadoEm, id };
+  } catch {
+    throw new Error('Cursor de auditoria inválido.');
+  }
+};
 
 export async function listAuditLogs(
   filters: AuditFilters = {},
-): Promise<{ data: Record<string, unknown>[]; total: number }> {
+): Promise<{ data: Record<string, unknown>[]; temProxima: boolean; proximoCursor?: string }> {
   const conditions: string[] = [];
   const params: unknown[] = [];
 
@@ -200,8 +222,8 @@ export async function listAuditLogs(
     params.push(filters.startDate);
   }
   if (filters.endDate) {
-    conditions.push('created_at <= ?');
-    params.push(filters.endDate);
+    conditions.push('created_at < ?');
+    params.push(proximoDia(filters.endDate));
   }
   if (filters.search) {
     conditions.push('(acao LIKE ? OR mensagem LIKE ? OR detalhes LIKE ?)');
@@ -209,22 +231,29 @@ export async function listAuditLogs(
     params.push(s, s, s);
   }
 
+  const cursor = decodificarCursorAuditoria(filters.cursor);
+  if (cursor) {
+    conditions.push('(created_at < ? OR (created_at = ? AND id < ?))');
+    params.push(cursor.criadoEm, cursor.criadoEm, cursor.id);
+  }
+
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
   const limit = Math.min(filters.limit ?? 200, 1000);
-  const offset = filters.offset ?? 0;
-
-  const [data, countResult] = await Promise.all([
-    executeQuery<Record<string, unknown>>(
-      `SELECT * FROM logs_auditoria ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
-      [...params, limit, offset],
-    ),
-    executeQuery<{ total: number }>(
-      `SELECT COUNT(*) as total FROM logs_auditoria ${where}`,
-      params,
-    ),
-  ]);
-
-  return { data, total: countResult[0]?.total ?? 0 };
+  const linhas = await executeQuery<Record<string, unknown>>(
+    `SELECT * FROM logs_auditoria ${where} ORDER BY created_at DESC, id DESC LIMIT ?`,
+    [...params, limit + 1],
+  );
+  const temProxima = linhas.length > limit;
+  const data = linhas.slice(0, limit);
+  const ultimo = data.at(-1);
+  const criadoEm = ultimo?.created_at;
+  const id = ultimo?.id;
+  return {
+    data,
+    temProxima,
+    proximoCursor: temProxima && typeof criadoEm === 'string' && typeof id === 'number'
+      ? codificarCursorAuditoria({ criadoEm, id }) : undefined,
+  };
 }
 
 export async function clearAuditLogs(): Promise<{ success: boolean; count: number }> {

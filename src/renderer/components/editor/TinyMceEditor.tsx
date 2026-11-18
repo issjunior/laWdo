@@ -25,8 +25,10 @@ import { registrarSeletoresCamposB601, type SolicitacaoIdentificacaoProjetilB601
 import { registrarColetaB601 } from '@/lib/b601-coleta';
 import { registrarMenuPreenchimentoB601 } from '@/lib/menu-preenchimento-b601';
 import { MARCADOR_QUEBRA_PAGINA } from '@shared/utils/quebra-pagina';
-import { criarHtmlFigura, URL_FIGURA_DUMMY } from '@shared/figura/html';
-import { cancelarPrevisualizacaoAlturaParFiguras, definirAjusteVisualParFiguras, definirAlturaParFiguras, previsualizarAlturaParFiguras, atualizarNumeroFigura, centralizarFigurasSozinhas, normalizarParesFiguras, removerFiguraEReorganizarPar } from '@/lib/figuras';
+import { URL_FIGURA_DUMMY } from '@shared/figura/html';
+import { atualizarOrigemImagemFigura, criarFiguraLaudoHtml } from '@/features/figuras/documento';
+import { prepararImagemParaEditor } from '@/features/figuras/editor';
+import { cancelarPrevisualizacaoAlturaParFiguras, definirAjusteVisualParFiguras, definirAlturaParFiguras, previsualizarAlturaParFiguras, atualizarNumeroFigura, localizarFiguraImagemSelecionada, normalizarParesFiguras, obterFiguraEmProcessamento, removerOcorrenciaFigura, substituirImagemOcorrencia } from '@/lib/figuras';
 import type { AjusteVisualParFiguras } from '@shared/figura/enquadramento';
 import {
   aplicarRecuoPrimeiraLinha,
@@ -38,18 +40,6 @@ import {
   obterRecuoSelecionado,
   recuoCorresponde,
 } from './editor-formatacao';
-
-/* ─── Funções utilitárias para figuras (modularizadas / DRY) ─── */
-
-/** Markup interno da figura (sem <br> ao final) — usado para criar elementos DOM */
-function buildFigureInnerHtml(url: string, id: string, legenda: string): string {
-  return criarHtmlFigura(url, id, legenda);
-}
-
-/** Markup completo da figura com <br> ao final — ideal para insertContent */
-function buildFigureHtml(url: string, id: string, legenda: string): string {
-  return buildFigureInnerHtml(url, id, legenda) + '<br>';
-}
 
 function imagemEhMarcadorQuebraPagina(img: HTMLImageElement): boolean {
   return img.classList.contains('mce-pagebreak');
@@ -63,7 +53,7 @@ function imagemEhTemporariaEditor(img: HTMLImageElement): boolean {
 function wrapImgAsFigure(img: HTMLImageElement): HTMLElement {
   const id = crypto.randomUUID();
   const template = document.createElement('template');
-  template.innerHTML = buildFigureInnerHtml(img.src, id, img.alt || '').trim();
+  template.innerHTML = criarFiguraLaudoHtml(img.src, id, img.alt || '').trim();
   return template.content.firstElementChild as HTMLElement;
 }
 
@@ -190,14 +180,17 @@ interface TinyMceEditorProps {
   editorId?: string;
   /** Callback disparado quando uma imagem é inserida via botão de imagem do editor */
   onImageInserted?: () => void;
+  onIniciarProcessamentoImagem?: () => () => void;
+  onExecutarOperacaoFigura?: (operacao: () => Promise<void>) => Promise<void>;
   onSolicitarInsercaoFigura?: (editor: TinyMceEditorInstance) => void;
+  onSolicitarExclusaoFigura?: (imagemId: string, ocorrenciaId: string) => void;
   /** Lista de chaves de placeholder válidas para auto-conversão ao digitar {{chave}} */
   placeholderChaves?: string[];
   /** Callback disparado quando o editor termina de inicializar */
   onEditorInit?: (editor: TinyMceEditorInstance) => void | Promise<void>;
   onFalhaInicializacao?: () => void;
   /** Solicita a substituição de uma figura dummy pelo fluxo de ilustrações do laudo. */
-  onDummyFigureClick?: (imageId: string) => void;
+  onDummyFigureClick?: (imageId: string, ocorrenciaId?: string) => void;
   onFiguraRealClick?: () => void;
   onSolicitarBusca?: () => void;
   onSolicitarSalvar?: () => void;
@@ -540,7 +533,10 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
   repNumero,
   editorId,
   onImageInserted,
+  onIniciarProcessamentoImagem,
+  onExecutarOperacaoFigura,
   onSolicitarInsercaoFigura,
+  onSolicitarExclusaoFigura,
   placeholderChaves,
   onEditorInit,
   onFalhaInicializacao,
@@ -565,6 +561,10 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
   const idReact = useId();
   const editorIdResolvido = editorId || `tiny-editor-${idReact.replace(/[^a-zA-Z0-9_-]/g, '')}`;
   const editorRef = useRef<TinyMceEditorInstance | null>(null);
+  const contextoFigurasRef = useRef({ laudoId, sessao: diagnosticoLaudo?.sessao });
+  contextoFigurasRef.current = { laudoId, sessao: diagnosticoLaudo?.sessao };
+  const editorDaSessaoAtivo = (editor: TinyMceEditorInstance) => !editor.removed && !editor.destroyed
+    && contextoFigurasRef.current.laudoId === laudoId && contextoFigurasRef.current.sessao === diagnosticoLaudo?.sessao;
   const onFalhaInicializacaoRef = useRef(onFalhaInicializacao);
   onFalhaInicializacaoRef.current = onFalhaInicializacao;
   const aoMarcarPendenteRef = useRef(onAlteracaoPendente);
@@ -577,6 +577,10 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
   const onCampoReservadoDuploCliqueRef = useRef(onCampoReservadoDuploClique);
   const aoClicarFiguraRealRef = useRef(onFiguraRealClick);
   aoClicarFiguraRealRef.current = onFiguraRealClick;
+  const aoClicarFiguraDummyRef = useRef(onDummyFigureClick);
+  aoClicarFiguraDummyRef.current = onDummyFigureClick;
+  const aoSolicitarExclusaoFiguraRef = useRef(onSolicitarExclusaoFigura);
+  aoSolicitarExclusaoFiguraRef.current = onSolicitarExclusaoFigura;
   const aoSolicitarBuscaRef = useRef(onSolicitarBusca);
   aoSolicitarBuscaRef.current = onSolicitarBusca;
   const aoSolicitarSalvarRef = useRef(onSolicitarSalvar);
@@ -694,18 +698,6 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
       reader.readAsDataURL(blobInfo.blob());
     });
 
-  const prepararImagemInserida = async (editor: TinyMceEditorInstance, dataUri: string, id: string, nomeArquivo: string): Promise<string> => {
-    if (!laudoId) return dataUri;
-    const estagio = await window.ipcAPI.ilustracoes.estagiarImagem(laudoId, {
-      id, nomeArquivo, dataUri, legenda: '', origem: 'local', sequencia: 0,
-    });
-    if (!estagio.success) throw new Error(estagio.error || 'Não foi possível preparar a imagem.');
-    const largura = Math.max(1, editor.getBody()?.clientWidth || 800);
-    const preparada = await window.ipcAPI.ilustracoes.prepararInsercao(laudoId, id, largura, largura * 0.75, window.devicePixelRatio || 1);
-    if (!preparada.success || !preparada.data) throw new Error(preparada.error || 'Não foi possível gerar a prévia da imagem.');
-    return preparada.data.previaDataUri;
-  };
-
   const pastePostprocess: PastePostprocessHandler = (editor, args) => {
     const fragment = args.node;
     if (!fragment) return;
@@ -714,6 +706,8 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
       const figuras = Array.from(fragment.querySelectorAll<HTMLElement>('.laudo-figure[data-image-id]'));
       if (fragment instanceof HTMLElement && fragment.matches('.laudo-figure[data-image-id]')) figuras.unshift(fragment);
       for (const figura of figuras) {
+        const ocorrenciaId = crypto.randomUUID();
+        figura.setAttribute('data-figure-id', ocorrenciaId);
         const imagem = figura.querySelector('img');
         const id = figura.getAttribute('data-image-id');
         const origem = imagem?.getAttribute('src') || '';
@@ -725,26 +719,34 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
           continue;
         }
         if (!/^(data:image\/|blob:)/i.test(origem)) continue;
-        imagem.setAttribute('src', 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==');
+        atualizarOrigemImagemFigura(imagem, 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==');
         figura.setAttribute('data-imagem-processando', 'true');
+        const finalizarProcessamento = onIniciarProcessamentoImagem?.();
         window.requestAnimationFrame(() => {
-          void (async () => {
-            const dataUri = origem.startsWith('blob:') ? await converterBlobImagemParaDataUri(origem) : origem;
-            const previa = await prepararImagemInserida(editor, dataUri, id, `imagem-colada-${id}`);
-            const inserida = Array.from(editor.getBody().querySelectorAll<HTMLElement>('.laudo-figure[data-image-id]'))
-              .find(elemento => elemento.getAttribute('data-image-id') === id);
-            if (!inserida) return;
-            inserida.querySelector('img')?.setAttribute('src', previa);
-            inserida.setAttribute('data-imagem-previa', 'true');
-            inserida.removeAttribute('data-imagem-processando');
-            onChange(editor.getContent());
-            onImageInserted?.();
-          })().catch(error => {
-            const inserida = Array.from(editor.getBody().querySelectorAll<HTMLElement>('.laudo-figure[data-image-id]'))
-              .find(elemento => elemento.getAttribute('data-image-id') === id);
-            inserida?.remove();
-            window.alert(error instanceof Error ? error.message : 'Não foi possível inserir a imagem.');
-          });
+          const executar = onExecutarOperacaoFigura || (async (operacao: () => Promise<void>) => operacao());
+          void executar(async () => {
+            try {
+              if (!editorDaSessaoAtivo(editor) || !obterFiguraEmProcessamento(editor, ocorrenciaId, id)) return;
+              const dataUri = origem.startsWith('blob:') ? await converterBlobImagemParaDataUri(origem) : origem;
+              const previa = await prepararImagemParaEditor(editor, laudoId, dataUri, id, `imagem-colada-${id}`);
+              if (!editorDaSessaoAtivo(editor)) return;
+              const inserida = obterFiguraEmProcessamento(editor, ocorrenciaId, id);
+              if (!inserida) return;
+              const imagemInserida = inserida.querySelector<HTMLImageElement>('img');
+              if (imagemInserida) atualizarOrigemImagemFigura(imagemInserida, previa);
+              inserida.setAttribute('data-imagem-previa', 'true');
+              inserida.removeAttribute('data-imagem-processando');
+              onChange(editor.getContent());
+              onImageInserted?.();
+            } catch (error) {
+              if (!editorDaSessaoAtivo(editor)) return;
+              const inserida = obterFiguraEmProcessamento(editor, ocorrenciaId, id);
+              if (!inserida) return;
+              editor.undoManager.transact(() => removerOcorrenciaFigura(editor.getBody(), inserida));
+              onChange(editor.getContent());
+              window.alert(error instanceof Error ? error.message : 'Não foi possível inserir a imagem.');
+            }
+          }).finally(() => finalizarProcessamento?.());
         });
       }
     }
@@ -762,18 +764,29 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
       input.onchange = () => {
         const file = input.files?.[0];
         if (!file) return;
+        const editor = (window as TinymceWindow).tinymce?.get(editorIdResolvido);
+        if (!editor || !editorDaSessaoAtivo(editor)) return;
+        const finalizarProcessamento = onIniciarProcessamentoImagem?.();
         const reader = new FileReader();
         reader.onload = () => {
           const dataUri = reader.result as string;
-          const editor = (window as TinymceWindow).tinymce?.get(editorIdResolvido);
-          if (editor) {
-            void prepararImagemInserida(editor, dataUri, id, file.name).then(preview => {
-              const html = buildFigureHtml(preview, id, '');
-              editor.insertContent(laudoId ? html.replace('<figure ', '<figure data-imagem-previa="true" ') : html);
+          if (!editorDaSessaoAtivo(editor)) { finalizarProcessamento?.(); return; }
+          const executar = onExecutarOperacaoFigura || (async (operacao: () => Promise<void>) => operacao());
+          void executar(async () => {
+              if (!editorDaSessaoAtivo(editor)) return;
+              const preview = await prepararImagemParaEditor(editor, laudoId, dataUri, id, file.name);
+              if (!editorDaSessaoAtivo(editor)) return;
+              editor.insertContent(criarFiguraLaudoHtml(preview, id, '', { previa: Boolean(laudoId), quebraFinal: true }));
               onImageInserted?.();
-            }).catch(error => window.alert(error instanceof Error ? error.message : 'Não foi possível inserir a imagem.'));
-          }
+            }).catch(error => {
+              if (editorDaSessaoAtivo(editor)) window.alert(error instanceof Error ? error.message : 'Não foi possível inserir a imagem.');
+            }).finally(() => finalizarProcessamento?.());
         };
+        reader.onerror = () => {
+          finalizarProcessamento?.();
+          if (editorDaSessaoAtivo(editor)) window.alert('Não foi possível ler a imagem selecionada.');
+        };
+        reader.onabort = () => finalizarProcessamento?.();
         reader.readAsDataURL(file);
       };
       input.click();
@@ -1229,6 +1242,16 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
 
           // ─── Placeholder personalizado e Proxy de ContextMenu ─────
           setup: (editor: TinyMceEditorInstance) => {
+            editor.on('keydown', evento => {
+              if ((evento.key !== 'Delete' && evento.key !== 'Backspace') || editor.mode.isReadOnly()) return;
+              const figura = localizarFiguraImagemSelecionada(editor);
+              const imagemId = figura?.getAttribute('data-image-id');
+              const ocorrenciaId = figura?.getAttribute('data-figure-id');
+              if (!imagemId || !ocorrenciaId || !aoSolicitarExclusaoFiguraRef.current) return;
+              evento.preventDefault();
+              evento.stopPropagation();
+              aoSolicitarExclusaoFiguraRef.current(imagemId, ocorrenciaId);
+            });
             const atualizarPreviaFigura = (figura: HTMLElement) => {
               if (!laudoId || figura.getAttribute('data-imagem-previa') !== 'true') return;
               const imagem = figura.querySelector<HTMLImageElement>('img');
@@ -1241,7 +1264,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
                 if (!resultado.success || !resultado.data) throw new Error(resultado.error || 'Não foi possível atualizar a prévia.');
                 if (!editor.getBody().contains(figura) || figura.getAttribute('data-image-id') !== id) return;
                 const previaDataUri = resultado.data.previaDataUri;
-                editor.undoManager.ignore(() => imagem.setAttribute('src', previaDataUri));
+                editor.undoManager.ignore(() => atualizarOrigemImagemFigura(imagem, previaDataUri));
                 onChange(editor.getContent());
               }).catch((erro: unknown) => window.alert(erro instanceof Error ? erro.message : 'Não foi possível atualizar a prévia.'));
             };
@@ -1380,8 +1403,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
             }) satisfies ComandoTinyMce<PlaceholderPayload>);
 
             editor.addCommand('insertLaudoImage', ((_ui, data) => {
-              const html = buildFigureHtml(data.url, data.id, data.legenda);
-              editor.insertContent(data.previa ? html.replace('<figure ', '<figure data-imagem-previa="true" ') : html);
+              editor.insertContent(criarFiguraLaudoHtml(data.url, data.id, data.legenda, { previa: data.previa, quebraFinal: true }));
             }) satisfies ComandoTinyMce<ImagemLaudoPayload>);
 
             editor.addCommand('reindexFiguras', () => {
@@ -1398,15 +1420,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
               const figure = data.figureElement && body.contains(data.figureElement)
                 ? data.figureElement
                 : body.querySelector(`.laudo-figure[data-image-id="${data.id}"]`);
-              if (figure) {
-                if (removerFiguraEReorganizarPar(figure as HTMLElement)) return;
-                const nextSibling = figure.nextElementSibling;
-                figure.remove();
-                if (nextSibling && (nextSibling.tagName === 'BR' || (nextSibling.tagName === 'P' && (nextSibling as HTMLElement).innerHTML === '&nbsp;'))) {
-                  nextSibling.remove();
-                }
-                centralizarFigurasSozinhas(body);
-              }
+              if (figure) removerOcorrenciaFigura(body, figure as HTMLElement);
             }) satisfies ComandoTinyMce<RemoverImagemPayload>);
 
             editor.addCommand('replaceLaudoImage', ((_ui, data) => {
@@ -1419,24 +1433,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
                   figure = body.querySelector(`.laudo-figure[data-image-id="${data.imageId}"]`);
                 }
                 if (!figure) return;
-                const img = figure.querySelector('img');
-                if (img) {
-                  editor.dom.setAttrib(img, 'src', data.newUrl);
-                }
-                if (data.newImageId) {
-                  figure.setAttribute('data-image-id', data.newImageId);
-                }
-                if (data.previa) figure.setAttribute('data-imagem-previa', 'true');
-                else figure.removeAttribute('data-imagem-previa');
-                if (data.imagemOrigemId) {
-                  figure.setAttribute('data-image-original-id', data.imagemOrigemId);
-                  if (!figure.hasAttribute('data-figure-id')) figure.setAttribute('data-figure-id', crypto.randomUUID());
-                } else {
-                  figure.removeAttribute('data-image-original-id');
-                }
-                figure.removeAttribute('data-dummy');
-                figure.style.cursor = '';
-                normalizarParesFiguras(body);
+                substituirImagemOcorrencia(body, figure, { url: data.newUrl, imagemId: data.newImageId, imagemOrigemId: data.imagemOrigemId, previa: data.previa });
               });
             }) satisfies ComandoTinyMce<SubstituirImagemPayload>);
 
@@ -1477,7 +1474,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
             editor.addCommand('insertLaudoImageDummy', () => {
               const id = crypto.randomUUID();
               const src = URL_FIGURA_DUMMY;
-              const html = criarHtmlFigura(src, id, '', true) + '<br>';
+              const html = criarFiguraLaudoHtml(src, id, '', { dummy: true, quebraFinal: true });
               editor.insertContent(html);
             });
 
@@ -1714,8 +1711,10 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
                     e.preventDefault();
                     e.stopPropagation();
                     const imageId = figure.getAttribute('data-image-id');
-                    if (imageId && onDummyFigureClick) {
-                      onDummyFigureClick(imageId);
+                    if (imageId && aoClicarFiguraDummyRef.current) {
+                      const ocorrenciaId = figure.getAttribute('data-figure-id');
+                      if (ocorrenciaId) aoClicarFiguraDummyRef.current(imageId, ocorrenciaId);
+                      else aoClicarFiguraDummyRef.current(imageId);
                       return;
                     }
                     const input = document.createElement('input');
@@ -1724,11 +1723,17 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
                     input.onchange = () => {
                       const file = input.files?.[0];
                       if (!file) return;
+                      if (!editorDaSessaoAtivo(editor)) return;
+                      const finalizarProcessamento = onIniciarProcessamentoImagem?.();
                       const reader = new FileReader();
                       reader.onload = () => {
-                        void (async () => {
+                        const executar = onExecutarOperacaoFigura || (async (operacao: () => Promise<void>) => operacao());
+                        void executar(async () => {
+                          if (!editorDaSessaoAtivo(editor)) return;
                           const id = crypto.randomUUID();
-                          const previa = await prepararImagemInserida(editor, String(reader.result), id, file.name);
+                          const previa = await prepararImagemParaEditor(editor, laudoId, String(reader.result), id, file.name);
+                          if (!editorDaSessaoAtivo(editor) || !editor.getBody()?.contains(figure)
+                            || figure.getAttribute('data-dummy') !== 'true' || figure.getAttribute('data-image-id') !== imageId) return;
                           editor.execCommand('replaceLaudoImage', false, {
                             figureElement: figure as HTMLElement,
                             newImageId: id,
@@ -1736,8 +1741,15 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
                             previa: true,
                           });
                           onChange(editor.getContent());
-                        })().catch((erro: unknown) => window.alert(erro instanceof Error ? erro.message : 'Não foi possível preparar a imagem.'));
+                        }).catch((erro: unknown) => {
+                          if (editorDaSessaoAtivo(editor)) window.alert(erro instanceof Error ? erro.message : 'Não foi possível preparar a imagem.');
+                        }).finally(() => finalizarProcessamento?.());
                       };
+                      reader.onerror = () => {
+                        finalizarProcessamento?.();
+                        if (editorDaSessaoAtivo(editor)) window.alert('Não foi possível ler a imagem selecionada.');
+                      };
+                      reader.onabort = () => finalizarProcessamento?.();
                       reader.readAsDataURL(file);
                     };
                     input.click();
@@ -1762,20 +1774,34 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
                     }
                     evento.preventDefault();
                     evento.stopImmediatePropagation();
-                    void (async () => {
+                    let intervalo = editor.selection.getRng().cloneRange();
+                    const executar = onExecutarOperacaoFigura || (async (operacao: () => Promise<void>) => {
+                      const finalizar = onIniciarProcessamentoImagem?.();
+                      try { await operacao(); } finally { finalizar?.(); }
+                    });
+                    void executar(async () => {
                       for (const arquivo of arquivos) {
                         const dataUri = await new Promise<string>((resolve, reject) => {
                           const leitor = new FileReader();
                           leitor.onload = () => resolve(String(leitor.result));
                           leitor.onerror = () => reject(new Error('Não foi possível ler a imagem arrastada.'));
+                          leitor.onabort = () => reject(new Error('A leitura da imagem arrastada foi cancelada.'));
                           leitor.readAsDataURL(arquivo);
                         });
                         const id = crypto.randomUUID();
-                        const previa = await prepararImagemInserida(editor, dataUri, id, arquivo.name);
-                        editor.insertContent(buildFigureHtml(previa, id, '').replace('<figure ', '<figure data-imagem-previa="true" '));
+                        const previa = await prepararImagemParaEditor(editor, laudoId, dataUri, id, arquivo.name);
+                        if (!editorDaSessaoAtivo(editor)) return;
+                        if (!body.contains(intervalo.startContainer) || !body.contains(intervalo.endContainer)) {
+                          throw new Error('A posição de inserção não está mais disponível.');
+                        }
+                        editor.selection.setRng(intervalo);
+                        editor.insertContent(criarFiguraLaudoHtml(previa, id, '', { previa: true, quebraFinal: true }));
+                        intervalo = editor.selection.getRng().cloneRange();
                         onImageInserted?.();
                       }
-                    })().catch(error => window.alert(error instanceof Error ? error.message : 'Não foi possível inserir a imagem.'));
+                    }).catch(error => {
+                      if (editorDaSessaoAtivo(editor)) window.alert(error instanceof Error ? error.message : 'Não foi possível inserir a imagem.');
+                    });
                   };
                   body.addEventListener('drop', aoSoltarArquivo, true);
                   editor.on('remove', () => body.removeEventListener('drop', aoSoltarArquivo, true));
@@ -1813,7 +1839,7 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
                   processando = true;
                   figuraObserver.disconnect();
 
-                  const pendentes: Array<{ id: string; origem: string }> = [];
+                  const pendentes: Array<{ id: string; ocorrenciaId: string; origem: string }> = [];
 
                   editor.undoManager.transact(() => {
                     for (const img of rawImages) {
@@ -1824,14 +1850,15 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
                         window.alert('Para inserir uma imagem de um site, salve o arquivo e anexe-o ao laudo.');
                         continue;
                       }
-                      if (laudoId) img.setAttribute('src', 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==');
+                      if (laudoId) atualizarOrigemImagemFigura(img, 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==');
                       const figure = wrapImgAsFigure(img);
                       img.parentNode?.replaceChild(figure, img);
                       if (laudoId) {
                         const id = figure.getAttribute('data-image-id');
-                        if (id) {
+                        const ocorrenciaId = figure.getAttribute('data-figure-id');
+                        if (id && ocorrenciaId) {
                           figure.setAttribute('data-imagem-processando', 'true');
-                          pendentes.push({ id, origem });
+                          pendentes.push({ id, ocorrenciaId, origem });
                         }
                       }
                     }
@@ -1843,22 +1870,31 @@ export const TinyMceEditor: React.FC<TinyMceEditorProps & Omit<React.HTMLAttribu
                   processando = false;
                   onImageInserted?.();
                   for (const pendente of pendentes) {
-                    void (async () => {
-                      const dataUri = pendente.origem.startsWith('blob:')
-                        ? await converterBlobImagemParaDataUri(pendente.origem) : pendente.origem;
-                      const previa = await prepararImagemInserida(editor, dataUri, pendente.id, `imagem-${pendente.id}`);
-                      const figura = Array.from(body.querySelectorAll<HTMLElement>('.laudo-figure[data-image-id]'))
-                        .find(elemento => elemento.getAttribute('data-image-id') === pendente.id);
-                      if (!figura) return;
-                      figura.querySelector('img')?.setAttribute('src', previa);
-                      figura.setAttribute('data-imagem-previa', 'true');
-                      figura.removeAttribute('data-imagem-processando');
-                      onChange(editor.getContent());
-                    })().catch((erro: unknown) => {
-                      Array.from(body.querySelectorAll<HTMLElement>('.laudo-figure[data-image-id]'))
-                        .find(elemento => elemento.getAttribute('data-image-id') === pendente.id)?.remove();
-                      window.alert(erro instanceof Error ? erro.message : 'Não foi possível preparar a imagem.');
-                    });
+                    const finalizarProcessamento = onIniciarProcessamentoImagem?.();
+                    const executar = onExecutarOperacaoFigura || (async (operacao: () => Promise<void>) => operacao());
+                    void executar(async () => {
+                      try {
+                        if (!editorDaSessaoAtivo(editor) || !obterFiguraEmProcessamento(editor, pendente.ocorrenciaId, pendente.id)) return;
+                        const dataUri = pendente.origem.startsWith('blob:')
+                          ? await converterBlobImagemParaDataUri(pendente.origem) : pendente.origem;
+                        const previa = await prepararImagemParaEditor(editor, laudoId, dataUri, pendente.id, `imagem-${pendente.id}`);
+                        if (!editorDaSessaoAtivo(editor)) return;
+                        const figura = obterFiguraEmProcessamento(editor, pendente.ocorrenciaId, pendente.id);
+                        if (!figura) return;
+                        const imagemInserida = figura.querySelector<HTMLImageElement>('img');
+                        if (imagemInserida) atualizarOrigemImagemFigura(imagemInserida, previa);
+                        figura.setAttribute('data-imagem-previa', 'true');
+                        figura.removeAttribute('data-imagem-processando');
+                        onChange(editor.getContent());
+                      } catch (erro: unknown) {
+                        if (!editorDaSessaoAtivo(editor)) return;
+                        const figura = obterFiguraEmProcessamento(editor, pendente.ocorrenciaId, pendente.id);
+                        if (!figura) return;
+                        editor.undoManager.transact(() => removerOcorrenciaFigura(body, figura));
+                        onChange(editor.getContent());
+                        window.alert(erro instanceof Error ? erro.message : 'Não foi possível preparar a imagem.');
+                      }
+                    }).finally(() => finalizarProcessamento?.());
                   }
                 });
 

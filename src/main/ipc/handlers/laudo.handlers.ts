@@ -1,11 +1,13 @@
 import { obterContextoWizardLaudo, calcularPecasDoLaudo } from '../../services/laudo-estrutura.service.js';
 import { esquemaRespostasIncorporadas } from '../../../shared/types/laudo-bkp.types.js';
 import { authSessaoService } from '../../services/auth-sessao.service.js';
+import { STATUS_LAUDO } from '../../utils/data-civil.js';
 import { ipcMain } from 'electron';
 import { logDebug, logError } from '../../utils/logger.js';
 import { auditCicloVida, auditDelete } from '../../services/audit-log.service.js';
 import { laudoService } from '../../services/laudo.service.js';
 import { repService } from '../../services/rep.service.js';
+import { googleDriveService } from '../../services/google-drive.service.js';
 import { withTransaction } from '../../database/sqlite.js';
 import { concluirImagensLaudo, prepararConclusaoImagensLaudo, descartarPreparacaoImagens, descartarArquivosConcluidos } from '../../services/imagem-laudo.service.js';
 import {
@@ -267,9 +269,8 @@ export const registerLaudoHandlers = (): void => {
     let preparacao: Awaited<ReturnType<typeof prepararConclusaoImagensLaudo>> | undefined;
     try {
       if (!laudoId) return { success: false, error: 'ID do laudo inválido' };
-      const statusValidos = ['Em andamento', 'Concluído', 'Entregue'];
-      if (!statusValidos.includes(novoStatus)) {
-        return { success: false, error: `Status inválido. Use: ${statusValidos.join(', ')}` };
+      if (!STATUS_LAUDO.includes(novoStatus as typeof STATUS_LAUDO[number])) {
+        return { success: false, error: `Status inválido. Use: ${STATUS_LAUDO.join(', ')}` };
       }
 
       const laudoAntes = await laudoService.findById(laudoId);
@@ -291,6 +292,9 @@ export const registerLaudoHandlers = (): void => {
       if (novoStatus === 'Concluído' && statusAnterior !== 'Concluído') {
         try { await descartarArquivosConcluidos(laudoId, caminhosAntigos); }
         catch (error) { logError('Falha ao descartar arquivos após conclusão do laudo', { laudoId, error }); }
+        void googleDriveService.enfileirarConclusao(laudo.perito_id, laudo.id).catch(error => {
+          logError('Falha ao enfileirar backup automático do laudo', { laudoId, error });
+        });
       }
 
       const rep = await repService.findById(laudoAntes.rep_id);

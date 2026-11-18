@@ -25,6 +25,7 @@ import { DiagnosticoCapturaService } from './services/diagnostico-captura.servic
 import { DiagnosticoSourceMapService } from './services/diagnostico-source-map.service.js';
 import { prepararAvisoConsoleDiagnostico } from './services/diagnostico-console.service.js';
 import { iaExecucaoService } from './services/ia-execucao.service.js';
+import { googleDriveService } from './services/google-drive.service.js';
 import { authSessaoService } from './services/auth-sessao.service.js';
 import { concluirRestauracaoPendente, reverterRestauracaoPendente } from './services/backup.service.js';
 import { desempenhoService } from './services/desempenho.service.js';
@@ -37,6 +38,7 @@ import { schemaEventoEditorLaudo } from '../shared/diagnostico/contratos.js';
 import { navegacaoAplicacaoPermitida } from './security/navegacao.js';
 import { criarAtalhoDesktopLinux } from './services/atalho-linux.service.js';
 import { criarAtalhoMesaMacOS } from './services/atalho-macos.service.js';
+import * as electron from 'electron';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -46,6 +48,8 @@ const caminhoRelatorioSmoke = process.env.LAWDO_SMOKE_SAIDA;
 const caminhoIcone = app.isPackaged
   ? path.join(process.resourcesPath, 'assets/icon.ico')
   : path.join(__dirname, '../../src/renderer/assets/icon.ico');
+
+electron.crashReporter?.start({ productName: 'laWdo', uploadToServer: false });
 
 // Configurações de segurança
 if (squirrelStartup) {
@@ -442,6 +446,9 @@ async function iniciarDiagnosticoAssistido(): Promise<void> {
     const falha = canal.startsWith('gdl:') && (resultadoFuncional === 'falha' || resultadoFuncional === 'indisponivel') ? normalizarFalhaDiagnosticoGdl(entrada.falha) : undefined;
     const falhaImagem = canal === 'ilustracoes:obter-imagem-impressao' && resultadoFuncional === 'falha'
       ? normalizarFalhaDiagnosticoImagem(entrada.falhaImagem) : undefined;
+    const diagnosticoGoogleDrive = canal.startsWith('google-drive:') && resultadoFuncional === 'falha' && entrada.diagnosticoGoogleDrive && typeof entrada.diagnosticoGoogleDrive === 'object'
+      && typeof (entrada.diagnosticoGoogleDrive as Record<string, unknown>).etapa === 'string' && typeof (entrada.diagnosticoGoogleDrive as Record<string, unknown>).codigo === 'string'
+      ? { etapa: (entrada.diagnosticoGoogleDrive as Record<string, string>).etapa, codigo: (entrada.diagnosticoGoogleDrive as Record<string, string>).codigo } : undefined;
     const tipoFalha = entrada.tipoFalha === 'transporte' ? 'transporte' : undefined;
     const categoria = entrada.categoria === 'acao' ? 'acao' : 'ipc';
     const nivel = entrada.nivel === 'debug' || entrada.nivel === 'warn' || entrada.nivel === 'error' ? entrada.nivel : 'info';
@@ -454,7 +461,7 @@ async function iniciarDiagnosticoAssistido(): Promise<void> {
       correlacaoId,
       dados: categoria === 'acao'
         ? entrada
-        : { fase, canal, duracaoMs, resultadoFuncional, tipoFalha, interacaoUsuario: CANAIS_COM_INTERACAO_USUARIO.some(item => item === canal), ...(falha ? { falha } : {}), ...(falhaImagem ? { falhaImagem } : {}), erro: typeof entrada.erro === 'string' ? entrada.erro : undefined },
+        : { fase, canal, duracaoMs, resultadoFuncional, tipoFalha, interacaoUsuario: CANAIS_COM_INTERACAO_USUARIO.some(item => item === canal), ...(falha ? { falha } : {}), ...(falhaImagem ? { falhaImagem } : {}), ...(diagnosticoGoogleDrive ? { diagnosticoGoogleDrive } : {}), erro: typeof entrada.erro === 'string' ? entrada.erro : undefined },
     });
   });
   ipcMain.on('diagnostico:erro-fatal-renderer', (evento, erro: unknown) => {
@@ -472,12 +479,16 @@ async function iniciarDiagnosticoAssistido(): Promise<void> {
   iaExecucaoService.configurarRegistradorDiagnostico(dados => {
     registrarEventoDiagnostico('erro', 'warn', dados, mainWindow ?? undefined);
   });
+  googleDriveService.configurarRegistradorDiagnostico(dados => {
+    registrarEventoDiagnostico('erro', 'error', { integracao: 'google_drive', ...dados }, mainWindow ?? undefined);
+  });
   pipeDiagnostico = pipe;
   log.info(`Modo diagnóstico pronto (${ativa.sessionId.slice(0, 8)}).`);
 }
 
 async function encerrarDiagnosticoAssistido(): Promise<void> {
   iaExecucaoService.configurarRegistradorDiagnostico();
+  googleDriveService.configurarRegistradorDiagnostico();
   await capturaDiagnostico?.interromper('Aplicativo encerrado durante a captura.').catch(() => undefined);
   if (temporizadorAtrasoEventLoopDiagnostico) clearInterval(temporizadorAtrasoEventLoopDiagnostico);
   temporizadorAtrasoEventLoopDiagnostico = null;
@@ -832,10 +843,25 @@ const encerramentoAplicativo = new EncerramentoAplicativoService({
   registrarFalha: (etapa, erro) => log.error('Erro no encerramento do aplicativo', {
     etapa, erro: erro instanceof Error ? erro.message : 'Erro inesperado',
   }),
-  sair: () => app.quit(),
+  registrarEtapa: (etapa, estado) => {
+    if (process.env.LAWDO_MODO_DIAGNOSTICO === '1' && !app.isPackaged) {
+      log.warn('Etapa de encerramento', { etapa, estado });
+    } else {
+      log.info('Etapa de encerramento', { etapa, estado });
+    }
+  },
+  registrarEspera: etapa => log.warn('Encerramento aguardando etapa', { etapa }),
+  sair: () => {
+    if (process.env.LAWDO_MODO_DIAGNOSTICO === '1' && !app.isPackaged) log.warn('Solicitando saída final do Electron');
+    app.quit();
+    if (process.env.LAWDO_MODO_DIAGNOSTICO === '1' && !app.isPackaged) log.warn('Solicitação de saída final retornou');
+  },
 });
 
 app.on('will-quit', evento => encerramentoAplicativo.solicitar(evento));
+app.on('quit', () => {
+  if (process.env.LAWDO_MODO_DIAGNOSTICO === '1' && !app.isPackaged) log.warn('Electron iniciou saída final');
+});
 
 app.on('activate', () => {
   // No macOS, recriar uma janela no app quando

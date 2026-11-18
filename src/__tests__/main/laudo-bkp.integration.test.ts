@@ -138,7 +138,7 @@ describe('transferência portável de um laudo', () => {
     const previa = await servico.analisarConflitosBkp(pacote);
     const id = await servico.importarBkpLaudo(pacote, extraido, 'perito', previa.identidade, true);
     const [laudo] = await sqlite.executeQuery<{ template_id: null; apresentacao_json: string; estrutura_incorporada_json: string; status: string; data_entrega: string; conteudo: string }>('SELECT * FROM laudos WHERE id = ?', [id]);
-    expect(laudo).toMatchObject({ template_id: null, status: 'Entregue', data_entrega: '2026-10-30' });
+    expect(laudo).toMatchObject({ template_id: null, status: 'Entregue', data_entrega: '2026-10-30T00:00:00.000Z' });
     expect(laudo.apresentacao_json).toContain('Destino');
     expect(laudo.conteudo).toContain('minha_chave_importado_');
     expect(estrutura.lerEstruturaIncorporada(laudo)?.template.nome).toBe('Modelo de origem');
@@ -146,6 +146,13 @@ describe('transferência portável de um laudo', () => {
     expect(await sqlite.executeQuery('SELECT * FROM users ORDER BY id')).toEqual(credenciaisAntes);
     expect(await sqlite.executeQuery('SELECT * FROM configuracoes ORDER BY chave')).toEqual(configuracoesAntes);
     await servico.exportarBkpLaudo(id, path.join(diretorio, 'segunda.bkp'));
+  });
+
+  it('inclui a apresentação original somente no pacote destinado ao Google Drive', async () => {
+    const pacoteDrive = path.join(diretorio, 'drive.bkp');
+    await servico.exportarBkpLaudo('laudo', pacoteDrive, { incluirApresentacao: true });
+    const lido = await servico.lerBkpLaudo(pacoteDrive, path.join(diretorio, 'drive-extraido'));
+    expect(lido.laudo.apresentacao_json).toContain('Origem');
   });
 
   it('impede substituição sem confirmação, prévia desatualizada e REP com vários laudos', async () => {

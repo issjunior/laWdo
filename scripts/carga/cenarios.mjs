@@ -137,14 +137,28 @@ export async function executarCenario(nome, contexto) {
     });
   } else if (nome === 'figuras') {
     await acao('inserir_imagem_local', async () => {
-      const antes = await pagina.evaluate(() => [...globalThis.document.querySelectorAll('iframe.tox-edit-area__iframe')].reduce((total, iframe) => total + (iframe.contentDocument?.querySelectorAll('.laudo-figure').length ?? 0), 0));
       await pagina.getByRole('button', { name: 'Painel de Ilustrações', exact: true }).click();
       const indiceImagem = contexto.proximaImagem ?? 0;
       assert.ok(indiceImagem < QUANTIDADE_IMAGENS_ADICIONAIS, 'As imagens fictícias adicionais foram esgotadas.');
       contexto.proximaImagem = indiceImagem + 1;
-      await pagina.locator('input[type="file"][multiple]').setInputFiles(`${diretorio}/entradas/adicional-${indiceImagem}.jpg`);
+      const nomeArquivo = `adicional-${indiceImagem}.jpg`;
+      await pagina.locator('input[type="file"][multiple]').setInputFiles(`${diretorio}/entradas/${nomeArquivo}`);
+      const prazo = Date.now() + 30_000;
+      let imagemId;
+      while (!imagemId && Date.now() < prazo) {
+        imagemId = await pagina.evaluate(async nome => {
+          const resposta = await globalThis.window.ipcAPI.ilustracoes.listarEstagio('carga-laudo');
+          return resposta.success && Array.isArray(resposta.data) ? resposta.data.find(imagem => imagem.nomeArquivo === nome)?.id : undefined;
+        }, nomeArquivo);
+        if (!imagemId) await esperar(100);
+      }
+      assert.equal(typeof imagemId, 'string', 'A imagem carregada não foi identificada no estágio.');
+      contexto.imagemInseridaId = imagemId;
       await pagina.getByRole('button', { name: 'Inserir todas as imagens no laudo', exact: true }).click();
-      await pagina.waitForFunction(quantidade => [...globalThis.document.querySelectorAll('iframe.tox-edit-area__iframe')].reduce((total, iframe) => total + (iframe.contentDocument?.querySelectorAll('.laudo-figure').length ?? 0), 0) === quantidade + 1, antes, { polling: 100 });
+      await pagina.waitForFunction(id => [...globalThis.document.querySelectorAll('iframe.tox-edit-area__iframe')]
+        .flatMap(iframe => [...(iframe.contentDocument?.querySelectorAll('.laudo-figure[data-image-id]') ?? [])])
+        .filter(figura => figura.getAttribute('data-image-id') === id).length === 1, imagemId, { polling: 100 });
+      return { imagemInseridaId: imagemId };
     });
     await acao('editar_legenda', async () => {
       const legenda = pagina.getByPlaceholder('Descreva a figura...').first();

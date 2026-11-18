@@ -21,7 +21,7 @@ describe('LogsPage', () => {
       { timestamp: '2026-09-22T10:00:00.000Z', level: 'error', module: 'laudo', message: 'Falha' },
       { timestamp: '2026-09-22T10:01:00.000Z', level: 'info', module: 'sistema', message: 'Pronto' },
     ] });
-    listarAuditoria.mockResolvedValue({ success: true, data: [{ id: 1, created_at: '2026-09-22T10:00:00.000Z', modulo: 'laudo', tipo_acao: 'atualizacao', nivel: 'info', acao: 'Atualizou laudo' }], total: 250 });
+    listarAuditoria.mockResolvedValue({ success: true, data: [{ id: 1, created_at: '2026-09-22T10:00:00.000Z', modulo: 'laudo', tipo_acao: 'atualizacao', nivel: 'info', acao: 'Atualizou laudo' }], temProxima: true, proximoCursor: 'cursor-proxima-pagina' });
     contar.mockResolvedValue({ success: true, data: { sistema: 2, auditoria: 250 } });
     findByNumero.mockResolvedValue({ success: true, data: { id: 'rep-1', numero: '001/2026', status: 'Em Andamento' } });
     Object.assign(window.ipcAPI, {
@@ -39,15 +39,16 @@ describe('LogsPage', () => {
     expect(screen.queryByText('Registros de auditoria carregados')).not.toBeInTheDocument();
   });
 
-  it('distingue registros encontrados e carregados na Auditoria', async () => {
+  it('mostra a página carregada e a navegação por cursor na Auditoria', async () => {
     render(<LogsPage />);
     fireEvent.mouseDown(await screen.findByRole('tab', { name: 'Auditoria' }), { button: 0 });
 
     expect(await screen.findByText('Resumo da consulta')).toBeInTheDocument();
-    expect(screen.getByText('Registros encontrados')).toBeInTheDocument();
     expect(screen.getByText('Registros carregados')).toBeInTheDocument();
     expect(screen.getByText('250')).toBeInTheDocument();
     expect(screen.getByText('1')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Anterior' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Próxima' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Exportar CSV' })).toBeInTheDocument();
   });
 

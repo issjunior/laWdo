@@ -171,6 +171,31 @@ export interface ResultadoReconciliacaoImagensLaudo {
   arquivosAusentes: number
 }
 
+export type OperacaoPainelFiguras =
+  | 'insertImage'
+  | 'insertAll'
+  | 'deleteImage'
+  | 'deleteFile'
+  | 'updateLegenda'
+  | 'replaceImage'
+  | 'editImage'
+  | 'generateCaption'
+  | 'refreshHtml'
+  | 'commitPairHeight'
+  | 'setPairVisualMode';
+
+export interface ResultadoInsercaoFiguras {
+  inseridas: string[]
+  falhas: Array<{ imagemId: string; mensagem: string }>
+}
+
+export interface ResultadoOperacaoPainelFiguras {
+  solicitacaoId: string
+  sucesso: boolean
+  valor?: boolean | string | string[] | ResultadoInsercaoFiguras | ResultadoAtualizacaoFiguras | null
+  erro?: string
+}
+
 export interface AtualizarOrdemImagemLaudoEntrada {
   id: string
   sequencia: number

@@ -51,6 +51,8 @@ interface IpcRespostaLegada {
   limiteRequisicoes?: LimiteUsoIa;
   message?: string;
   total?: number;
+  temProxima?: boolean;
+  proximoCursor?: string;
   count?: number;
   path?: string;
   valid?: boolean;
@@ -137,6 +139,7 @@ interface IpcAPIRendererLegada {
   rep: IpcGrupoLegado;
   dashboard: IpcGrupoLegado;
   configuracao: IpcGrupoLegado;
+    googleDrive: Pick<import('../shared/types/google-drive.types.js').ApiGoogleDrive, 'estadoRapido' | 'estado' | 'resumoCache' | 'resumo' | 'conectar' | 'desconectar' | 'definirEnvioAutomatico' | 'listarCopias' | 'listarLaudosConcluidos' | 'enviarLaudo' | 'verificar' | 'cancelarVerificacao' | 'onProgressoVerificacao' | 'prepararVisualizacao' | 'analisarRestauracao' | 'confirmarRestauracao' | 'cancelarRestauracao' | 'moverParaLixeira'>;
   gdl: IpcGrupoLegado & ApiCredenciaisGdl & {
     consultarRepsMesmoCaso: (laudoId: string) => Promise<{ success: boolean; data?: import('@shared/gdl/reps-mesmo-caso').RepsMesmoCasoGdl; error?: string }>;
     obterMiniaturasImagensLaudo: (laudoId: string, sessaoId: string, idsSelecao: string[]) => Promise<{ success: boolean; data?: MiniaturaArquivoRepGdl[]; error?: string }>;
@@ -338,7 +341,7 @@ const initApp = async () => {
         log: {
           listar: async () => ({ success: true, data: [] }),
           limpar: async () => ({ success: true }),
-          listarAuditoria: async () => ({ success: true, data: [], total: 0 }),
+          listarAuditoria: async () => ({ success: true, data: [], temProxima: false }),
           limparAuditoria: async () => ({ success: true, count: 0 }),
           contar: async () => ({ success: true, data: { sistema: 0, auditoria: 0 } }),
         },

@@ -21,6 +21,8 @@ asarUnpack:
   - '**/node_modules/@img/**/*'
 
 extraResources:
+  - from: build/google-drive-oauth.dat
+    to: config/google-drive-oauth.dat
   - from: src/renderer/assets/icon.ico
     to: assets/icon.ico
   - from: src/renderer/assets/logo.png

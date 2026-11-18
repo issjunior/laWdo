@@ -7,6 +7,8 @@ interface DependenciasEncerramento {
   grupos: EtapaEncerramento[][];
   fecharBanco: () => Promise<void>;
   registrarFalha: (etapa: string, erro: unknown) => void;
+  registrarEtapa?: (etapa: string, estado: 'iniciada' | 'concluida') => void;
+  registrarEspera?: (etapa: string) => void;
   sair: () => void;
 }
 
@@ -20,7 +22,10 @@ export class EncerramentoAplicativoService {
     if (this.concluido) return;
     evento.preventDefault();
     if (this.execucao) return;
+    // Sem janelas, o Electron pode deixar pendente a continuação assíncrona da limpeza.
+    const manterAtivo = setInterval(() => undefined, 1_000);
     this.execucao = this.encerrar().then(() => {
+      clearInterval(manterAtivo);
       this.concluido = true;
       this.dependencias.sair();
     });
@@ -34,7 +39,16 @@ export class EncerramentoAplicativoService {
   }
 
   private async executarGrupo(grupo: EtapaEncerramento[]): Promise<void> {
-    const resultados = await Promise.allSettled(grupo.map(etapa => Promise.resolve().then(etapa.executar)));
+    const resultados = await Promise.allSettled(grupo.map(async etapa => {
+      this.dependencias.registrarEtapa?.(etapa.nome, 'iniciada');
+      const aviso = setTimeout(() => this.dependencias.registrarEspera?.(etapa.nome), 3_000);
+      try {
+        await etapa.executar();
+        this.dependencias.registrarEtapa?.(etapa.nome, 'concluida');
+      } finally {
+        clearTimeout(aviso);
+      }
+    }));
     resultados.forEach((resultado, indice) => {
       if (resultado.status === 'rejected') this.dependencias.registrarFalha(grupo[indice].nome, resultado.reason);
     });
