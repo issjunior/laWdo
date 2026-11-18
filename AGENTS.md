@@ -34,10 +34,10 @@ Após alterações, execute `npm run type-check` e `npm run lint`. Se houver alt
 
 ### Criação e manutenção de testes
 
-- Não criar nem alterar testes automaticamente durante implementações em andamento.
-- Criar ou ajustar testes somente quando o usuário solicitar explicitamente ou quando o agente recomendar a mudança de forma explícita, informando antes a justificativa e o escopo.
-- É permitido executar os testes existentes como validação ou diagnóstico. Se falharem, registrar o resultado e a causa provável, sem modificar os testes sem atender à regra acima.
-- Enquanto o contrato de uma feature ainda estiver em definição, priorizar a implementação; só propor testes quando o comportamento estiver suficientemente estabilizado ou houver risco relevante de regressão.
+- Crie ou ajuste testes somente após concluir a implementação planejada da feature e estabilizar seu comportamento, para evitar retrabalho durante a evolução do código.
+- Após a implementação, crie ou ajuste testes quando o usuário solicitar explicitamente ou quando o agente recomendar a mudança de forma explícita, informando antes a justificativa e o escopo. Considere especialmente comportamentos críticos e riscos relevantes de regressão.
+- É permitido executar os testes existentes durante a implementação para validação ou diagnóstico. Se falharem, registre o resultado e a causa provável; ajuste-os somente após a implementação e conforme a regra acima.
+- Organize novos testes por feature ou domínio, mantendo juntos os cenários relacionados. Preserve uma organização apropriada para testes de infraestrutura compartilhada e integrações entre features; não mova testes existentes apenas para adequá-los a essa convenção.
 
 ### Diagnóstico assistido por IA
 
@@ -111,6 +111,12 @@ Exemplos:
 
 Regra prática: ao cruzar uma fronteira insegura, não use `any` nem cast direto para “forçar” o tipo. Primeiro valide, normalize ou faça narrowing com `unknown`, e só então alimente estado tipado ou acesse propriedades.
 
+### Resiliência e recuperação
+
+- Trate falhas previsíveis com mensagens claras e amigáveis, explicando o que aconteceu e como o usuário pode prosseguir quando houver uma ação possível.
+- Preserve o trabalho e os dados do usuário em falhas e ofereça recuperação ou nova tentativa quando for seguro. Não apresente um fallback como sucesso se a operação não tiver sido concluída.
+- Registre detalhes técnicos úteis ao diagnóstico sem expor segredos ou dados sensíveis na interface ou nos logs. Não oculte falhas reais com fallbacks silenciosos.
+
 ---
 
 ## Arquitetura
@@ -176,6 +182,7 @@ Cada feature deve ter responsabilidade única e clara, com seus próprios servi�
 - Arquivos em `shared/` não podem depender de React, DOM, Electron ou módulos Node. Schemas usados somente por uma fronteira do main devem permanecer no main; componentes e regras exclusivamente visuais permanecem no renderer.
 - Evite transformar `shared/` em depósito genérico. Se algo pertence exclusivamente ao domínio interno de uma feature ou camada, mantenha junto dela.
 - Para fluxos grandes, prefira página como orquestradora e extraia componentes/hooks por responsabilidade clara.
+- Na página de Laudos, avalie extrações também quando promoverem comportamento compartilhado e padronizado, manutenção ou ganho de desempenho mensurável. Preserve o ciclo de vida e a sessão do editor; modularização por si só não garante melhora de desempenho.
 - Ao adicionar IPC de uma feature, mantenha juntos: handler, canal permitido, tipo no preload e chamada tipada no renderer.
 - Antes de criar uma nova abstração, verifique se ela reduz duplicação real ou melhora clareza; não criar arquivos pequenos apenas por simetria.
 
@@ -289,6 +296,7 @@ Consultas usam SQL bruto (strings template), não há ORM.
 
 - **Ferramentas permanentes**: manter em `scripts/`, versionadas e incluídas nas validações aplicáveis. Reservar `tmp/` para scripts de conferência e artefatos locais descartáveis; essa pasta é ignorada pelo Git e pelo ESLint. Se um script temporário passar a ser necessário regularmente, promovê-lo para `scripts/`, documentar seu uso e adequá-lo às regras do projeto antes de incorporá-lo ao fluxo de desenvolvimento.
 - **Em caso de dúvida material** — esclarecer com o usuário quando uma decisão não puder ser tomada com segurança a partir do contexto e do código disponível.
+- **Documentação de bibliotecas e APIs**: consulte o MCP Context7 para dúvidas sobre bibliotecas, frameworks, SDKs, APIs, ferramentas de linha de comando e serviços em nuvem, incluindo configuração e diagnóstico específico. Resolva primeiro a biblioteca e consulte a documentação correspondente; use outra fonte confiável se o Context7 não estiver disponível ou não responder à dúvida. Não é necessário para lógica de negócio, revisão de código ou conceitos gerais de programação.
 
 ---
 
