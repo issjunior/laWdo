@@ -843,10 +843,25 @@ const encerramentoAplicativo = new EncerramentoAplicativoService({
   registrarFalha: (etapa, erro) => log.error('Erro no encerramento do aplicativo', {
     etapa, erro: erro instanceof Error ? erro.message : 'Erro inesperado',
   }),
-  sair: () => app.quit(),
+  registrarEtapa: (etapa, estado) => {
+    if (process.env.LAWDO_MODO_DIAGNOSTICO === '1' && !app.isPackaged) {
+      log.warn('Etapa de encerramento', { etapa, estado });
+    } else {
+      log.info('Etapa de encerramento', { etapa, estado });
+    }
+  },
+  registrarEspera: etapa => log.warn('Encerramento aguardando etapa', { etapa }),
+  sair: () => {
+    if (process.env.LAWDO_MODO_DIAGNOSTICO === '1' && !app.isPackaged) log.warn('Solicitando saída final do Electron');
+    app.quit();
+    if (process.env.LAWDO_MODO_DIAGNOSTICO === '1' && !app.isPackaged) log.warn('Solicitação de saída final retornou');
+  },
 });
 
 app.on('will-quit', evento => encerramentoAplicativo.solicitar(evento));
+app.on('quit', () => {
+  if (process.env.LAWDO_MODO_DIAGNOSTICO === '1' && !app.isPackaged) log.warn('Electron iniciou saída final');
+});
 
 app.on('activate', () => {
   // No macOS, recriar uma janela no app quando
