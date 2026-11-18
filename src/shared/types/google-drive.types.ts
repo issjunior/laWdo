@@ -73,6 +73,7 @@ export interface ProgressoVerificacaoGoogleDrive {
 export interface ApiGoogleDrive {
   estadoRapido: () => Promise<RespostaGoogleDrive<EstadoGoogleDrive>>;
   estado: () => Promise<RespostaGoogleDrive<EstadoGoogleDrive>>;
+  resumoCache: () => Promise<RespostaGoogleDrive<ResumoGoogleDrive | null>>;
   resumo: (forcarAtualizacao?: boolean) => Promise<RespostaGoogleDrive<ResumoGoogleDrive>>;
   conectar: () => Promise<RespostaGoogleDrive<EstadoGoogleDrive>>;
   desconectar: () => Promise<RespostaGoogleDrive>;

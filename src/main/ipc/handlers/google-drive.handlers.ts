@@ -72,6 +72,7 @@ export function registrarGoogleDriveHandlers(): void {
   };
   ipcMain.handle('google-drive:estado-rapido', async evento => { try { return { success: true, data: await googleDriveService.estadoRapido(usuario(evento)) }; } catch (erro) { return respostaErro(erro); } });
   ipcMain.handle('google-drive:estado', async evento => { try { return { success: true, data: await googleDriveService.estado(usuario(evento)) }; } catch (erro) { return respostaErro(erro); } });
+  ipcMain.handle('google-drive:resumo-cache', async evento => { try { return { success: true, data: await googleDriveService.resumoCache(usuario(evento)) }; } catch (erro) { return respostaErro(erro); } });
   ipcMain.handle('google-drive:resumo', async (evento, forcarAtualizacao: unknown) => { try { if (forcarAtualizacao !== undefined && typeof forcarAtualizacao !== 'boolean') throw new Error('Atualização inválida.'); return { success: true, data: await googleDriveService.resumo(usuario(evento), forcarAtualizacao === true) }; } catch (erro) { return respostaErro(erro); } });
   ipcMain.handle('google-drive:conectar', async evento => { try { return { success: true, data: await googleDriveService.conectar(usuario(evento)) }; } catch (erro) { return respostaErro(erro); } });
   ipcMain.handle('google-drive:desconectar', async evento => { try { await limparPacotesDaJanela(evento.sender.id); await googleDriveService.desconectar(usuario(evento)); return { success: true }; } catch (erro) { return respostaErro(erro); } });

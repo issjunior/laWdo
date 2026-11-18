@@ -361,7 +361,7 @@ export interface IpcAPI {
     sincronizarSecoes: (laudoId: string) => Promise<UserResponse>;
   };
 
-  googleDrive: Pick<ApiGoogleDrive, 'estadoRapido' | 'estado' | 'resumo' | 'conectar' | 'desconectar' | 'definirEnvioAutomatico' | 'listarCopias' | 'listarLaudosConcluidos' | 'enviarLaudo' | 'verificar' | 'cancelarVerificacao' | 'onProgressoVerificacao' | 'prepararVisualizacao' | 'analisarRestauracao' | 'confirmarRestauracao' | 'cancelarRestauracao' | 'moverParaLixeira'>;
+  googleDrive: Pick<ApiGoogleDrive, 'estadoRapido' | 'estado' | 'resumoCache' | 'resumo' | 'conectar' | 'desconectar' | 'definirEnvioAutomatico' | 'listarCopias' | 'listarLaudosConcluidos' | 'enviarLaudo' | 'verificar' | 'cancelarVerificacao' | 'onProgressoVerificacao' | 'prepararVisualizacao' | 'analisarRestauracao' | 'confirmarRestauracao' | 'cancelarRestauracao' | 'moverParaLixeira'>;
 
   // Wizard
   wizard: {
@@ -1808,6 +1808,7 @@ contextBridge.exposeInMainWorld('ipcAPI', {
   googleDrive: {
     estadoRapido: () => invocarComDiagnostico('google-drive:estado-rapido'),
     estado: () => invocarComDiagnostico('google-drive:estado'),
+    resumoCache: () => invocarComDiagnostico('google-drive:resumo-cache'),
     resumo: (forcarAtualizacao = false) => invocarComDiagnostico('google-drive:resumo', forcarAtualizacao),
     conectar: () => invocarComDiagnostico('google-drive:conectar'),
     desconectar: () => invocarComDiagnostico('google-drive:desconectar'),

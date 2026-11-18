@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Database, Download, Loader2, Settings, Upload } from 'lucide-react';
+import { Cloud, Database, Download, Loader2, Settings, Upload } from 'lucide-react';
+import { GoogleDrivePage } from '@/pages/GoogleDrivePage';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -134,40 +135,64 @@ export const BackupPage: React.FC<{ currentUser: Record<string, unknown> | null 
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <Database className="h-7 w-7 text-primary" />
-        <div>
+      <div className="rounded-xl border bg-card p-5 shadow-sm sm:p-6">
+        <div className="flex items-start gap-3">
+          <div className="rounded-lg bg-primary/10 p-2.5 text-primary">
+            <Database className="h-6 w-6" />
+          </div>
+          <div className="min-w-0">
           <h1 className="text-2xl font-bold tracking-tight">Backup e restauração</h1>
           <p className="text-sm text-muted-foreground">Os novos backups são protegidos pela senha de acesso ao laWdo usada no momento da criação.</p>
+          </div>
         </div>
       </div>
-      <Tabs defaultValue="completo">
-        <TabsList>
-          <TabsTrigger value="completo"><Database className="mr-2 h-4 w-4" />Completo</TabsTrigger>
-          <TabsTrigger value="configuracao"><Settings className="mr-2 h-4 w-4" />Configuração</TabsTrigger>
+      <Tabs defaultValue="local">
+        <TabsList className="grid h-auto w-full grid-cols-2 sm:w-auto">
+          <TabsTrigger value="local" className="min-w-0 px-3 sm:px-4"><Database className="mr-2 h-4 w-4 shrink-0" />Backup local</TabsTrigger>
+          <TabsTrigger value="google-drive" className="min-w-0 px-3 sm:px-4"><Cloud className="mr-2 h-4 w-4 shrink-0" />Google Drive</TabsTrigger>
         </TabsList>
-        {(['completo', 'configuracao'] as const).map(tipo => (
-          <TabsContent key={tipo} value={tipo} className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>{MODALIDADES[tipo].titulo}</CardTitle>
-                <CardDescription className="space-y-2">
-                  <span className="block">{MODALIDADES[tipo].resumo}</span>
-                  <span className="block">{MODALIDADES[tipo].exclusao}</span>
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="grid gap-3 sm:grid-cols-2">
-                <Button onClick={() => void iniciar(tipo, 'criar')} disabled={ocupado}>
-                  <Download className="mr-2 h-4 w-4" />Criar backup
-                </Button>
-                <Button variant="outline" onClick={() => void iniciar(tipo, 'restaurar')} disabled={ocupado}>
-                  <Upload className="mr-2 h-4 w-4" />Restaurar backup
-                </Button>
-              </CardContent>
-            </Card>
-            <p className="text-sm text-muted-foreground">Ao restaurar: {MODALIDADES[tipo].restauracao}</p>
-          </TabsContent>
-        ))}
+        <TabsContent value="local" className="space-y-4">
+          <div className="space-y-1">
+            <h2 className="text-lg font-semibold tracking-tight">Tipos de backup local</h2>
+            <p className="text-sm text-muted-foreground">Escolha o conteúdo que deseja salvar ou restaurar nesta instalação.</p>
+          </div>
+          <div className="grid gap-4 lg:grid-cols-2">
+            {(['completo', 'configuracao'] as const).map(tipo => {
+              const Icone = tipo === 'completo' ? Database : Settings;
+              return (
+                <Card key={tipo} className="flex flex-col overflow-hidden">
+                  <CardHeader className="space-y-3 pb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="rounded-lg bg-primary/10 p-2 text-primary"><Icone className="h-5 w-5" /></div>
+                      <CardTitle className="text-lg">{MODALIDADES[tipo].titulo}</CardTitle>
+                    </div>
+                    <CardDescription className="space-y-3 leading-relaxed">
+                      <span className="block text-foreground/90">{MODALIDADES[tipo].resumo}</span>
+                      <span className="block rounded-md border bg-muted/40 p-3 text-xs leading-relaxed">{MODALIDADES[tipo].exclusao}</span>
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="mt-auto space-y-4">
+                    <div className="rounded-md border-l-2 border-primary/60 bg-muted/30 p-3">
+                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Ao restaurar</p>
+                      <p className="mt-1 text-sm text-muted-foreground">{MODALIDADES[tipo].restauracao}</p>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <Button onClick={() => void iniciar(tipo, 'criar')} disabled={ocupado}>
+                        <Download className="mr-2 h-4 w-4" />Criar backup
+                      </Button>
+                      <Button variant="outline" onClick={() => void iniciar(tipo, 'restaurar')} disabled={ocupado}>
+                        <Upload className="mr-2 h-4 w-4" />Restaurar backup
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </TabsContent>
+        <TabsContent value="google-drive">
+          <GoogleDrivePage />
+        </TabsContent>
       </Tabs>
 
       <Dialog open={Boolean(operacao)} onOpenChange={aberto => { if (!aberto && !ocupado) fechar(); }}>

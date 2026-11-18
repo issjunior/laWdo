@@ -39,10 +39,12 @@ type ServicoInterno = {
   registrarVerificacaoConcluida: (usuarioId: string, revisao: string) => Promise<void>;
   obterVerificacoes: (usuarioId: string) => Promise<Record<string, string>>;
   lerPacoteCopia: (usuarioId: string, copiaId: string, diretorio: string) => Promise<{ pacote: { rep: { numero: string }; tipoExame: { codigo: string; nome: string }; laudo: { status: string }; imagens: unknown[] }; hashCifrado: string; revisao: string }>;
+  estadoRapido: (usuarioId: string) => Promise<{ conectado: boolean; email?: string; envioAutomatico: boolean; pendencias: number }>;
+  obterCacheResumo: (usuarioId: string) => Promise<{ email: string; atualizadoEm: string; estado: { conectado: boolean; envioAutomatico: boolean; pendencias: number }; copias: Array<{ id: string; laudoId: string; numeroRep: string; nome: string; tamanho: number; modificadaEm: string; revisao: string }> } | null>;
 };
 
 const servico = googleDriveService as unknown as ServicoInterno;
-const metodosSubstituidos = ['obterRaiz', 'listarCopias', 'obterRevisoes', 'obterChavePacote', 'conferirCotaAntesDoEnvio', 'criarPasta', 'enviarArquivo', 'baixarArquivo', 'registrarRevisao', 'invalidarCacheResumo', 'listarDescendentes', 'requisitar', 'registrarVerificacaoConcluida', 'obterVerificacoes', 'lerPacoteCopia'] as const;
+const metodosSubstituidos = ['obterRaiz', 'listarCopias', 'obterRevisoes', 'obterChavePacote', 'conferirCotaAntesDoEnvio', 'criarPasta', 'enviarArquivo', 'baixarArquivo', 'registrarRevisao', 'invalidarCacheResumo', 'listarDescendentes', 'requisitar', 'registrarVerificacaoConcluida', 'obterVerificacoes', 'lerPacoteCopia', 'estadoRapido', 'obterCacheResumo'] as const;
 
 beforeEach(() => {
   mocks.consultarBanco.mockReset().mockResolvedValue([{ id: 'laudo-1', status: 'Concluído', data_conclusao: '2026-02-03T12:00:00.000Z', versao: 2, numero: '2026/00109026' }]);
@@ -58,6 +60,19 @@ afterEach(() => {
 });
 
 describe('GoogleDriveService', () => {
+  it('retorna o resumo em cache mesmo vencido para a tela exibir antes da atualização remota', async () => {
+    Object.assign(servico, {
+      estadoRapido: vi.fn(async () => ({ conectado: true, email: 'perito@policiacientifica.pr.gov.br', envioAutomatico: false, pendencias: 0 })),
+      obterCacheResumo: vi.fn(async () => ({
+        email: 'perito@policiacientifica.pr.gov.br', atualizadoEm: '2020-01-01T00:00:00.000Z',
+        estado: { conectado: true, envioAutomatico: false, pendencias: 0 },
+        copias: [{ id: 'copia', laudoId: 'laudo-1', numeroRep: '1', nome: '1.laWdo', tamanho: 1, modificadaEm: '', revisao: 'r1' }],
+      })),
+    });
+
+    await expect(googleDriveService.resumoCache('usuario-1')).resolves.toMatchObject({ origem: 'cache', desatualizado: true, copias: [expect.objectContaining({ id: 'copia' })] });
+  });
+
   it('lista apenas backups pertencentes à raiz e restaura a data da última integridade por revisão', async () => {
     Object.assign(servico, {
       obterRaiz: vi.fn(async () => 'raiz'), obterVerificacoes: vi.fn(async () => ({ revisao: '2026-02-03T12:00:00.000Z' })),
@@ -80,6 +95,17 @@ describe('GoogleDriveService', () => {
 
     await expect(googleDriveService.enviarLaudo('usuario-1', 'laudo-1', true)).resolves.toMatchObject({ id: 'existente' });
     expect(enviarArquivo).not.toHaveBeenCalled();
+  });
+
+  it('permite o envio manual de um laudo em andamento usando a última atualização como referência', async () => {
+    mocks.consultarBanco.mockResolvedValue([{ id: 'laudo-1', status: 'Em andamento', data_conclusao: null, updated_at: '2026-02-03T12:00:00.000Z', versao: 2, numero: '2026/00109026' }]);
+    const revisao = createHash('sha256').update('pacote válido').digest('hex');
+    Object.assign(servico, {
+      obterRaiz: vi.fn(async () => 'raiz'), listarCopias: vi.fn(async () => [{ id: 'existente', laudoId: 'laudo-1', numeroRep: '2026/00109026', nome: '109.026-26.laWdo', tamanho: 1, modificadaEm: '', revisao }]),
+      obterRevisoes: vi.fn(async () => ({})), enviarArquivo: vi.fn(), registrarRevisao: vi.fn(async () => undefined), invalidarCacheResumo: vi.fn(async () => undefined),
+    });
+
+    await expect(googleDriveService.enviarLaudo('usuario-1', 'laudo-1', true)).resolves.toMatchObject({ id: 'existente' });
   });
 
   it('protege o envio automático quando a cópia remota divergiu e exige confirmação no envio manual', async () => {

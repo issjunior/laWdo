@@ -2,7 +2,6 @@ import type { LucideIcon } from 'lucide-react'
 import {
   Brain,
   Database,
-  HardDrive,
   FileText,
   Image,
   FlaskConical,
@@ -96,7 +95,6 @@ export const itensMenu: ItemMenu[] = [
       { title: 'Margens do PDF', path: '/margens', icon: Ruler },
       { title: 'API GDL', path: '/gdl-config', icon: Network },
       { title: 'Backup', path: '/backup', icon: Database },
-      { title: 'Google Drive', path: '/google-drive', icon: HardDrive },
       { title: 'Logs', path: '/logs', icon: FileText },
     ],
   },

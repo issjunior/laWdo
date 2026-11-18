@@ -1,5 +1,6 @@
 import { normalizarCodigoExame } from '@shared/gdl/natureza-exame';
 import { ImportarBkpLaudo } from '@/components/laudo/ImportarBkpLaudo';
+import { EnviarCopiaGoogleDriveDialog } from '@/components/google-drive/EnviarCopiaGoogleDriveDialog';
 import { permiteEdicaoCampo } from '@/lib/politica-edicao-conteudo';
 import { materializarEdicaoPontual } from '@/lib/adaptadores-conteudo-laudo';
 import { useConfirmacaoConteudo } from '@/components/editor/ConfirmacaoConteudo';
@@ -31,7 +32,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Edit, ChevronDown, Eye, FileText, Trash2, Send, ShieldAlert, Lock, CheckCircle, RotateCcw, Clock, Wand2, Download, CircleAlert, RefreshCw, Loader2 } from 'lucide-react';
+import { Edit, ChevronDown, Eye, FileText, Trash2, Send, ShieldAlert, Lock, CheckCircle, RotateCcw, Clock, Wand2, Download, CircleAlert, RefreshCw, Loader2, Upload } from 'lucide-react';
 import { lerUsuarioSessao } from '@/lib/usuario-sessao';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { DefinicaoColunaTabela } from '@/components/data-table/data-table-features';
@@ -502,6 +503,7 @@ export const LaudosPage: React.FC = () => {
   const location = useLocation();
   const { setTemporariamenteRecolhida } = useSidebar();
   const [laudos, setLaudos] = useState<LaudoItem[]>([]);
+  const [laudoParaEnviarDrive, setLaudoParaEnviarDrive] = useState<LaudoItem | null>(null);
   const filtroDashboard = useMemo(() => new URLSearchParams(location.search), [location.search]);
   const laudosFiltradosDashboard = useMemo(() => {
     const status = filtroDashboard.get('status');
@@ -4299,6 +4301,15 @@ export const LaudosPage: React.FC = () => {
               </Tooltip>
             )}
 
+            {(isReadonly || laudo.status === 'Em andamento') && <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="sm" onClick={() => setLaudoParaEnviarDrive(laudo)} aria-label={`Enviar cópia da REP ${laudo.rep_numero} ao Google Drive`}>
+                  <Upload size={14} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Enviar cópia ao Google Drive</TooltipContent>
+            </Tooltip>}
+
             {/* Visualizar PDF */}
             <Tooltip>
               <TooltipTrigger asChild>
@@ -5323,6 +5334,11 @@ export const LaudosPage: React.FC = () => {
             ? 'Estrutura do laudo reconciliada com os dados locais.'
             : 'REP atualizada com as informações do GDL.');
         }}
+      />
+      <EnviarCopiaGoogleDriveDialog
+        aberto={laudoParaEnviarDrive !== null}
+        laudoId={laudoParaEnviarDrive?.id ?? null}
+        onAbertoChange={aberto => { if (!aberto) setLaudoParaEnviarDrive(null); }}
       />
 
     </div>

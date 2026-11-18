@@ -766,6 +766,20 @@ class GoogleDriveService {
     return { estado, copias: [], origem: 'drive' };
   }
 
+  async resumoCache(usuarioId: string): Promise<ResumoGoogleDrive | null> {
+    const rapido = await this.estadoRapido(usuarioId);
+    if (!rapido.conectado || !rapido.email) return null;
+    const cache = await this.obterCacheResumo(usuarioId);
+    if (!cache || cache.email !== rapido.email) return null;
+    return {
+      estado: { ...cache.estado, ...rapido },
+      copias: cache.copias,
+      atualizadoEm: cache.atualizadoEm,
+      origem: 'cache',
+      desatualizado: Date.now() - new Date(cache.atualizadoEm).getTime() >= DURACAO_CACHE_RESUMO_MS,
+    };
+  }
+
   async definirEnvioAutomatico(usuarioId: string, ativo: boolean) {
     if (ativo) {
       const estado = await this.estadoRapido(usuarioId);
@@ -883,13 +897,16 @@ class GoogleDriveService {
   }
 
   async enviarLaudo(usuarioId: string, laudoId: string, confirmarSubstituicao: boolean, automatico = false): Promise<CopiaGoogleDrive> {
-    const [laudo] = await executeQuery<{ id: string; status: string; data_conclusao: string | null; versao: number; numero: string }>(
-      'SELECT l.id, l.status, l.data_conclusao, l.versao, r.numero FROM laudos l JOIN reps r ON r.id = l.rep_id WHERE l.id = ?', [laudoId],
+    const [laudo] = await executeQuery<{ id: string; status: string; data_conclusao: string | null; updated_at: string | null; versao: number; numero: string }>(
+      'SELECT l.id, l.status, l.data_conclusao, l.updated_at, l.versao, r.numero FROM laudos l JOIN reps r ON r.id = l.rep_id WHERE l.id = ?', [laudoId],
     );
     if (!laudo || !/^[\w-]+$/.test(laudoId)) throw new ErroGoogleDrive('criar_pacote', 'Laudo inválido para envio.', 'laudo_invalido');
-    if (!['Concluído', 'Entregue'].includes(laudo.status) || !laudo.data_conclusao) throw new ErroGoogleDrive('criar_pacote', 'Somente laudos concluídos podem ser enviados ao Google Drive.', 'laudo_nao_concluido');
-    const conclusao = new Date(laudo.data_conclusao);
-    if (Number.isNaN(conclusao.getTime())) throw new ErroGoogleDrive('criar_pacote', 'A data de conclusão do laudo é inválida.', 'data_conclusao_invalida');
+    const envioManualEmAndamento = !automatico && laudo.status === 'Em andamento';
+    if (!envioManualEmAndamento && !['Concluído', 'Entregue'].includes(laudo.status)) throw new ErroGoogleDrive('criar_pacote', 'Somente laudos concluídos, entregues ou em andamento podem ser enviados ao Google Drive.', 'laudo_nao_elegivel');
+    const dataReferencia = laudo.data_conclusao ?? laudo.updated_at;
+    if (!dataReferencia) throw new ErroGoogleDrive('criar_pacote', 'O laudo não possui uma data válida para organizar a cópia no Google Drive.', 'data_referencia_ausente');
+    const conclusao = new Date(dataReferencia);
+    if (Number.isNaN(conclusao.getTime())) throw new ErroGoogleDrive('criar_pacote', 'A data de referência do laudo é inválida.', 'data_referencia_invalida');
     const raizId = await this.obterRaiz(usuarioId);
     const copiasAtuais = (await this.listarCopias(usuarioId)).filter(copia => copia.laudoId === laudo.id);
     const revisoes = await this.obterRevisoes(usuarioId);
