@@ -76,15 +76,3 @@ export function ajusteVisualPorAlturaPar(alturaPercentual: number): number {
     / (ALTURA_MAXIMA_PAR_FIGURAS - ALTURA_MINIMA_PAR_FIGURAS);
   return Math.round(ajuste / PASSO_AJUSTE_VISUAL_ALTURA_PAR) * PASSO_AJUSTE_VISUAL_ALTURA_PAR;
 }
-
-export function ajustarNivelEnquadramentoPar(
-  atual: EnquadramentoParFiguras,
-  direcao: 'aumentar' | 'reduzir',
-): EnquadramentoParFiguras {
-  const indice = ENQUADRAMENTOS_PARES_FIGURAS.indexOf(atual);
-  const deslocamento = direcao === 'aumentar' ? 1 : -1;
-  return ENQUADRAMENTOS_PARES_FIGURAS[Math.min(
-    ENQUADRAMENTOS_PARES_FIGURAS.length - 1,
-    Math.max(0, indice + deslocamento),
-  )];
-}

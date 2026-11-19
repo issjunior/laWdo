@@ -1,8 +1,6 @@
 export const STATUS_REP = ['Pendente', 'Em Andamento', 'Concluído'] as const;
 export const STATUS_LAUDO = ['Em andamento', 'Concluído', 'Entregue'] as const;
 
-export type StatusRep = (typeof STATUS_REP)[number];
-export type StatusLaudo = (typeof STATUS_LAUDO)[number];
 
 export const CAMPOS_DATA_CIVIL_REP = [
   'data_requisicao', 'prazo', 'data_documento', 'data_acionamento', 'data_chegada', 'data_saida',

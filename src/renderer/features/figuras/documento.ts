@@ -6,14 +6,11 @@ import {
   ajusteVisualParFigurasValido,
   alturaEnquadramentoLegado,
   alturaParFigurasValida,
-  ajustarNivelEnquadramentoPar,
   ALTURA_PADRAO_PAR_FIGURAS,
-  ENQUADRAMENTO_PADRAO_PAR_FIGURAS,
   enquadramentoParFigurasValido,
   normalizarAlturaParFiguras,
   normalizarAjusteVisualParFiguras,
   type AjusteVisualParFiguras,
-  type EnquadramentoParFiguras,
 } from '@shared/figura/enquadramento';
 import { criarHtmlFigura } from '@shared/figura/html';
 
@@ -34,7 +31,7 @@ export function criarFigurasLaudoHtml(imagens: Array<{ url: string; id: string; 
 
 const PREFIXO_FIGURA = /^\s*Fig(?:ura|\.)\s*(?:\d+|XX)\s*:?\s*/i;
 
-export function prepararIdentidadesFiguras(raiz: ParentNode): void {
+function prepararIdentidadesFiguras(raiz: ParentNode): void {
   const identidades = new Set<string>();
   raiz.querySelectorAll<HTMLElement>('figure.laudo-figure').forEach(figura => {
     let identidade = figura.getAttribute('data-figure-id');
@@ -53,7 +50,6 @@ export function prepararIdentidadesFigurasHtml(html: string): string {
   return documento.body.innerHTML;
 }
 const ID_MOLDURA_VAZIA_LOCAL_NECROPSIA = 'dummy-b601-local-necropsia-material-apresentado-1';
-export const ENQUADRAMENTO_PAR_FIGURAS = ENQUADRAMENTO_PADRAO_PAR_FIGURAS;
 const ATRIBUTO_ENQUADRAMENTO = 'data-enquadramento-figura';
 const ATRIBUTO_LAYOUT_LINHA = 'data-layout-figuras';
 const ATRIBUTO_ALTURA_PAR = 'data-altura-par-figuras';
@@ -159,14 +155,6 @@ function obterParFotografico(linha: HTMLTableRowElement): {
   };
 }
 
-function obterEnquadramentoLinha(linha: HTMLTableRowElement, figuras: HTMLElement[]): EnquadramentoParFiguras {
-  const valorLinha = linha.getAttribute(ATRIBUTO_LAYOUT_LINHA);
-  if (enquadramentoParFigurasValido(valorLinha)) return valorLinha;
-  const valorFigura = figuras.map(figura => figura.getAttribute(ATRIBUTO_ENQUADRAMENTO))
-    .find(enquadramentoParFigurasValido);
-  return valorFigura ?? ENQUADRAMENTO_PADRAO_PAR_FIGURAS;
-}
-
 function lerAlturaParAtributo(elemento: Element): number | undefined {
   const valor = Number(elemento.getAttribute(ATRIBUTO_ALTURA_PAR));
   return alturaParFigurasValida(valor) ? valor : undefined;
@@ -189,14 +177,6 @@ function obterAjusteVisualParLinha(linha: HTMLTableRowElement, figuras: HTMLElem
   const valorFigura = figuras.map(figura => figura.getAttribute(ATRIBUTO_AJUSTE_VISUAL_PAR))
     .find(ajusteVisualParFigurasValido);
   return valorFigura ?? AJUSTE_VISUAL_PADRAO_PAR_FIGURAS;
-}
-
-export function obterEnquadramentoParFigura(figura: Element): EnquadramentoParFiguras | undefined {
-  const linha = figura.closest<HTMLTableRowElement>('tr');
-  if (!linha) return undefined;
-  const par = obterParFotografico(linha);
-  if (!par || !par.figuras.includes(figura as HTMLElement)) return undefined;
-  return obterEnquadramentoLinha(linha, par.figuras);
 }
 
 export function obterAlturaParFigura(figura: Element): number | undefined {
@@ -244,7 +224,7 @@ function centralizarFiguraRestante(
   figura.style.marginRight = 'auto';
 }
 
-export function removerFiguraEReorganizarPar(figura: HTMLElement): boolean {
+function removerFiguraEReorganizarPar(figura: HTMLElement): boolean {
   const linha = figura.closest<HTMLTableRowElement>('tr');
   if (!linha) return false;
   const par = obterParFotografico(linha);
@@ -420,21 +400,6 @@ export function normalizarParesFiguras(raiz: ParentNode): boolean {
     if (!figurasEmPares.has(figura)) alterou = removerEnquadramentoFigura(figura) || alterou;
   });
   return alterou;
-}
-
-export function ajustarAlturaParFiguras(
-  figura: HTMLElement,
-  direcao: 'aumentar' | 'reduzir',
-): { alterou: boolean; enquadramento?: EnquadramentoParFiguras; figuras: HTMLElement[] } {
-  const linha = figura.closest<HTMLTableRowElement>('tr');
-  if (!linha) return { alterou: false, figuras: [] };
-  const par = obterParFotografico(linha);
-  if (!par || !par.figuras.includes(figura)) return { alterou: false, figuras: [] };
-  const atual = obterEnquadramentoLinha(linha, par.figuras);
-  const proximo = ajustarNivelEnquadramentoPar(atual, direcao);
-  if (proximo === atual) return { alterou: false, enquadramento: atual, figuras: par.figuras };
-  definirAlturaParFiguras(figura, alturaEnquadramentoLegado(proximo) ?? ALTURA_PADRAO_PAR_FIGURAS);
-  return { alterou: true, enquadramento: proximo, figuras: par.figuras };
 }
 
 function obterParDaFigura(figura: HTMLElement): {
