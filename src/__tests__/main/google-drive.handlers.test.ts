@@ -1,5 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ipcMain } from 'electron';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { app, ipcMain } from 'electron';
 import { authSessaoService } from '../../main/services/auth-sessao.service';
 import { googleDriveService } from '../../main/services/google-drive.service';
 
@@ -13,6 +16,7 @@ vi.mock('../../main/services/laudo-bkp.service', () => ({ analisarConflitosBkp: 
 type Remetente = { id: number; isDestroyed: () => boolean; once: ReturnType<typeof vi.fn>; send: ReturnType<typeof vi.fn> };
 type Tratador = (evento: { sender: Remetente }, ...argumentos: unknown[]) => Promise<unknown>;
 const pacote = { rep: { numero: '109.026-26' }, tipoExame: { codigo: 'T', nome: 'Teste' }, solicitante: null, placeholders: [], laudo: { conteudo: '<p>Laudo</p>', apresentacao_json: null } };
+const diretorioDadosTeste = mkdtempSync(path.join(tmpdir(), 'lawdo-google-drive-handlers-'));
 
 function obterTratador(canal: string): Tratador {
   const tratador = vi.mocked(ipcMain.handle).mock.calls.find(([registrado]) => registrado === canal)?.[1];
@@ -22,11 +26,16 @@ function obterTratador(canal: string): Tratador {
 
 beforeEach(async () => {
   vi.clearAllMocks();
+  vi.mocked(app.getPath).mockReturnValue(diretorioDadosTeste);
   vi.mocked(authSessaoService.exigir).mockReturnValue('usuario-1');
   vi.mocked(googleDriveService.lerPacoteCopia).mockResolvedValue({ pacote, hashCifrado: 'hash', revisao: 'r1' } as never);
   vi.mocked(googleDriveService.registrarVerificacaoConcluida).mockResolvedValue(undefined);
   const { registrarGoogleDriveHandlers } = await import('../../main/ipc/handlers/google-drive.handlers');
   registrarGoogleDriveHandlers();
+});
+
+afterAll(() => {
+  rmSync(diretorioDadosTeste, { recursive: true, force: true });
 });
 
 describe('fronteira IPC do Google Drive', () => {

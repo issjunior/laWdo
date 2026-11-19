@@ -1,5 +1,6 @@
 import { app, ipcMain } from 'electron';
-import { mkdtemp, rm } from 'node:fs/promises';
+import type { Dirent } from 'node:fs';
+import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { authSessaoService } from '../../services/auth-sessao.service.js';
@@ -8,6 +9,7 @@ import { analisarConflitosBkp, importarBkpLaudo } from '../../services/laudo-bkp
 import type { PacoteLaudo } from '../../../shared/types/laudo-bkp.types.js';
 
 const DURACAO_CACHE_MS = 5 * 60_000;
+const PREFIXO_CACHE_GOOGLE_DRIVE = 'google-drive-cache-';
 
 interface PacoteTemporario { id: string; janelaId: number; usuarioId: string; copiaId: string; revisao: string; hashCifrado: string; pacote: PacoteLaudo; diretorio: string; expiraEm: number }
 interface RestauracaoPreparada { janelaId: number; usuarioId: string; copiaId: string; revisao: string; identidadeCaso: string; cacheId: string; expiraEm: number }
@@ -23,6 +25,27 @@ function respostaErro(erro: unknown) {
 function usuario(evento: Electron.IpcMainInvokeEvent) { return authSessaoService.exigir(evento.sender.id); }
 async function limparTemporario(diretorio: string) { await rm(diretorio, { recursive: true, force: true }).catch(() => undefined); }
 async function descartarPacote(id: string): Promise<void> { const pacote = pacotes.get(id); pacotes.delete(id); if (pacote) await limparTemporario(pacote.diretorio); }
+export async function limparPacotesGoogleDriveAtivos(): Promise<void> {
+  await Promise.all(Array.from(pacotes.keys()).map(descartarPacote));
+  restauracoes.clear();
+  for (const verificacao of verificacoes.values()) verificacao.controlador.abort();
+  verificacoes.clear();
+}
+
+export async function limparCachesGoogleDriveOrfaos(): Promise<void> {
+  const diretorioDados = app.getPath('userData');
+  let entradas: Dirent[];
+  try {
+    entradas = await readdir(diretorioDados, { withFileTypes: true });
+  } catch (erro) {
+    if (erro instanceof Error && 'code' in erro && erro.code === 'ENOENT') return;
+    throw erro;
+  }
+  await Promise.all(entradas
+    .filter(entrada => entrada.isDirectory() && entrada.name.startsWith(PREFIXO_CACHE_GOOGLE_DRIVE))
+    .map(entrada => limparTemporario(path.join(diretorioDados, entrada.name))));
+}
+
 async function limparPacotesDaJanela(janelaId: number): Promise<void> {
   await Promise.all(Array.from(pacotes.values()).filter(item => item.janelaId === janelaId).map(item => descartarPacote(item.id)));
   for (const [id, operacao] of restauracoes) if (operacao.janelaId === janelaId) restauracoes.delete(id);

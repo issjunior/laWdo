@@ -38,6 +38,7 @@ import { schemaEventoEditorLaudo } from '../shared/diagnostico/contratos.js';
 import { navegacaoAplicacaoPermitida } from './security/navegacao.js';
 import { criarAtalhoDesktopLinux } from './services/atalho-linux.service.js';
 import { criarAtalhoMesaMacOS } from './services/atalho-macos.service.js';
+import { limparCachesGoogleDriveOrfaos, limparPacotesGoogleDriveAtivos } from './ipc/handlers/google-drive.handlers.js';
 import * as electron from 'electron';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -708,6 +709,11 @@ app.whenReady().then(async () => {
       return;
     }
     setupLogging();
+    try {
+      await limparCachesGoogleDriveOrfaos();
+    } catch (erro) {
+      log.warn('Não foi possível concluir a limpeza de caches temporários do Google Drive na abertura.', { erro });
+    }
     logDebug('Preparando serviços de desempenho e logs');
     await desempenhoService.inicializar();
     await capturaLogsService.inicializar();
@@ -834,6 +840,7 @@ const encerramentoAplicativo = new EncerramentoAplicativoService({
       } },
       { nome: 'atualização automática GDL', executar: encerrarAtualizacaoAutomaticaGdl },
       { nome: 'processador de imagens', executar: () => import('./services/processador-imagens.service.js').then(modulo => modulo.encerrarProcessadorImagens()) },
+      { nome: 'cache temporário Google Drive', executar: limparPacotesGoogleDriveAtivos },
     ],
     [{ nome: 'diagnóstico assistido', executar: encerrarDiagnosticoAssistido }],
     [{ nome: 'desempenho', executar: () => desempenhoService.encerrar() }],

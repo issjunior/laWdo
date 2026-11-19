@@ -2,7 +2,7 @@
 
 ## Escopo e fontes de verdade
 
-Esta spec descreve os arquivos .lawdo-backup criados manualmente em Backup > Completo ou Configuração. Eles são independentes dos snapshots obrigatórios de atualização descritos em spec/12 atualizacao/backup_pre_atualizacao.md; não compartilham formato, retenção ou restauração.
+Esta spec descreve os arquivos .lawdo-backup criados manualmente em Backup > Completo ou Configuração. Eles são independentes dos snapshots obrigatórios de atualização descritos em spec/12 atualizacao/backup_pre_atualizacao.md; não compartilham formato, retenção ou restauração. As cópias remotas cifradas de laudos no Google Drive têm fluxo próprio em [Cópias de laudos no Google Drive](google_drive.md).
 
 | Responsabilidade | Fonte |
 | --- | --- |

@@ -7,7 +7,10 @@ const recursoTemporario = path.resolve('build', 'google-drive-oauth.dat');
 
 function executar(comando, argumentos) {
   return new Promise((resolve, reject) => {
-    const processo = spawn(comando, argumentos, { stdio: 'inherit', env: process.env });
+    const usarCmd = process.platform === 'win32';
+    const processo = usarCmd
+      ? spawn(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', comando, ...argumentos], { stdio: 'inherit', env: process.env })
+      : spawn(comando, argumentos, { stdio: 'inherit', env: process.env });
     processo.once('error', reject);
     processo.once('exit', codigo => codigo === 0 ? resolve() : reject(new Error(`Falha ao executar ${comando}.`)));
   });
