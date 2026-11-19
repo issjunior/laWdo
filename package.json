@@ -37,7 +37,7 @@
     "test:release": "node --test scripts/release/*.test.mjs",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
-    "test:coverage": "vitest run --coverage",
+    "test:coverage": "vitest run --coverage --no-file-parallelism",
     "smoke:schema": "node scripts/release/executar-smoke-schema.mjs",
     "lint": "eslint . --ext .ts,.tsx",
     "lint:fix": "eslint . --ext .ts,.tsx --fix",
@@ -53,6 +53,7 @@
     "pack": "node scripts/google-drive/empacotar-com-credencial-oauth.mjs --dir",
     "dist": "node scripts/google-drive/empacotar-com-credencial-oauth.mjs",
     "test:saude": "node --test scripts/saude/*.test.mjs",
+    "saude:completa": "node scripts/saude/executar.mjs",
     "smoke:imagens": "node scripts/saude/smoke-imagens.mjs"
   },
   "dependencies": {
