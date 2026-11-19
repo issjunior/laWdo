@@ -888,6 +888,23 @@
       ]
     },
     {
+      "arquivo": "spec/14 backup/google_drive.md",
+      "tipo": "estado_atual",
+      "autoAtualizavel": true,
+      "descricao": "Cópias cifradas de laudos no Google Drive, OAuth, fila, verificação e restauração.",
+      "globsCodigo": [
+        "src/shared/types/google-drive.types.ts",
+        "src/main/services/google-drive.service.ts",
+        "src/main/services/google-drive-*.service.ts",
+        "src/main/ipc/handlers/google-drive.handlers.ts",
+        "src/preload/index.ts",
+        "src/renderer/index.tsx",
+        "src/renderer/pages/GoogleDrivePage.tsx",
+        "src/renderer/components/google-drive/**",
+        "src/__tests__/main/google-drive.*.test.ts"
+      ]
+    },
+    {
       "arquivo": "spec/15 seguranca/seguranca_electron.md",
       "tipo": "estado_atual",
       "autoAtualizavel": true,
