@@ -2,7 +2,7 @@ import type { ApiCredenciaisGdl } from '../preload/types';
 import type { ApiBkpLaudo } from '../shared/types/laudo-bkp.types';
 import React from 'react';
 import type { EstadoConexaoGdl } from '@shared/gdl/conexao';
-import ReactDOM from 'react-dom/client';
+import ReactDOM, { type Root } from 'react-dom/client';
 import App from './App.js';
 import './styles/globals.css';
 import type {
@@ -210,6 +210,10 @@ interface IpcAPIRendererLegada {
 }
 
 // Tipos globais para TypeScript
+interface ElementoRaizLaWdo extends HTMLElement {
+  raizReactLaWdo?: Root;
+}
+
 declare global {
   interface Window {
     ipcAPI: IpcAPIRendererLegada;
@@ -262,14 +266,17 @@ const LoadingScreen = () => (
 
 // Funcao para inicializar a aplicacao
 const initApp = async () => {
-  const rootElement = document.getElementById('root');
+  const rootElement = document.getElementById('root') as ElementoRaizLaWdo | null;
 
   if (!rootElement) {
     console.error('Elemento root nao encontrado');
     return;
   }
 
+  rootElement.raizReactLaWdo?.unmount();
+  rootElement.replaceChildren();
   const root = ReactDOM.createRoot(rootElement);
+  rootElement.raizReactLaWdo = root;
 
   // Mostrar tela de carregamento inicial
   root.render(<LoadingScreen />);
@@ -395,12 +402,14 @@ const initApp = async () => {
     }
 
     // Renderizar aplicacao principal
+    if (rootElement.raizReactLaWdo !== root) return;
     root.render(
       <React.StrictMode>
         <App />
       </React.StrictMode>
     );
   } catch (error) {
+    if (rootElement.raizReactLaWdo !== root) return;
     console.error('Erro ao inicializar aplicacao:', error);
 
     // Mostrar tela de erro
@@ -457,8 +466,9 @@ const initApp = async () => {
   }
 };
 
-// Inicializar aplicacao
-initApp();
+// A instrumentação de diagnóstico pode reavaliar o bundle do renderer.
+// initApp desmonta qualquer raiz anterior antes de criar a próxima.
+void initApp();
 
 // Hot Module Replacement (HMR)
 if (import.meta.hot) {

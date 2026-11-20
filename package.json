@@ -10,8 +10,8 @@
   "type": "module",
   "packageManager": "npm@11.17.0",
   "scripts": {
-    "dev": "npm run build && electron .",
-    "dev:diagnostico": "set LAWDO_MODO_DIAGNOSTICO=1&& npm run build:diagnostico && electron .",
+    "dev": "node scripts/google-drive/iniciar-desenvolvimento.mjs",
+    "dev:diagnostico": "node scripts/google-drive/iniciar-desenvolvimento.mjs diagnostico",
     "build:diagnostico": "npm run build:preload:diagnostico && npm run build:main:diagnostico && npm run build:renderer:diagnostico && npm run diagnostico:gerar-manifesto",
     "build:main:diagnostico": "tsc -p tsconfig.main.json --sourceMap",
     "build:preload:diagnostico": "tsc -p tsconfig.preload.json --sourceMap",

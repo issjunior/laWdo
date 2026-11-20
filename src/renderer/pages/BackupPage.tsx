@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useSearchParams } from 'react-router';
 import { Cloud, Database, Download, Loader2, Settings, Upload } from 'lucide-react';
 import { GoogleDrivePage } from '@/pages/GoogleDrivePage';
 import { toast } from 'sonner';
@@ -36,6 +37,8 @@ function numero(valor: unknown): string {
 }
 
 export const BackupPage: React.FC<{ currentUser: Record<string, unknown> | null }> = ({ currentUser }) => {
+  const [parametrosBusca, definirParametrosBusca] = useSearchParams();
+  const aba = parametrosBusca.get('aba') === 'google-drive' ? 'google-drive' : 'local';
   const nomeUsuario = [currentUser?.name, currentUser?.nome, currentUser?.username]
     .find((valor): valor is string => typeof valor === 'string' && valor.trim().length > 0) || 'usuário atual';
   const [operacao, setOperacao] = useState<Operacao | null>(null);
@@ -146,7 +149,12 @@ export const BackupPage: React.FC<{ currentUser: Record<string, unknown> | null 
           </div>
         </div>
       </div>
-      <Tabs defaultValue="local">
+      <Tabs value={aba} onValueChange={valor => {
+        const proximosParametros = new URLSearchParams(parametrosBusca);
+        if (valor === 'google-drive') proximosParametros.set('aba', valor);
+        else proximosParametros.delete('aba');
+        definirParametrosBusca(proximosParametros);
+      }}>
         <TabsList className="grid h-auto w-full grid-cols-2 sm:w-auto">
           <TabsTrigger value="local" className="min-w-0 px-3 sm:px-4"><Database className="mr-2 h-4 w-4 shrink-0" />Backup local</TabsTrigger>
           <TabsTrigger value="google-drive" className="min-w-0 px-3 sm:px-4"><Cloud className="mr-2 h-4 w-4 shrink-0" />Google Drive</TabsTrigger>

@@ -8,6 +8,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { IndicadorConexaoGdl } from './IndicadorConexaoGdl';
+import { IndicadorGoogleDrive } from './IndicadorGoogleDrive';
 import {
   Info,
   LogOut,
@@ -241,6 +242,7 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
           </div>}
           {/* Escolha de Tema */}
           <IndicadorConexaoGdl key={typeof currentUser?.id === 'string' ? currentUser.id : 'sessao'} />
+          <IndicadorGoogleDrive key={typeof currentUser?.id === 'string' ? currentUser.id : 'sessao'} />
           <Button
             variant="ghost"
             size="icon"
