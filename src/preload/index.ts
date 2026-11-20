@@ -361,7 +361,7 @@ export interface IpcAPI {
     sincronizarSecoes: (laudoId: string) => Promise<UserResponse>;
   };
 
-  googleDrive: Pick<ApiGoogleDrive, 'estadoRapido' | 'estado' | 'resumoCache' | 'resumo' | 'conectar' | 'desconectar' | 'definirEnvioAutomatico' | 'listarCopias' | 'listarLaudosConcluidos' | 'enviarLaudo' | 'verificar' | 'cancelarVerificacao' | 'onProgressoVerificacao' | 'prepararVisualizacao' | 'analisarRestauracao' | 'confirmarRestauracao' | 'cancelarRestauracao' | 'moverParaLixeira'>;
+  googleDrive: Pick<ApiGoogleDrive, 'estadoRapido' | 'estado' | 'resumoCache' | 'resumo' | 'conectar' | 'desconectar' | 'abrirPasta' | 'definirEnvioAutomatico' | 'listarCopias' | 'listarLaudosConcluidos' | 'enviarLaudo' | 'verificar' | 'cancelarVerificacao' | 'onProgressoVerificacao' | 'prepararVisualizacao' | 'analisarRestauracao' | 'confirmarRestauracao' | 'cancelarRestauracao' | 'moverParaLixeira'>;
 
   // Wizard
   wizard: {
@@ -710,6 +710,7 @@ const ALLOWED_CHANNELS = new Set([
   'google-drive:resumo',
   'google-drive:conectar',
   'google-drive:desconectar',
+  'google-drive:abrir-pasta',
   'google-drive:definir-envio-automatico',
   'google-drive:listar-copias',
     'google-drive:listar-laudos-concluidos',
@@ -1812,6 +1813,7 @@ contextBridge.exposeInMainWorld('ipcAPI', {
     resumo: (forcarAtualizacao = false) => invocarComDiagnostico('google-drive:resumo', forcarAtualizacao),
     conectar: () => invocarComDiagnostico('google-drive:conectar'),
     desconectar: () => invocarComDiagnostico('google-drive:desconectar'),
+    abrirPasta: () => invocarComDiagnostico('google-drive:abrir-pasta'),
     definirEnvioAutomatico: (ativo: boolean) => invocarComDiagnostico('google-drive:definir-envio-automatico', ativo),
     listarCopias: () => invocarComDiagnostico('google-drive:listar-copias'),
       listarLaudosConcluidos: () => invocarComDiagnostico('google-drive:listar-laudos-concluidos'),

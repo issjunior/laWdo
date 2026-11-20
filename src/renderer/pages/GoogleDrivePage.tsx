@@ -11,9 +11,10 @@ import { EnviarCopiaGoogleDriveDialog } from '@/components/google-drive/EnviarCo
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { resolverPlaceholdersExportacao } from '@/lib/exportacao-placeholders';
 import { buildPdfHeaderConfig, montarCabecalhoPrimeiraPagina } from '@/lib/pdf-header';
-import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Cloud, Download, FileText, Loader2, RefreshCw, Trash2, Upload } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Cloud, Download, FileText, Info, Loader2, RefreshCw, Trash2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import type { CopiaGoogleDrive, EstadoGoogleDrive, LaudoElegivelGoogleDrive, PreviaRestauracaoGoogleDrive, ResumoGoogleDrive } from '@shared/types/google-drive.types';
 
@@ -284,10 +285,10 @@ export function GoogleDrivePage() {
       </CardContent>
     </Card>
     <Card>
-      <CardHeader className="pb-4"><CardTitle className="text-lg">Envio e armazenamento</CardTitle><CardDescription>O envio manual e automático é habilitado somente para laudos concluídos.</CardDescription></CardHeader>
+      <CardHeader className="pb-4"><CardTitle className="text-lg">Envio e armazenamento</CardTitle></CardHeader>
       <CardContent className="space-y-4">
         <div className="grid gap-3 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
-          <div className="flex items-center justify-between gap-4 rounded-lg border bg-muted/20 p-4"><div><p className="font-medium">Envio automático</p><p className="text-sm text-muted-foreground">Uma nova conclusão poderá substituir a cópia vigente.</p></div><Switch checked={estado?.envioAutomatico ?? false} disabled={!estado?.conectado} onCheckedChange={ativo => void alterarAutomatico(ativo)} aria-label="Ativar envio automático" /></div>
+          <div className="flex items-center justify-between gap-4 rounded-lg border bg-muted/20 p-4"><div className="min-w-0"><p className="font-medium">Envio automático</p><div className="flex items-center gap-1 text-sm text-muted-foreground"><p className="truncate">Manual durante a elaboração; automático ao concluir.</p><Tooltip><TooltipTrigger asChild><button type="button" className="shrink-0 text-muted-foreground hover:text-foreground" aria-label="Explicação sobre os envios ao Google Drive"><Info className="h-3.5 w-3.5" /></button></TooltipTrigger><TooltipContent>Envie cópias manualmente durante a elaboração ou automaticamente ao concluir o laudo.</TooltipContent></Tooltip></div></div><Switch checked={estado?.envioAutomatico ?? false} disabled={!estado?.conectado} onCheckedChange={ativo => void alterarAutomatico(ativo)} aria-label="Ativar envio automático" /></div>
           <div className="flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-center"><p className="flex shrink-0 items-center gap-2 font-medium">Enviar cópia agora{carregandoLaudos && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}</p><Select value={laudoSelecionado} onValueChange={setLaudoSelecionado} disabled={!estado?.conectado || carregandoLaudos}><SelectTrigger className="sm:flex-1"><SelectValue placeholder={carregandoLaudos ? 'Buscando laudos concluídos...' : laudos.length ? 'Selecione um laudo concluído' : 'Nenhum laudo concluído disponível'} /></SelectTrigger><SelectContent>{laudos.map(laudo => <SelectItem key={laudo.id} value={laudo.id}>REP {laudo.numeroRep} · concluído em {new Date(laudo.concluidoEm).toLocaleDateString('pt-BR')}</SelectItem>)}</SelectContent></Select><Button className="sm:shrink-0" disabled={!estado?.conectado || !laudoSelecionado} onClick={() => setConfirmacaoEnvioAberta(true)}><Upload className="mr-2 h-4 w-4" />Enviar cópia</Button></div>
         </div>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.5fr)_repeat(3,minmax(0,1fr))]">

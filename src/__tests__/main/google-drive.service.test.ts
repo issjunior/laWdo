@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import os from 'node:os';
+import path from 'node:path';
+import { shell } from 'electron';
 
 const mocks = vi.hoisted(() => ({
   salvarConfiguracao: vi.fn(), consultarBanco: vi.fn(),
@@ -9,20 +11,24 @@ const mocks = vi.hoisted(() => ({
   lerBkp: vi.fn(async () => ({ rep: { numero: '2026/00109026' }, tipoExame: { codigo: 'T', nome: 'Teste' }, laudo: { status: 'Concluído' }, imagens: [] })),
   cifrar: vi.fn(async (_origem: string, destino: string) => writeFile(destino, 'pacote cifrado')),
   decifrar: vi.fn(async (_origem: string, destino: string) => writeFile(destino, 'pacote decifrado')),
+  validarJwt: vi.fn(),
+  obterSegredoCliente: vi.fn(),
 }));
 
 vi.mock('electron', () => ({ app: { getPath: vi.fn(() => os.tmpdir()), isPackaged: false, getAppPath: vi.fn(() => os.tmpdir()) }, shell: { openExternal: vi.fn() } }));
-vi.mock('../../main/database/sqlite', () => ({ executeQuery: mocks.consultarBanco, executeNonQuery: vi.fn() }));
+vi.mock('../../main/database/sqlite', () => ({ executeQuery: mocks.consultarBanco, executeNonQuery: vi.fn(), withTransaction: async <T>(operacao: () => Promise<T>) => operacao() }));
 vi.mock('../../main/services/configuracao.service', () => ({ configuracaoService: { obter: vi.fn(), salvar: mocks.salvarConfiguracao } }));
 vi.mock('../../main/services/safe-storage.service', () => ({ safeStorageService: { isAvailable: vi.fn(() => true) } }));
-vi.mock('../../main/services/google-drive-oauth.service', () => ({ CLIENT_ID_GOOGLE_DRIVE: 'cliente', obterSegredoClienteGoogleDrive: vi.fn() }));
+vi.mock('../../main/services/google-drive-oauth.service', () => ({ CLIENT_ID_GOOGLE_DRIVE: 'cliente', obterSegredoClienteGoogleDrive: mocks.obterSegredoCliente }));
 vi.mock('../../main/services/laudo-bkp.service', () => ({ exportarBkpLaudo: mocks.exportarBkp, lerBkpLaudo: mocks.lerBkp }));
 vi.mock('../../main/services/google-drive-pacote.service', () => ({ cifrarPacoteGoogleDrive: mocks.cifrar, decifrarPacoteGoogleDrive: mocks.decifrar, criarChavePacoteGoogleDrive: vi.fn(() => Buffer.alloc(32, 1)) }));
 vi.mock('../../main/utils/logger', () => ({ getLogger: vi.fn(() => ({ warn: vi.fn(), info: vi.fn(), error: vi.fn() })) }));
+vi.mock('jose', () => ({ createRemoteJWKSet: vi.fn(() => 'chaves-google'), jwtVerify: mocks.validarJwt }));
 
 import { ErroGoogleDrive, googleDriveService } from '../../main/services/google-drive.service';
 
-type ArquivoDrive = { id: string; name: string; mimeType?: string; size?: string; modifiedTime?: string; appProperties?: Record<string, string>; parents?: string[] };
+type ArquivoDrive = { id: string; name: string; mimeType?: string; size?: string; modifiedTime?: string; version?: string; appProperties?: Record<string, string>; parents?: string[] };
+type CopiaLocalizada = { id: string; laudoId: string; numeroRep: string; nome: string; tamanho: number; modificadaEm: string; revisao: string; versaoDrive: string };
 type ServicoInterno = {
   obterRaiz: (usuarioId: string) => Promise<string>;
   listarCopias: (usuarioId: string) => Promise<Array<{ id: string; laudoId: string; numeroRep: string; nome: string; tamanho: number; modificadaEm: string; revisao: string }>>;
@@ -41,10 +47,19 @@ type ServicoInterno = {
   lerPacoteCopia: (usuarioId: string, copiaId: string, diretorio: string) => Promise<{ pacote: { rep: { numero: string }; tipoExame: { codigo: string; nome: string }; laudo: { status: string }; imagens: unknown[] }; hashCifrado: string; revisao: string }>;
   estadoRapido: (usuarioId: string) => Promise<{ conectado: boolean; email?: string; envioAutomatico: boolean; pendencias: number }>;
   obterCacheResumo: (usuarioId: string) => Promise<{ email: string; atualizadoEm: string; estado: { conectado: boolean; envioAutomatico: boolean; pendencias: number }; copias: Array<{ id: string; laudoId: string; numeroRep: string; nome: string; tamanho: number; modificadaEm: string; revisao: string }> } | null>;
+  verificarAcessoDadosApp: (usuarioId: string) => Promise<void>;
+  migrarControleLegado: (usuarioId: string, raizId: string) => Promise<void>;
+  estado: (usuarioId: string) => Promise<{ conectado: boolean; email?: string; envioAutomatico: boolean; pendencias: number }>;
+  validarIdentidadeGoogle: (idToken: unknown, nonce: string) => Promise<{ email: string }>;
+  salvarConexao: (usuarioId: string, tokens: { access_token: string; refresh_token?: string; expires_at: number; escopos?: string[] }, email: string) => Promise<void>;
+  listar: (usuarioId: string, consulta: string, campos: string, sinal?: AbortSignal) => Promise<ArquivoDrive[]>;
+  obterArquivoDrive: (usuarioId: string, arquivoId: string, sinal?: AbortSignal) => Promise<ArquivoDrive | null>;
+  listarCopiasDoLaudo: (usuarioId: string, raizId: string, laudoId: string, sinal?: AbortSignal) => Promise<CopiaLocalizada[]>;
+  tokenValido: (usuarioId: string) => Promise<string>;
 };
 
 const servico = googleDriveService as unknown as ServicoInterno;
-const metodosSubstituidos = ['obterRaiz', 'listarCopias', 'obterRevisoes', 'obterChavePacote', 'conferirCotaAntesDoEnvio', 'criarPasta', 'enviarArquivo', 'baixarArquivo', 'registrarRevisao', 'invalidarCacheResumo', 'listarDescendentes', 'requisitar', 'registrarVerificacaoConcluida', 'obterVerificacoes', 'lerPacoteCopia', 'estadoRapido', 'obterCacheResumo'] as const;
+const metodosSubstituidos = ['obterRaiz', 'listarCopias', 'obterRevisoes', 'obterChavePacote', 'conferirCotaAntesDoEnvio', 'criarPasta', 'enviarArquivo', 'baixarArquivo', 'registrarRevisao', 'invalidarCacheResumo', 'listarDescendentes', 'requisitar', 'registrarVerificacaoConcluida', 'obterVerificacoes', 'lerPacoteCopia', 'estadoRapido', 'obterCacheResumo', 'verificarAcessoDadosApp', 'migrarControleLegado', 'estado', 'listar', 'obterArquivoDrive', 'listarCopiasDoLaudo', 'tokenValido'] as const;
 
 beforeEach(() => {
   mocks.consultarBanco.mockReset().mockResolvedValue([{ id: 'laudo-1', status: 'Concluído', data_conclusao: '2026-02-03T12:00:00.000Z', versao: 2, numero: '2026/00109026' }]);
@@ -53,13 +68,69 @@ beforeEach(() => {
   mocks.lerBkp.mockClear();
   mocks.cifrar.mockClear();
   mocks.decifrar.mockClear();
+  mocks.validarJwt.mockReset();
+  mocks.obterSegredoCliente.mockReset().mockResolvedValue('segredo-de-teste');
+  vi.mocked(shell.openExternal).mockReset();
 });
 
 afterEach(() => {
   for (const metodo of metodosSubstituidos) delete (servico as unknown as Record<string, unknown>)[metodo];
+  vi.unstubAllGlobals();
 });
 
 describe('GoogleDriveService', () => {
+  it('retoma o envio pelo byte confirmado após uma falha temporária', async () => {
+    const diretorio = await mkdtemp(path.join(os.tmpdir(), 'lawdo-upload-'));
+    const arquivo = path.join(diretorio, 'backup.lawdo');
+    await writeFile(arquivo, 'abcde');
+    const faixas: string[] = [];
+
+    try {
+      vi.spyOn(servico, 'requisitar').mockResolvedValue(new Response(null, {
+        status: 200,
+        headers: { location: 'https://www.googleapis.com/upload/drive/v3/files?upload_id=sessao' },
+      }));
+      vi.spyOn(servico, 'tokenValido').mockResolvedValue('token');
+      vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
+        const faixa = new Headers(init?.headers).get('Content-Range') ?? '';
+        faixas.push(faixa);
+        if (faixa === 'bytes 0-4/5') return new Response(null, { status: 503, headers: { 'retry-after': '0' } });
+        if (faixa === 'bytes */5') return new Response(null, { status: 308, headers: { range: 'bytes=0-1' } });
+        return new Response(JSON.stringify({ id: 'enviado', name: 'backup.lawdo' }), { status: 200 });
+      }));
+
+      await expect(servico.enviarArquivo('usuario-1', arquivo, { name: 'backup.lawdo', parents: ['pasta'] })).resolves.toMatchObject({ id: 'enviado' });
+      expect(faixas).toEqual(['bytes 0-4/5', 'bytes */5', 'bytes 2-4/5']);
+    } finally {
+      await rm(diretorio, { recursive: true, force: true });
+    }
+  });
+
+  it('recusa uma identidade institucional sem confirmação e não grava credenciais', async () => {
+    mocks.validarJwt.mockResolvedValue({ payload: { nonce: 'nonce-invalido', sub: 'conta', email: 'perito@policiacientifica.pr.gov.br', email_verified: true, hd: 'policiacientifica.pr.gov.br' } });
+
+    await expect(servico.validarIdentidadeGoogle('id-token', 'nonce-esperado')).rejects.toMatchObject({ codigo: 'conta_institucional_nao_confirmada' } satisfies Partial<ErroGoogleDrive>);
+    expect(mocks.salvarConfiguracao).not.toHaveBeenCalled();
+  });
+
+  it('persiste tokens e e-mail na mesma transação após a validação da conexão', async () => {
+    await servico.salvarConexao('usuario-1', { access_token: 'token-novo', refresh_token: 'refresh-novo', expires_at: 1, escopos: [] }, 'perito@policiacientifica.pr.gov.br');
+
+    expect(mocks.salvarConfiguracao).toHaveBeenCalledWith('google_drive_tokens_usuario-1', expect.any(String), 'api_key', 'Tokens OAuth do Google Drive');
+    expect(mocks.salvarConfiguracao).toHaveBeenCalledWith('google_drive_email_usuario-1', 'perito@policiacientifica.pr.gov.br', 'texto', 'Conta Google Drive autorizada');
+  });
+
+  it('abre no navegador a pasta exclusiva do laWdo da conta conectada', async () => {
+    Object.assign(servico, {
+      estadoRapido: vi.fn(async () => ({ conectado: true, email: 'perito@policiacientifica.pr.gov.br', envioAutomatico: false, pendencias: 0 })),
+      obterRaiz: vi.fn(async () => 'pasta do laWdo'),
+    });
+
+    await googleDriveService.abrirPasta('usuario-1');
+
+    expect(shell.openExternal).toHaveBeenCalledWith('https://drive.google.com/drive/u/0/folders/pasta%20do%20laWdo');
+  });
+
   it('retorna o resumo em cache mesmo vencido para a tela exibir antes da atualização remota', async () => {
     Object.assign(servico, {
       estadoRapido: vi.fn(async () => ({ conectado: true, email: 'perito@policiacientifica.pr.gov.br', envioAutomatico: false, pendencias: 0 })),
@@ -85,11 +156,30 @@ describe('GoogleDriveService', () => {
     await expect(googleDriveService.listarCopias('usuario-1')).resolves.toEqual([expect.objectContaining({ id: 'backup', nome: '109.026-26.laWdo', verificadaEm: '2026-02-03T12:00:00.000Z' })]);
   });
 
+  it('localiza apenas as cópias do laudo e confirma a hierarquia até a raiz', async () => {
+    const backup = { id: 'backup', name: '109.026-26.laWdo', size: '12', version: 'v1', parents: ['rep'], appProperties: { lawdoBackup: '1', lawdoRaizId: 'raiz', lawdoLaudoId: 'laudo-1', lawdoNumeroRep: '2026/00109026', lawdoHash: 'hash' } };
+    const pastas = new Map<string, ArquivoDrive>([
+      ['rep', { id: 'rep', name: '109.026-26', mimeType: 'application/vnd.google-apps.folder', parents: ['mes'], appProperties: { lawdoPasta: '1', lawdoRaizId: 'raiz' } }],
+      ['mes', { id: 'mes', name: '02', mimeType: 'application/vnd.google-apps.folder', parents: ['ano'], appProperties: { lawdoPasta: '1', lawdoRaizId: 'raiz' } }],
+      ['ano', { id: 'ano', name: '2026', mimeType: 'application/vnd.google-apps.folder', parents: ['raiz'], appProperties: { lawdoPasta: '1', lawdoRaizId: 'raiz' } }],
+    ]);
+    const listar = vi.fn(async () => [backup]);
+    Object.assign(servico, {
+      listar,
+      obterArquivoDrive: vi.fn(async (_usuarioId: string, arquivoId: string) => pastas.get(arquivoId) ?? null),
+      listarDescendentes: vi.fn(),
+    });
+
+    await expect(servico.listarCopiasDoLaudo('usuario-1', 'raiz', 'laudo-1')).resolves.toEqual([expect.objectContaining({ id: 'backup', versaoDrive: 'v1' })]);
+    expect(listar).toHaveBeenCalledWith('usuario-1', expect.stringContaining("key='lawdoLaudoId' and value='laudo-1'"), expect.any(String), undefined);
+    expect(servico.listarDescendentes).not.toHaveBeenCalled();
+  });
+
   it('não envia novamente uma cópia idêntica e preserva o arquivo remoto já validado', async () => {
     const revisao = createHash('sha256').update('pacote válido').digest('hex');
     const enviarArquivo = vi.fn();
     Object.assign(servico, {
-      obterRaiz: vi.fn(async () => 'raiz'), listarCopias: vi.fn(async () => [{ id: 'existente', laudoId: 'laudo-1', numeroRep: '2026/00109026', nome: '109.026-26.laWdo', tamanho: 1, modificadaEm: '', revisao }]),
+      obterRaiz: vi.fn(async () => 'raiz'), listarCopiasDoLaudo: vi.fn(async () => [{ id: 'existente', laudoId: 'laudo-1', numeroRep: '2026/00109026', nome: '109.026-26.laWdo', tamanho: 1, modificadaEm: '', revisao, versaoDrive: 'v1' }]),
       obterRevisoes: vi.fn(async () => ({})), enviarArquivo, registrarRevisao: vi.fn(async () => undefined), invalidarCacheResumo: vi.fn(async () => undefined),
     });
 
@@ -101,7 +191,7 @@ describe('GoogleDriveService', () => {
     mocks.consultarBanco.mockResolvedValue([{ id: 'laudo-1', status: 'Em andamento', data_conclusao: null, updated_at: '2026-02-03T12:00:00.000Z', versao: 2, numero: '2026/00109026' }]);
     const revisao = createHash('sha256').update('pacote válido').digest('hex');
     Object.assign(servico, {
-      obterRaiz: vi.fn(async () => 'raiz'), listarCopias: vi.fn(async () => [{ id: 'existente', laudoId: 'laudo-1', numeroRep: '2026/00109026', nome: '109.026-26.laWdo', tamanho: 1, modificadaEm: '', revisao }]),
+      obterRaiz: vi.fn(async () => 'raiz'), listarCopiasDoLaudo: vi.fn(async () => [{ id: 'existente', laudoId: 'laudo-1', numeroRep: '2026/00109026', nome: '109.026-26.laWdo', tamanho: 1, modificadaEm: '', revisao, versaoDrive: 'v1' }]),
       obterRevisoes: vi.fn(async () => ({})), enviarArquivo: vi.fn(), registrarRevisao: vi.fn(async () => undefined), invalidarCacheResumo: vi.fn(async () => undefined),
     });
 
@@ -109,8 +199,8 @@ describe('GoogleDriveService', () => {
   });
 
   it('protege o envio automático quando a cópia remota divergiu e exige confirmação no envio manual', async () => {
-    const copias = [{ id: 'existente', laudoId: 'laudo-1', numeroRep: '2026/00109026', nome: '109.026-26.laWdo', tamanho: 1, modificadaEm: '', revisao: 'remota' }];
-    Object.assign(servico, { obterRaiz: vi.fn(async () => 'raiz'), listarCopias: vi.fn(async () => copias), obterRevisoes: vi.fn(async () => ({ 'laudo-1': 'local' })) });
+    const copias = [{ id: 'existente', laudoId: 'laudo-1', numeroRep: '2026/00109026', nome: '109.026-26.laWdo', tamanho: 1, modificadaEm: '', revisao: 'remota', versaoDrive: 'v1' }];
+    Object.assign(servico, { obterRaiz: vi.fn(async () => 'raiz'), listarCopiasDoLaudo: vi.fn(async () => copias), obterRevisoes: vi.fn(async () => ({ 'laudo-1': 'local' })) });
 
     await expect(googleDriveService.enviarLaudo('usuario-1', 'laudo-1', false, true)).rejects.toMatchObject({ codigo: 'divergencia_remota' } satisfies Partial<ErroGoogleDrive>);
     await expect(googleDriveService.enviarLaudo('usuario-1', 'laudo-1', false)).rejects.toMatchObject({ codigo: 'substituicao_nao_confirmada' } satisfies Partial<ErroGoogleDrive>);
@@ -119,8 +209,12 @@ describe('GoogleDriveService', () => {
   it('envia o arquivo com o nome amigável da REP e mantém a troca de cópia anterior', async () => {
     const enviarArquivo = vi.fn(async (_usuarioId: string, _caminho: string, metadados: Record<string, unknown>) => ({ id: 'nova-copia', name: String(metadados.name), size: '17', modifiedTime: '2026-02-03T12:00:00.000Z' }));
     const requisitar = vi.fn(async () => new Response(null, { status: 204 }));
+    const anterior = { id: 'anterior', laudoId: 'laudo-1', numeroRep: '2026/00109026', nome: 'antigo.laWdo', tamanho: 1, modificadaEm: '', revisao: 'antiga', versaoDrive: 'v1' };
+    const listarCopiasDoLaudo = vi.fn()
+      .mockResolvedValueOnce([anterior])
+      .mockResolvedValueOnce([anterior, { id: 'nova-copia', laudoId: 'laudo-1', numeroRep: '2026/00109026', nome: '109.026-26.laWdo', tamanho: 17, modificadaEm: '', revisao: 'nova', versaoDrive: 'v2' }]);
     Object.assign(servico, {
-      obterRaiz: vi.fn(async () => 'raiz'), listarCopias: vi.fn(async () => [{ id: 'anterior', laudoId: 'laudo-1', numeroRep: '2026/00109026', nome: 'antigo.laWdo', tamanho: 1, modificadaEm: '', revisao: 'antiga' }]),
+      obterRaiz: vi.fn(async () => 'raiz'), listarCopiasDoLaudo,
       obterRevisoes: vi.fn(async () => ({ 'laudo-1': 'antiga' })), obterChavePacote: vi.fn(async () => Buffer.alloc(32, 1)), conferirCotaAntesDoEnvio: vi.fn(async () => undefined),
       criarPasta: vi.fn(async (_usuarioId: string, nome: string) => `pasta-${nome}`), enviarArquivo, baixarArquivo: vi.fn(async () => undefined),
       registrarRevisao: vi.fn(async () => undefined), invalidarCacheResumo: vi.fn(async () => undefined), requisitar,
@@ -131,6 +225,24 @@ describe('GoogleDriveService', () => {
     expect(enviarArquivo).toHaveBeenCalledWith('usuario-1', expect.any(String), expect.objectContaining({ name: '109.026-26.laWdo', parents: ['pasta-109.026-26'] }));
     expect(copia.nome).toBe('109.026-26.laWdo');
     expect(requisitar).toHaveBeenCalledWith('usuario-1', expect.stringContaining('/anterior'), { method: 'DELETE' });
+  });
+
+  it('preserva as cópias anteriores quando a revisão remota muda durante o envio', async () => {
+    const anterior = { id: 'anterior', laudoId: 'laudo-1', numeroRep: '2026/00109026', nome: 'antigo.laWdo', tamanho: 1, modificadaEm: '', revisao: 'antiga', versaoDrive: 'v1' };
+    const requisitar = vi.fn(async () => new Response(null, { status: 204 }));
+    Object.assign(servico, {
+      obterRaiz: vi.fn(async () => 'raiz'),
+      listarCopiasDoLaudo: vi.fn()
+        .mockResolvedValueOnce([anterior])
+        .mockResolvedValueOnce([{ ...anterior, versaoDrive: 'v2' }, { id: 'nova-copia', laudoId: 'laudo-1', numeroRep: '2026/00109026', nome: '109.026-26.laWdo', tamanho: 17, modificadaEm: '', revisao: 'nova', versaoDrive: 'v3' }]),
+      obterRevisoes: vi.fn(async () => ({ 'laudo-1': 'antiga' })), obterChavePacote: vi.fn(async () => Buffer.alloc(32, 1)), conferirCotaAntesDoEnvio: vi.fn(async () => undefined),
+      criarPasta: vi.fn(async (_usuarioId: string, nome: string) => `pasta-${nome}`),
+      enviarArquivo: vi.fn(async () => ({ id: 'nova-copia', name: '109.026-26.laWdo', size: '17', modifiedTime: '2026-02-03T12:00:00.000Z' })),
+      baixarArquivo: vi.fn(async () => undefined), registrarRevisao: vi.fn(async () => undefined), invalidarCacheResumo: vi.fn(async () => undefined), requisitar,
+    });
+
+    await expect(googleDriveService.enviarLaudo('usuario-1', 'laudo-1', true)).rejects.toMatchObject({ codigo: 'divergencia_remota' } satisfies Partial<ErroGoogleDrive>);
+    expect(requisitar).not.toHaveBeenCalled();
   });
 
   it('envia somente a pasta exclusiva validada da REP para a Lixeira', async () => {

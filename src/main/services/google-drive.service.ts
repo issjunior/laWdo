@@ -1,16 +1,17 @@
 import { app, shell } from 'electron';
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
 import { createReadStream, createWriteStream } from 'node:fs';
 import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
+import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { configuracaoService } from './configuracao.service.js';
 import { exportarBkpLaudo, lerBkpLaudo } from './laudo-bkp.service.js';
 import { cifrarPacoteGoogleDrive, criarChavePacoteGoogleDrive, decifrarPacoteGoogleDrive } from './google-drive-pacote.service.js';
 import { obterIdentificacaoBkpLaudo } from '../../shared/utils/nomes-documentos-rep.js';
-import { executeNonQuery, executeQuery } from '../database/sqlite.js';
+import { executeNonQuery, executeQuery, withTransaction } from '../database/sqlite.js';
 import { getLogger } from '../utils/logger.js';
 import { safeStorageService } from './safe-storage.service.js';
 import { CLIENT_ID_GOOGLE_DRIVE, obterSegredoClienteGoogleDrive } from './google-drive-oauth.service.js';
@@ -22,15 +23,21 @@ const ESCOPO_DRIVE_ARQUIVOS = 'https://www.googleapis.com/auth/drive.file';
 const ESCOPO_DADOS_APP = 'https://www.googleapis.com/auth/drive.appdata';
 const ESCOPO = `openid email profile ${ESCOPO_DRIVE_ARQUIVOS} ${ESCOPO_DADOS_APP}`;
 const MIME_PASTA = 'application/vnd.google-apps.folder';
-const DOMINIO_INSTITUCIONAL = '@policiacientifica.pr.gov.br';
+const DOMINIO_INSTITUCIONAL = 'policiacientifica.pr.gov.br';
 const VERSAO_VALIDACAO_FILA = 2;
 const DURACAO_CACHE_RESUMO_MS = 5 * 60 * 1000;
 const LIMITE_BACKUPS_BYTES = 10 * 1024 ** 3;
 const TEMPO_LIMITE_REQUISICAO_MS = 45_000;
 const TEMPO_LIMITE_INATIVIDADE_DOWNLOAD_MS = 90_000;
+const TAMANHO_BLOCO_UPLOAD = 8 * 1024 * 1024;
+const TENTATIVAS_RECUPERACAO_UPLOAD = 3;
+const ESPERA_PADRAO_RECUPERACAO_MS = 1_000;
+const ESPERA_MAXIMA_RECUPERACAO_MS = 30_000;
+const CHAVES_PUBLICAS_GOOGLE = createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2/v3/certs'));
 
 interface Tokens { access_token: string; refresh_token?: string; expires_at: number; escopos?: string[] }
 interface ArquivoDrive { id: string; name: string; mimeType?: string; modifiedTime?: string; size?: string; version?: string; appProperties?: Record<string, string>; parents?: string[] }
+interface CopiaGoogleDriveLocalizada extends CopiaGoogleDrive { versaoDrive: string }
 interface ControleGoogleDrive { formato: 1; chave: string }
 interface ItemFilaGoogleDrive {
   laudoId: string;
@@ -75,6 +82,9 @@ function nomePastaLaudo(numero: string) { return numero.replace(/[\\/:*?"<>|]/g,
 function temEscopoDadosApp(tokens: Tokens): boolean { return tokens.escopos?.includes(ESCOPO_DADOS_APP) ?? false; }
 function escoposAutorizados(valor: unknown): string[] {
   return typeof valor === 'string' ? valor.split(/\s+/).filter(Boolean) : [];
+}
+function temEscoposObrigatorios(escopos: string[]): boolean {
+  return escopos.includes(ESCOPO_DRIVE_ARQUIVOS) && escopos.includes(ESCOPO_DADOS_APP);
 }
 async function hashArquivo(caminho: string): Promise<string> {
   const hash = createHash('sha256');
@@ -133,6 +143,9 @@ function paginaRetornoOAuth(logo: string | null, sucesso: boolean): string {
 class GoogleDriveService {
   private readonly processamentosFila = new Map<string, Promise<void>>();
   private readonly temporizadoresFila = new Map<string, NodeJS.Timeout>();
+  private readonly conexoesEmAndamento = new Map<string, Promise<EstadoGoogleDrive>>();
+  private readonly versoesConexao = new Map<string, number>();
+  private readonly tokensTemporarios = new Map<string, { versao: number; tokens: Tokens }>();
   private registradorDiagnostico?: RegistradorDiagnosticoGoogleDrive;
 
   configurarRegistradorDiagnostico(registrador?: RegistradorDiagnosticoGoogleDrive): void {
@@ -141,6 +154,8 @@ class GoogleDriveService {
 
   private async obterTokens(usuarioId: string): Promise<Tokens | null> {
     if (!safeStorageService.isAvailable()) return null;
+    const temporario = this.tokensTemporarios.get(usuarioId);
+    if (temporario) return temporario.tokens;
     const valor = await configuracaoService.obter(chave('tokens', usuarioId));
     if (!valor) return null;
     try {
@@ -153,6 +168,43 @@ class GoogleDriveService {
   private async salvarTokens(usuarioId: string, tokens: Tokens) {
     if (!safeStorageService.isAvailable()) throw new ErroGoogleDrive('trocar_codigo_oauth', 'A proteção local de credenciais não está disponível neste dispositivo.', 'protecao_local_indisponivel');
     await configuracaoService.salvar(chave('tokens', usuarioId), JSON.stringify(tokens), 'api_key', 'Tokens OAuth do Google Drive');
+  }
+
+  private confirmarConexaoAtiva(usuarioId: string, versao: number): void {
+    if (this.versoesConexao.get(usuarioId) !== versao) {
+      throw new ErroGoogleDrive('trocar_codigo_oauth', 'A conexão com o Google Drive foi cancelada.', 'conexao_cancelada');
+    }
+  }
+
+  private async validarIdentidadeGoogle(idToken: unknown, nonce: string): Promise<{ email: string }> {
+    if (typeof idToken !== 'string') {
+      throw new ErroGoogleDrive('validar_conta_institucional', 'O Google não devolveu a identificação da conta autorizada.', 'id_token_ausente');
+    }
+    let payload: Record<string, unknown>;
+    try {
+      const resultado = await jwtVerify(idToken, CHAVES_PUBLICAS_GOOGLE, {
+        algorithms: ['RS256'],
+        audience: CLIENT_ID,
+        issuer: ['https://accounts.google.com', 'accounts.google.com'],
+      });
+      payload = resultado.payload;
+    } catch {
+      throw new ErroGoogleDrive('validar_conta_institucional', 'Não foi possível validar a identidade da conta Google autorizada.', 'id_token_invalido');
+    }
+    const email = payload.email;
+    if (payload.nonce !== nonce || typeof payload.sub !== 'string' || typeof email !== 'string'
+      || payload.email_verified !== true || payload.hd !== DOMINIO_INSTITUCIONAL
+      || !email.toLowerCase().endsWith(`@${DOMINIO_INSTITUCIONAL}`)) {
+      throw new ErroGoogleDrive('validar_conta_institucional', 'Esta conta não é institucional ou não foi autorizada pela organização.', 'conta_institucional_nao_confirmada');
+    }
+    return { email };
+  }
+
+  private async salvarConexao(usuarioId: string, tokens: Tokens, email: string): Promise<void> {
+    await withTransaction(async () => {
+      await this.salvarTokens(usuarioId, tokens);
+      await configuracaoService.salvar(chave('email', usuarioId), email, 'texto', 'Conta Google Drive autorizada');
+    });
   }
 
   private async segredoClienteObrigatorio(etapa: 'trocar_codigo_oauth' | 'renovar_token'): Promise<string> {
@@ -328,31 +380,52 @@ class GoogleDriveService {
   }
 
   async conectar(usuarioId: string): Promise<EstadoGoogleDrive> {
+    const emAndamento = this.conexoesEmAndamento.get(usuarioId);
+    if (emAndamento) return emAndamento;
+    const versao = (this.versoesConexao.get(usuarioId) ?? 0) + 1;
+    this.versoesConexao.set(usuarioId, versao);
+    const operacao = this.conectarConta(usuarioId, versao).finally(() => {
+      if (this.conexoesEmAndamento.get(usuarioId) === operacao) this.conexoesEmAndamento.delete(usuarioId);
+      const temporario = this.tokensTemporarios.get(usuarioId);
+      if (temporario?.versao === versao) this.tokensTemporarios.delete(usuarioId);
+    });
+    this.conexoesEmAndamento.set(usuarioId, operacao);
+    return operacao;
+  }
+
+  private async conectarConta(usuarioId: string, versao: number): Promise<EstadoGoogleDrive> {
     if (!safeStorageService.isAvailable()) throw new ErroGoogleDrive('trocar_codigo_oauth', 'A proteção local de credenciais não está disponível neste dispositivo.', 'protecao_local_indisponivel');
     const clientSecret = await this.segredoClienteObrigatorio('trocar_codigo_oauth');
     const servidor = createServer();
-    const retorno = await new Promise<{ codigo: string; redirectUri: string }>((resolve, reject) => {
+    const retorno = await new Promise<{ codigo: string; redirectUri: string; nonce: string }>((resolve, reject) => {
       const state = base64Url(randomBytes(32));
+      const nonce = base64Url(randomBytes(32));
       const verifier = base64Url(randomBytes(64));
       const challenge = base64Url(createHash('sha256').update(verifier).digest());
       let redirectUri = '';
-      const tempo = setTimeout(() => { servidor.close(); reject(new Error('A autorização do Google Drive expirou.')); }, 300_000);
+      const encerrarComErro = (erro: Error) => {
+        clearTimeout(tempo);
+        servidor.close();
+        reject(erro);
+      };
+      const tempo = setTimeout(() => encerrarComErro(new Error('A autorização do Google Drive expirou.')), 300_000);
+      servidor.once('error', () => encerrarComErro(new Error('Não foi possível iniciar a autorização segura.')));
       servidor.on('request', async (requisicao, resposta) => {
-        const url = new URL(requisicao.url ?? '/', `http://${requisicao.headers.host}`);
-        const autorizado = url.searchParams.get('state') === state && Boolean(url.searchParams.get('code'));
+        const url = new URL(requisicao.url ?? '/', redirectUri);
+        const autorizado = url.pathname === '/oauth2callback' && url.searchParams.get('state') === state && Boolean(url.searchParams.get('code'));
         const pagina = paginaRetornoOAuth(await obterLogoRetornoOAuth(), autorizado);
         resposta.writeHead(autorizado ? 200 : 400, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
         resposta.end(pagina);
         if (!autorizado) return;
         clearTimeout(tempo);
-        resolve({ codigo: url.searchParams.get('code')!, redirectUri });
+        resolve({ codigo: url.searchParams.get('code')!, redirectUri, nonce });
         servidor.close();
       });
       servidor.listen(0, '127.0.0.1', () => {
         const porta = (servidor.address() as import('node:net').AddressInfo).port;
         redirectUri = `http://127.0.0.1:${porta}/oauth2callback`;
         const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
-        url.search = new URLSearchParams({ client_id: CLIENT_ID, redirect_uri: redirectUri, response_type: 'code', scope: ESCOPO, state, code_challenge: challenge, code_challenge_method: 'S256', access_type: 'offline', prompt: 'consent' }).toString();
+        url.search = new URLSearchParams({ client_id: CLIENT_ID, redirect_uri: redirectUri, response_type: 'code', scope: ESCOPO, state, nonce, code_challenge: challenge, code_challenge_method: 'S256', access_type: 'offline', prompt: 'consent' }).toString();
         void shell.openExternal(url.toString());
       });
       void verifier;
@@ -367,21 +440,20 @@ class GoogleDriveService {
     const dados: unknown = await resposta.json().catch(() => null);
     if (!resposta.ok || !dados || typeof dados !== 'object' || typeof (dados as Record<string, unknown>).access_token !== 'string') throw new ErroGoogleDrive('trocar_codigo_oauth', 'O Google não concluiu a autorização. Confira a configuração da integração e tente novamente.', codigoErroOAuth(dados, resposta.status));
     const bruto = dados as Record<string, unknown>;
-    await this.salvarTokens(usuarioId, { access_token: String(bruto.access_token), refresh_token: typeof bruto.refresh_token === 'string' ? bruto.refresh_token : undefined, expires_at: Date.now() + Number(bruto.expires_in ?? 3600) * 1000, escopos: escoposAutorizados(bruto.scope) });
-    let perfil: Response;
-    try { perfil = await this.requisitar(usuarioId, 'https://www.googleapis.com/oauth2/v3/userinfo'); }
-    catch (erro) { throw erro instanceof ErroGoogleDrive ? erro : new ErroGoogleDrive('perfil_conta', 'Não foi possível confirmar a conta Google autorizada.', 'rede_indisponivel'); }
-    const perfilJson: unknown = await perfil.json().catch(() => null);
-    if (!perfil.ok) throw new ErroGoogleDrive('perfil_conta', 'Não foi possível confirmar a conta Google autorizada.', `http_${perfil.status}`);
-    const email = perfilJson && typeof perfilJson === 'object' ? (perfilJson as Record<string, unknown>).email : undefined;
-    if (typeof email !== 'string' || !email.toLowerCase().endsWith(DOMINIO_INSTITUCIONAL)) { await this.desconectar(usuarioId); throw new ErroGoogleDrive('validar_conta_institucional', 'Esta conta não é institucional ou não foi autorizada pela organização.', 'dominio_nao_autorizado'); }
-    await configuracaoService.salvar(chave('email', usuarioId), email, 'texto', 'Conta Google Drive autorizada');
-    await this.invalidarCacheResumo(usuarioId);
+    const escopos = escoposAutorizados(bruto.scope);
+    if (!temEscoposObrigatorios(escopos)) throw new ErroGoogleDrive('validar_conta_institucional', 'A conta não concedeu todas as permissões necessárias ao Google Drive.', 'escopos_insuficientes');
+    const identidade = await this.validarIdentidadeGoogle(bruto.id_token, retorno.nonce);
+    const tokens: Tokens = { access_token: String(bruto.access_token), refresh_token: typeof bruto.refresh_token === 'string' ? bruto.refresh_token : undefined, expires_at: Date.now() + Number(bruto.expires_in ?? 3600) * 1000, escopos };
+    this.confirmarConexaoAtiva(usuarioId, versao);
+    this.tokensTemporarios.set(usuarioId, { versao, tokens });
     try {
       const raizId = await this.obterRaiz(usuarioId);
       await this.verificarAcessoDadosApp(usuarioId);
       await this.migrarControleLegado(usuarioId, raizId);
     } catch (erro) { throw erro instanceof ErroGoogleDrive ? erro : new ErroGoogleDrive('localizar_raiz_drive', 'Não foi possível preparar a pasta laWdo no Google Drive.', 'falha_nao_classificada'); }
+    this.confirmarConexaoAtiva(usuarioId, versao);
+    await this.salvarConexao(usuarioId, tokens, identidade.email);
+    await this.invalidarCacheResumo(usuarioId);
     const estado = await this.estado(usuarioId);
     if (!estado.conectado) throw new ErroGoogleDrive('localizar_raiz_drive', estado.aviso ?? 'Não foi possível concluir a conexão com o Google Drive.', 'estado_indisponivel');
     void this.processarFila(usuarioId);
@@ -389,6 +461,8 @@ class GoogleDriveService {
   }
 
   async desconectar(usuarioId: string) {
+    this.versoesConexao.set(usuarioId, (this.versoesConexao.get(usuarioId) ?? 0) + 1);
+    this.tokensTemporarios.delete(usuarioId);
     await executeNonQuery('DELETE FROM configuracoes WHERE chave = ?', [chave('tokens', usuarioId)]);
     await configuracaoService.salvar(chave('email', usuarioId), '', 'texto', 'Conta Google Drive removida');
     await this.invalidarCacheResumo(usuarioId);
@@ -480,6 +554,66 @@ class GoogleDriveService {
     return encontrados;
   }
 
+  private async obterArquivoDrive(usuarioId: string, arquivoId: string, sinal?: AbortSignal): Promise<ArquivoDrive | null> {
+    if (!/^[\w-]+$/.test(arquivoId)) return null;
+    const campos = 'id,name,mimeType,size,modifiedTime,version,appProperties,parents';
+    const resposta = await this.requisitar(usuarioId, `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(arquivoId)}?fields=${encodeURIComponent(campos)}`, { signal: sinal });
+    if (resposta.status === 404) return null;
+    const bruto: unknown = await resposta.json().catch(() => null);
+    if (!resposta.ok) throw new ErroGoogleDrive('verificar_pacote', 'Não foi possível confirmar a cópia no Google Drive.', `http_${resposta.status}`);
+    if (!bruto || typeof bruto !== 'object' || typeof (bruto as Record<string, unknown>).id !== 'string' || typeof (bruto as Record<string, unknown>).name !== 'string') {
+      throw new ErroGoogleDrive('verificar_pacote', 'O Google Drive retornou uma cópia inválida.', 'resposta_invalida');
+    }
+    return bruto as ArquivoDrive;
+  }
+
+  private async listarCopiasDoLaudo(usuarioId: string, raizId: string, laudoId: string, sinal?: AbortSignal): Promise<CopiaGoogleDriveLocalizada[]> {
+    const consulta = [
+      'trashed = false',
+      "appProperties has { key='lawdoBackup' and value='1' }",
+      `appProperties has { key='lawdoRaizId' and value='${escaparConsultaDrive(raizId)}' }`,
+      `appProperties has { key='lawdoLaudoId' and value='${escaparConsultaDrive(laudoId)}' }`,
+    ].join(' and ');
+    const arquivos = await this.listar(usuarioId, consulta, 'id,name,mimeType,size,modifiedTime,version,appProperties,parents', sinal);
+    const cache = new Map<string, ArquivoDrive>();
+    for (const arquivo of arquivos) cache.set(arquivo.id, arquivo);
+    const obterPai = async (filho: ArquivoDrive): Promise<ArquivoDrive | null> => {
+      if (filho.parents?.length !== 1) return null;
+      const paiId = filho.parents[0]!;
+      const conhecido = cache.get(paiId);
+      if (conhecido) return conhecido;
+      const pai = await this.obterArquivoDrive(usuarioId, paiId, sinal);
+      if (pai) cache.set(pai.id, pai);
+      return pai;
+    };
+    const ehPastaLaWdo = (arquivo: ArquivoDrive | null): arquivo is ArquivoDrive => arquivo?.mimeType === MIME_PASTA
+      && arquivo.appProperties?.lawdoPasta === '1' && arquivo.appProperties.lawdoRaizId === raizId;
+
+    const copias: CopiaGoogleDriveLocalizada[] = [];
+    for (const arquivo of arquivos) {
+      const pastaRep = await obterPai(arquivo);
+      const pastaMes = pastaRep ? await obterPai(pastaRep) : null;
+      const pastaAno = pastaMes ? await obterPai(pastaMes) : null;
+      const pertenceARaiz = pastaAno?.parents?.length === 1 && pastaAno.parents[0] === raizId;
+      if (arquivo.appProperties?.lawdoBackup !== '1' || arquivo.appProperties.lawdoRaizId !== raizId
+        || arquivo.appProperties.lawdoLaudoId !== laudoId || !ehPastaLaWdo(pastaRep)
+        || !ehPastaLaWdo(pastaMes) || !ehPastaLaWdo(pastaAno) || !pertenceARaiz) {
+        throw new ErroGoogleDrive('verificar_pacote', 'A pasta exclusiva de uma cópia encontrada não pôde ser confirmada. Nenhuma cópia foi substituída.', 'pasta_copia_invalida');
+      }
+      copias.push({
+        id: arquivo.id,
+        laudoId,
+        numeroRep: arquivo.appProperties.lawdoNumeroRep ?? '',
+        nome: arquivo.name,
+        tamanho: Number(arquivo.size ?? 0),
+        modificadaEm: arquivo.modifiedTime ?? '',
+        revisao: arquivo.appProperties.lawdoHash ?? arquivo.version ?? '',
+        versaoDrive: arquivo.version ?? '',
+      });
+    }
+    return copias;
+  }
+
   private async obterPastaExclusivaDaCopia(usuarioId: string, copiaId: string): Promise<ArquivoDrive> {
     const raizId = await this.obterRaiz(usuarioId);
     const descendentes = await this.listarDescendentes(usuarioId, raizId);
@@ -555,26 +689,158 @@ class GoogleDriveService {
     } finally { if (temporizadorInatividade) clearTimeout(temporizadorInatividade); }
   }
 
-  private async enviarArquivo(usuarioId: string, caminho: string, metadados: Record<string, unknown>): Promise<ArquivoDrive> {
-    const { size } = await (await import('node:fs/promises')).stat(caminho);
+  private async iniciarEnvioResumivel(usuarioId: string, tamanho: number, metadados: Record<string, unknown>): Promise<string> {
     const inicio = await this.requisitar(usuarioId, 'https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json; charset=UTF-8', 'X-Upload-Content-Type': 'application/octet-stream', 'X-Upload-Content-Length': String(size) },
+      headers: { 'Content-Type': 'application/json; charset=UTF-8', 'X-Upload-Content-Type': 'application/octet-stream', 'X-Upload-Content-Length': String(tamanho) },
       body: JSON.stringify(metadados),
     });
     const destino = inicio.headers.get('location');
     if (!inicio.ok || !destino) throw new ErroGoogleDrive('enviar_pacote', 'Não foi possível iniciar o envio ao Google Drive.', `http_${inicio.status}`);
-    const token = await this.tokenValido(usuarioId);
-    const fluxo = Readable.toWeb(createReadStream(caminho));
-    let resposta: Response;
-    try {
-      resposta = await fetch(destino, { method: 'PUT', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/octet-stream', 'Content-Length': String(size) }, body: fluxo as unknown as BodyInit, duplex: 'half' } as RequestInit & { duplex: 'half' });
-    } catch { throw new ErroGoogleDrive('enviar_pacote', 'A conexão foi interrompida durante o envio ao Google Drive.', 'rede_indisponivel'); }
+    let url: URL;
+    try { url = new URL(destino); }
+    catch { throw new ErroGoogleDrive('enviar_pacote', 'O Google Drive retornou um destino de envio inválido.', 'destino_upload_invalido'); }
+    if (url.protocol !== 'https:' || url.hostname !== 'www.googleapis.com') {
+      throw new ErroGoogleDrive('enviar_pacote', 'O Google Drive retornou um destino de envio não confiável.', 'destino_upload_nao_confiavel');
+    }
+    return url.toString();
+  }
+
+  private proximoByteRecebido(resposta: Response, tamanho: number): number {
+    const faixa = resposta.headers.get('range');
+    if (!faixa) return 0;
+    const correspondencia = /^bytes=(\d+)-(\d+)$/.exec(faixa);
+    if (!correspondencia) throw new ErroGoogleDrive('enviar_pacote', 'O Google Drive retornou o progresso do envio em formato inválido.', 'progresso_upload_invalido');
+    const inicio = Number(correspondencia[1]);
+    const fim = Number(correspondencia[2]);
+    if (!Number.isSafeInteger(inicio) || !Number.isSafeInteger(fim) || inicio !== 0 || fim < inicio || fim >= tamanho) {
+      throw new ErroGoogleDrive('enviar_pacote', 'O Google Drive retornou um progresso de envio inválido.', 'progresso_upload_invalido');
+    }
+    return fim + 1;
+  }
+
+  private async lerArquivoEnviado(resposta: Response): Promise<ArquivoDrive> {
     const arquivo: unknown = await resposta.json().catch(() => null);
-    if (!resposta.ok || !arquivo || typeof arquivo !== 'object' || typeof (arquivo as Record<string, unknown>).id !== 'string') {
-      throw new ErroGoogleDrive('enviar_pacote', 'O Google Drive não confirmou o envio do pacote.', `http_${resposta.status}`);
+    if (!arquivo || typeof arquivo !== 'object' || typeof (arquivo as Record<string, unknown>).id !== 'string' || typeof (arquivo as Record<string, unknown>).name !== 'string') {
+      throw new ErroGoogleDrive('enviar_pacote', 'O Google Drive não confirmou o envio do pacote.', 'resposta_upload_invalida');
     }
     return arquivo as ArquivoDrive;
+  }
+
+  private esperaRecuperacaoUpload(resposta?: Response): number {
+    const valor = resposta?.headers.get('retry-after');
+    if (!valor) return ESPERA_PADRAO_RECUPERACAO_MS;
+    const segundos = Number(valor);
+    if (Number.isFinite(segundos) && segundos >= 0) return Math.min(ESPERA_MAXIMA_RECUPERACAO_MS, segundos * 1_000);
+    const data = new Date(valor).getTime();
+    if (Number.isNaN(data)) return ESPERA_PADRAO_RECUPERACAO_MS;
+    return Math.min(ESPERA_MAXIMA_RECUPERACAO_MS, Math.max(0, data - Date.now()));
+  }
+
+  private async aguardarRecuperacaoUpload(tempoMs: number): Promise<void> {
+    if (tempoMs > 0) await new Promise<void>(resolver => setTimeout(resolver, tempoMs));
+  }
+
+  private async consultarEnvioResumivel(destino: string, token: string, tamanho: number): Promise<Response> {
+    return fetch(destino, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Length': '0', 'Content-Range': `bytes */${tamanho}` },
+      redirect: 'error',
+    });
+  }
+
+  private async localizarArquivoPorOperacao(usuarioId: string, operacaoId: string, dadosPrivados: boolean): Promise<ArquivoDrive | null> {
+    const consulta = `trashed = false and appProperties has { key='lawdoOperacaoId' and value='${escaparConsultaDrive(operacaoId)}' }`;
+    const arquivos = dadosPrivados
+      ? await this.listarDadosApp(usuarioId, consulta, 'id,name,mimeType,size,modifiedTime,version,appProperties,parents')
+      : await this.listar(usuarioId, consulta, 'id,name,mimeType,size,modifiedTime,version,appProperties,parents');
+    if (arquivos.length > 1) throw new ErroGoogleDrive('enviar_pacote', 'Foram encontrados envios duplicados para a mesma operação. A substituição foi interrompida.', 'operacao_upload_duplicada');
+    return arquivos[0] ?? null;
+  }
+
+  private async enviarArquivo(usuarioId: string, caminho: string, metadados: Record<string, unknown>): Promise<ArquivoDrive> {
+    const { size } = await (await import('node:fs/promises')).stat(caminho);
+    const propriedades = metadados.appProperties && typeof metadados.appProperties === 'object' && !Array.isArray(metadados.appProperties)
+      ? metadados.appProperties as Record<string, unknown> : {};
+    const operacaoId = randomUUID();
+    const metadadosComOperacao = { ...metadados, appProperties: { ...propriedades, lawdoOperacaoId: operacaoId } };
+    const dadosPrivados = Array.isArray(metadados.parents) && metadados.parents.includes('appDataFolder');
+    let recuperacoes = 0;
+
+    for (let sessao = 0; sessao <= TENTATIVAS_RECUPERACAO_UPLOAD; sessao += 1) {
+      const destino = await this.iniciarEnvioResumivel(usuarioId, size, metadadosComOperacao);
+      let proximoByte = 0;
+      let reiniciarSessao = false;
+
+      while (proximoByte < size) {
+        const fim = Math.min(proximoByte + TAMANHO_BLOCO_UPLOAD, size) - 1;
+        const token = await this.tokenValido(usuarioId);
+        let resposta: Response | undefined;
+        try {
+          const fluxo = Readable.toWeb(createReadStream(caminho, { start: proximoByte, end: fim }));
+          resposta = await fetch(destino, {
+            method: 'PUT',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/octet-stream', 'Content-Length': String(fim - proximoByte + 1), 'Content-Range': `bytes ${proximoByte}-${fim}/${size}` },
+            body: fluxo as unknown as BodyInit,
+            duplex: 'half',
+            redirect: 'error',
+          } as RequestInit & { duplex: 'half' });
+        } catch {
+          // A consulta de status abaixo determina se o Drive recebeu parte do bloco.
+        }
+
+        if (resposta?.ok) return this.lerArquivoEnviado(resposta);
+        if (resposta?.status === 308) {
+          proximoByte = this.proximoByteRecebido(resposta, size);
+          continue;
+        }
+        if (resposta?.status === 404) {
+          const existente = await this.localizarArquivoPorOperacao(usuarioId, operacaoId, dadosPrivados);
+          if (existente) return existente;
+          reiniciarSessao = true;
+          break;
+        }
+        if (resposta && resposta.status !== 429 && resposta.status < 500) {
+          throw new ErroGoogleDrive('enviar_pacote', 'O Google Drive recusou o envio do pacote.', `http_${resposta.status}`);
+        }
+        if (recuperacoes >= TENTATIVAS_RECUPERACAO_UPLOAD) {
+          throw new ErroGoogleDrive('enviar_pacote', 'A conexão foi interrompida durante o envio ao Google Drive. Tente novamente.', resposta ? `http_${resposta.status}` : 'rede_indisponivel');
+        }
+        recuperacoes += 1;
+        await this.aguardarRecuperacaoUpload(this.esperaRecuperacaoUpload(resposta));
+
+        let estado: Response | undefined;
+        try { estado = await this.consultarEnvioResumivel(destino, token, size); }
+        catch {
+          if (recuperacoes >= TENTATIVAS_RECUPERACAO_UPLOAD) throw new ErroGoogleDrive('enviar_pacote', 'Não foi possível confirmar o progresso do envio ao Google Drive.', 'rede_indisponivel');
+          continue;
+        }
+        if (estado.ok) return this.lerArquivoEnviado(estado);
+        if (estado.status === 308) {
+          proximoByte = this.proximoByteRecebido(estado, size);
+          continue;
+        }
+        if (estado.status === 404) {
+          const existente = await this.localizarArquivoPorOperacao(usuarioId, operacaoId, dadosPrivados);
+          if (existente) return existente;
+          reiniciarSessao = true;
+          break;
+        }
+        if (estado.status !== 429 && estado.status < 500) throw new ErroGoogleDrive('enviar_pacote', 'O Google Drive recusou a confirmação do envio.', `http_${estado.status}`);
+        if (recuperacoes >= TENTATIVAS_RECUPERACAO_UPLOAD) {
+          throw new ErroGoogleDrive('enviar_pacote', 'Não foi possível confirmar o progresso do envio ao Google Drive.', `http_${estado.status}`);
+        }
+        recuperacoes += 1;
+        await this.aguardarRecuperacaoUpload(this.esperaRecuperacaoUpload(estado));
+      }
+
+      if (reiniciarSessao) {
+        if (recuperacoes >= TENTATIVAS_RECUPERACAO_UPLOAD) throw new ErroGoogleDrive('enviar_pacote', 'A sessão de envio expirou. Tente novamente.', 'sessao_upload_expirada');
+        recuperacoes += 1;
+        continue;
+      }
+    }
+    throw new ErroGoogleDrive('enviar_pacote', 'Não foi possível concluir o envio ao Google Drive.', 'tentativas_upload_esgotadas');
   }
 
   private async enviarControlePrivado(usuarioId: string, raizId: string, controle: ControleGoogleDrive): Promise<void> {
@@ -734,6 +1000,17 @@ class GoogleDriveService {
       if (!privados.length && possuiBackups) return { ...base, protecaoChave: 'indisponivel', aviso: 'Há backups no Drive, mas a chave privada de recuperação não está disponível. Envio, verificação e restauração foram suspensos.' };
       return { ...base, protecaoChave: privados.length ? 'protegida' : 'aguardando_primeiro_envio' };
     } catch (erro) { return { conectado: false, envioAutomatico: automatico, pendencias, caminho: 'Meu Drive/laWdo', falhaFila, filaAguardaCorrecao, filaAguardaEspaco, aviso: erro instanceof Error ? erro.message : 'Erro ao consultar o Drive.' }; }
+  }
+
+  async abrirPasta(usuarioId: string): Promise<void> {
+    const estado = await this.estadoRapido(usuarioId);
+    if (!estado.conectado) throw new ErroGoogleDrive('localizar_raiz_drive', 'Conecte uma conta institucional antes de abrir a pasta do laWdo.', 'conta_nao_conectada');
+    const raizId = await this.obterRaiz(usuarioId);
+    try {
+      await shell.openExternal(`https://drive.google.com/drive/u/0/folders/${encodeURIComponent(raizId)}`);
+    } catch {
+      throw new ErroGoogleDrive('localizar_raiz_drive', 'Não foi possível abrir a pasta do laWdo no navegador.', 'abrir_navegador');
+    }
   }
 
   async resumo(usuarioId: string, forcarAtualizacao = false): Promise<ResumoGoogleDrive> {
@@ -908,7 +1185,7 @@ class GoogleDriveService {
     const conclusao = new Date(dataReferencia);
     if (Number.isNaN(conclusao.getTime())) throw new ErroGoogleDrive('criar_pacote', 'A data de referência do laudo é inválida.', 'data_referencia_invalida');
     const raizId = await this.obterRaiz(usuarioId);
-    const copiasAtuais = (await this.listarCopias(usuarioId)).filter(copia => copia.laudoId === laudo.id);
+    const copiasAtuais = await this.listarCopiasDoLaudo(usuarioId, raizId, laudo.id);
     const revisoes = await this.obterRevisoes(usuarioId);
     const revisaoConhecida = revisoes[laudo.id];
     const revisaoRemotaConhecida = Boolean(revisaoConhecida) && copiasAtuais.every(copia => copia.revisao === revisaoConhecida);
@@ -949,6 +1226,13 @@ class GoogleDriveService {
       await this.baixarArquivo(usuarioId, enviada.id, validacao);
       await decifrarPacoteGoogleDrive(validacao, path.join(temporario, 'validacao.bkp'), chavePacote);
       await lerBkpLaudo(path.join(temporario, 'validacao.bkp'), conteudo);
+      const copiasAntesDaSubstituicao = await this.listarCopiasDoLaudo(usuarioId, raizId, laudo.id);
+      const anterioresAtuais = copiasAntesDaSubstituicao.filter(copia => copia.id !== enviada.id);
+      const mesmasCopias = anterioresAtuais.length === copiasAtuais.length
+        && anterioresAtuais.every(copia => copiasAtuais.some(anterior => anterior.id === copia.id && anterior.versaoDrive === copia.versaoDrive));
+      if (!mesmasCopias) {
+        throw new ErroGoogleDrive('enviar_pacote', 'Uma cópia remota foi alterada durante o envio. A cópia anterior foi preservada.', 'divergencia_remota');
+      }
       for (const copia of copiasAtuais) {
         const resposta = await this.requisitar(usuarioId, `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(copia.id)}`, { method: 'DELETE' });
         if (!resposta.ok && resposta.status !== 404) throw new ErroGoogleDrive('enviar_pacote', 'A nova cópia foi validada, mas não foi possível remover a cópia anterior.', `http_${resposta.status}`);

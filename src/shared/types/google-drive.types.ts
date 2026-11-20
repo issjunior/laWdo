@@ -77,6 +77,7 @@ export interface ApiGoogleDrive {
   resumo: (forcarAtualizacao?: boolean) => Promise<RespostaGoogleDrive<ResumoGoogleDrive>>;
   conectar: () => Promise<RespostaGoogleDrive<EstadoGoogleDrive>>;
   desconectar: () => Promise<RespostaGoogleDrive>;
+  abrirPasta: () => Promise<RespostaGoogleDrive>;
   definirEnvioAutomatico: (ativo: boolean) => Promise<RespostaGoogleDrive<EstadoGoogleDrive>>;
   listarCopias: () => Promise<RespostaGoogleDrive<CopiaGoogleDrive[]>>;
   listarLaudosConcluidos: () => Promise<RespostaGoogleDrive<LaudoElegivelGoogleDrive[]>>;
