@@ -82,7 +82,7 @@ export function IndicadorConexaoGdl() {
         <Tooltip>
           <TooltipTrigger asChild>
             <PopoverTrigger asChild>
-              <button type="button" data-indicador-gdl={instancia.current} aria-label={`GDL: ${resumo.mensagem}`} className="flex h-8 w-16 shrink-0 items-center justify-center gap-1.5 rounded-md text-xs font-medium text-sidebar-foreground hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <button type="button" data-indicador-gdl={instancia.current} aria-label={`GDL: ${resumo.mensagem}`} className="flex h-8 w-[72px] shrink-0 items-center justify-center gap-1.5 rounded-md text-xs font-medium text-sidebar-foreground hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                 <span>GDL</span><Icone className={`h-4 w-4 ${classe}`} aria-hidden="true" />
               </button>
             </PopoverTrigger>
