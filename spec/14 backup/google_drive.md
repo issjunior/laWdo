@@ -15,6 +15,12 @@ Esta spec cobre as cópias remotas cifradas de laudos no Google Drive. Elas usam
 
 A conta é vinculada ao usuário autenticado da janela; o handler sempre exige a sessão antes de executar. A integração aceita apenas conta institucional `@policiacientifica.pr.gov.br`, depende de `safeStorage` e de uma credencial OAuth distribuída com a instalação. A ausência de qualquer um desses requisitos bloqueia a conexão em vez de degradar para armazenamento de token em texto.
 
+### Credencial OAuth e ambientes
+
+O ID do cliente OAuth é um identificador definido no código. O segredo correspondente não é versionado: em releases, o job protegido fornece `LAWDO_GOOGLE_CLIENT_SECRET` ao script `npm run preparar:oauth-google-drive`; em desenvolvimento, `npm run dev` e `npm run dev:diagnostico` procuram essa variável somente na sessão local ou o arquivo ignorado `build/google-drive-oauth.local`. O script valida o formato, gera `build/google-drive-oauth.dat` com o segredo ofuscado e a aplicação lê esse arquivo em `build/` durante o desenvolvimento.
+
+No empacotamento, `scripts/google-drive/empacotar-com-credencial-oauth.mjs` prepara a cópia antes de chamar o `electron-builder`, e `electron-builder.yml` a inclui como `extraResources` em `resources/config/google-drive-oauth.dat`, fora do `app.asar`. O arquivo temporário é removido após a execução, inclusive em falhas. Se a credencial local não estiver disponível no desenvolvimento, o aplicativo abre sem conexão ao Drive; na instalação, a ausência ou invalidez do recurso bloqueia a conexão. A ofuscação não deve ser tratada como criptografia forte nem como garantia de segredo contra quem possui o instalador. Valores de segredos, tokens e conteúdo dos arquivos locais nunca pertencem a esta spec.
+
 ## Conexão, estado e persistência
 
 A conexão abre uma autorização OAuth local e solicita identidade, `drive.file` e `drive.appdata`. Tokens, e-mail, preferência de envio automático, fila, revisões conhecidas, verificações e resumo em cache são chaves por usuário na configuração local. Tokens são gravados como segredo via `safeStorage`; respostas JSON dessa configuração são validadas antes do uso. Desconectar remove credenciais e estado da conexão e descarta os pacotes temporários da janela.

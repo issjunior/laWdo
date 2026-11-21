@@ -11,7 +11,8 @@ Este domínio documenta as automações de integração, atualização de depend
 - `scripts/release/**` para validação, manifesto, assinatura e geração do feed;
 - `package.json` para os comandos executados, Node.js `>=24.21.0 <25`, npm `>=11.17.0 <12` e a lista de scripts de instalação autorizados;
 - `.nvmrc` para a versão local de referência, fixada em Node.js 24.21.0;
-- `electron-builder.yml` para os alvos e metadados de empacotamento.
+- `electron-builder.yml` para os alvos, metadados de empacotamento e recursos externos;
+- `scripts/google-drive/gerar-credencial-oauth.mjs`, `scripts/google-drive/empacotar-com-credencial-oauth.mjs` e `scripts/google-drive/iniciar-desenvolvimento.mjs` para a preparação da credencial OAuth do Google Drive.
 
 O arquivo `spec/01 planejamento/git_realease_plan.md` é planejamento e histórico operacional da implantação. Em caso de divergência, os YAMLs e scripts acima descrevem o comportamento atual.
 
@@ -131,6 +132,12 @@ Os jobs selecionados fazem checkout do mesmo commit, usam Node.js 24.21.0, execu
 - macOS x64 e arm64: somente DMG experimental. ZIP continua aceito pelo consumidor como compatibilidade de leitura, mas não é gerado, manifestado nem publicado pelo produtor atual.
 
 O upload temporário falha se os padrões não encontrarem arquivos. O Windows possui uma barreira adicional: a versão dentro de `app.asar` e a versão de produto do executável devem coincidir com a versão solicitada. Não há verificação interna equivalente para Linux ou macOS.
+
+### Credencial OAuth do Google Drive
+
+Os jobs de empacotamento recebem o segredo do cliente OAuth somente pelo secret LAWDO_GOOGLE_CLIENT_SECRET do environment protegido release. O comando npm run preparar:oauth-google-drive combina esse segredo com o ID do cliente definido no código e gera temporariamente build/google-drive-oauth.dat, em formato ofuscado e sem o valor em texto puro. O electron-builder.yml copia esse arquivo para resources/config/google-drive-oauth.dat por meio de extraResources; o aplicativo empacotado lê esse recurso fora do app.asar. O script de empacotamento remove o arquivo temporário no bloco de finalização, e os jobs de release também o removem com always() após o empacotamento.
+
+A CI comum não recebe esse secret nem prepara a credencial. No desenvolvimento, npm run dev e npm run dev:diagnostico aceitam somente LAWDO_GOOGLE_CLIENT_SECRET na sessão local ou o arquivo ignorado build/google-drive-oauth.local; quando uma dessas fontes existe, geram a cópia local em build/google-drive-oauth.dat. Sem ela, o aplicativo inicia sem conexão ao Drive. Nenhum valor de credencial deve ser versionado, impresso ou incluído nesta spec. A ofuscação não transforma o valor incorporado ao instalador em segredo de alta confidencialidade; a proteção operacional depende também dos escopos OAuth e do armazenamento local protegido dos tokens.
 
 ### Agregação protegida
 
