@@ -106,6 +106,19 @@ describe('Header - atualizações', () => {
     await vi.waitFor(() => expect(toast.error).toHaveBeenCalledWith('Não foi possível copiar o e-mail.'));
   });
 
+  it('inclui os canais de suporte no diagnóstico copiável da atualização', async () => {
+    const escrever = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: escrever } });
+    render(<MemoryRouter><Header currentUser={null} /></MemoryRouter>);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Atualizações' }));
+    fireEvent.click(await screen.findByText('Ver detalhes técnicos'));
+    fireEvent.click(screen.getByRole('button', { name: /copiar detalhes/i }));
+
+    await vi.waitFor(() => expect(escrever).toHaveBeenCalledWith(expect.stringContaining('izaias.santos@policiacientifica.pr.gov.br')));
+    expect(escrever).toHaveBeenCalledWith(expect.stringContaining('https://github.com/issjunior/laWdo'));
+  });
+
   it('oferece tema e informações como ações diretas sem repetir o nome da sessão', () => {
     render(<MemoryRouter><Header currentUser={{ nome: 'Izaias Santos de Souza Júnior' }} /></MemoryRouter>);
 

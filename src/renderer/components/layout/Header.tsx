@@ -229,6 +229,9 @@ export const Header: React.FC<HeaderProps> = ({ currentUser }) => {
       `Ocorrido em: ${new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'medium' }).format(new Date(falhaAtualizacao.ocorridoEm))}`,
       `Versão do laWdo: v${appInfo?.version ?? atualizacao?.versaoInstalada ?? 'não identificada'}`,
       `Detalhe técnico: ${falhaAtualizacao.detalheTecnico}`,
+      'Anexe os logs locais pelo canal autorizado, sem incluir dados de REPs, laudos, credenciais ou chaves.',
+      'Desenvolvedor: izaias.santos@policiacientifica.pr.gov.br',
+      'Projeto: https://github.com/issjunior/laWdo',
     ].join('\n');
     try {
       await navigator.clipboard.writeText(detalhes);

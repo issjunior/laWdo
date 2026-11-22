@@ -1,83 +1,41 @@
-# Backup pré-atualização
+# Recuperação pré-atualização
 
-## Responsabilidade e vínculo com o fluxo
+## Responsabilidade
 
-`BackupAtualizacaoService` protege o estado local antes de qualquer instalação. Ele é chamado por `AtualizacaoService` depois da autorização de reinício na instalação imediata ou durante o processamento de uma atualização agendada. O campo assinado `requerBackupCompletoImagens`, produzido pelo fluxo descrito em `spec/11 github actions/workflows_github_actions.md`, decide entre snapshot do banco e backup completo.
+A proteção de dados antes da instalação automática é responsabilidade de `RecuperacaoAtualizacaoService`, em `src/main/services/recuperacao-atualizacao.service.ts`. `AtualizacaoService` chama `preparar(versaoDestino)` após a autorização de reinício, ou antes de executar uma pendência agendada. Esta política substitui o uso ativo de `BackupAtualizacaoService` no fluxo de atualização.
 
-Esta spec complementa `fluxo_atualizacao.md`: aquela define quando o backup é exigido; esta define o que é criado, validado, retido e deixado em caso de falha.
+O mecanismo protege uma atualização interrompida antes de a versão nova completar a abertura. Ele não é o backup comum do usuário, não substitui exportações de backup e não faz rollback automático do executável.
 
-## Fontes e armazenamento
+## Conjunto protegido e formato persistido
 
-| Dado | Local atual |
-|---|---|
-| banco de origem | `userData/laudopericial.db` |
-| snapshots e manifestos | `userData/backups-atualizacao` |
-| imagens de origem | `userData/imagens` |
-| implementação | `src/main/services/backup-atualizacao.service.ts` |
-| schema registrado | `getSchemaVersion()` em `src/main/database/index.ts` |
-| checkpoint do banco aberto | `executeNonQuery()` em `src/main/database/sqlite.ts` |
+| Item | Origem | Destino no snapshot |
+|---|---|---|
+| SQLite | `userData/laudopericial.db` | `backups-atualizacao/transacao-<id>/laudopericial.db` |
+| imagens | `userData/imagens` | `transacao-<id>/imagens` |
+| avatares | `userData/avatars` | `transacao-<id>/avatars` |
+| estado local GDL | `userData/gdl` | `transacao-<id>/gdl` |
+| marcador | — | `userData/recuperacao-atualizacao-pendente.json` |
 
-Os backups pré-atualização são separados do backup comum da aplicação. Não existe restauração automática ou interface de recuperação para esses artefatos.
+O marcador JSON formato 1 é gravado por arquivo temporário e rename. Ele guarda ID, data, versões origem/destino, schema de origem, diretório do snapshot e estado. O caminho do snapshot é aceito na leitura apenas se estiver dentro de `userData/backups-atualizacao`, evitando que um JSON inválido direcione cópias para outro local.
 
-## Snapshot do SQLite
+Caches, logs e temporários não fazem parte da transação. Cada arquivo copiado nas árvores protegidas é validado por SHA-256. O banco é criado por `criarBackupConsistente` e validado em modo somente leitura por `PRAGMA integrity_check`.
 
-`criarSnapshot(versaoDestino)` executa:
+## Ciclo de vida e falhas
 
-1. exige que `laudopericial.db` exista;
-2. solicita `PRAGMA wal_checkpoint(FULL)` na conexão ativa;
-3. lê a versão atual do schema;
-4. copia o banco com `COPYFILE_EXCL` para um nome que contém data, versão de origem e destino;
-5. abre a cópia em modo somente leitura e exige `PRAGMA integrity_check = ok`;
-6. calcula tamanho e SHA-256;
-7. grava um manifesto JSON formato 1;
-8. aplica a retenção dos snapshots;
-9. retorna os caminhos e metadados.
+A preparação cria primeiro o diretório da transação, depois o banco validado e as árvores; por último escreve o marcador em `preparada`. Qualquer falha de preparação remove somente a transação parcial e bloqueia a instalação.
 
-Falha após a criação remove o banco e o manifesto daquele snapshot. O checkpoint e a cópia não formam uma transação única com a futura instalação; a instalação só prossegue se a Promise do backup concluir.
+Na versão destino, `iniciarVersaoDestino` muda o marcador para `iniciada`. `confirmarSaude` remove o marcador somente depois do banco migrado, dos serviços essenciais e da criação da janela. O diretório do snapshot é deliberadamente mantido; não existe política de retenção automática para esse conjunto no estado atual.
 
-O manifesto registra caminhos absolutos locais, versões de origem e destino, schema, criação, tamanho e hash. Ele descreve recuperação e auditoria local, não é assinado nem publicado.
+Quando há falha antes da confirmação, `restaurarSeInterrompida` valida novamente o banco do snapshot, fecha o banco aberto quando a falha ocorreu durante inicialização, move o estado ativo para `recuperacao-atualizacao-falha-<id>` e repõe banco e árvores protegidas. O marcador é removido apenas após a reposição. Falha de validação ou restauração preserva o ativo e os artefatos disponíveis para investigação.
 
-## Retenção
+Após recuperação bem-sucedida, o processo mostra e copia um diagnóstico sanitizado. O usuário pode abrir a versão atual assumindo o risco ou fechá-la e reinstalar manualmente uma versão anterior. Instalador anterior ausente não é baixado automaticamente.
 
-A retenção considera manifestos `pre-atualizacao_*.json`, ordenados por `mtime`, e mantém os dois mais recentes. Para cada excedente, remove o banco somente se o caminho registrado estiver no mesmo diretório dos snapshots; depois remove o manifesto.
+## Invariantes e testes
 
-Falha ao interpretar ou remover um snapshot antigo não desfaz o snapshot novo: é registrada como warning e a retenção pode permanecer acima de dois itens.
+- O instalador não começa sem snapshot SQLite íntegro e marcador persistido.
+- O conjunto restaurado é banco, imagens, avatares e estado local GDL; conteúdo de REP e laudo não é mostrado no diagnóstico.
+- Snapshot inválido não pode substituir o banco ativo.
+- Uma recuperação preserva o estado falho separado para suporte.
+- A recuperação de dados não confirma compatibilidade ou reinstala o binário anterior.
 
-Diretórios de backup completo não entram nessa varredura. Portanto, o limite de dois vale apenas para pares snapshot/manifesto; backups completos de imagens permanecem sem retenção automática.
-
-## Backup completo de banco e imagens
-
-`criarBackupCompleto` cria primeiro um snapshot válido. Depois:
-
-1. enumera recursivamente arquivos em `userData/imagens`;
-2. registra caminho relativo, tamanho e SHA-256 de cada imagem;
-3. cria um diretório `pre-atualizacao_completo_*`;
-4. copia o snapshot do banco para esse diretório e compara seu hash;
-5. copia cada imagem preservando o caminho relativo;
-6. valida tamanho e hash de cada cópia;
-7. grava `manifesto.json` dentro do backup completo.
-
-Se o diretório `imagens` não existir, o backup completo ainda é válido com lista vazia. Links simbólicos e entradas que não sejam arquivo ou diretório não são incluídos.
-
-Uma falha remove o diretório completo parcial, mas preserva o snapshot criado no início. Logo, snapshot e backup completo não são uma operação transacional única; a instalação é bloqueada, mas pode restar um snapshot válido sujeito à retenção normal.
-
-## Consistência, desempenho e espaço
-
-O checkpoint protege a cópia do SQLite, mas não existe congelamento transacional conjunto entre banco e árvore de imagens. As imagens são enumeradas e copiadas sequencialmente; uma alteração externa durante o processo pode causar divergência e falha ou produzir um conjunto capturado em momentos diferentes.
-
-As operações de cópia e hash usam APIs síncronas e leem arquivos completos para calcular SHA-256. Backups com muitas imagens bloqueiam o processo principal por mais tempo e calculam hashes na origem e novamente no destino. Não há cálculo prévio de espaço livre; falta de espaço aparece como falha de I/O e bloqueia a atualização.
-
-O banco aparece no snapshot e novamente dentro do backup completo. Essa duplicação é deliberada no comportamento atual, mas aumenta o espaço necessário.
-
-## Invariantes
-
-- A ausência do banco, falha do checkpoint, integridade diferente de `ok`, cópia incompleta ou hash divergente bloqueia a instalação.
-- O snapshot sempre registra versão de origem, versão de destino e schema.
-- O backup completo nunca substitui a exigência do snapshot: ele é construído a partir de um snapshot já validado.
-- Caminhos relativos das imagens precisam permanecer dentro da árvore de dados ao serem reconstruídos.
-- Alterar `requerBackupCompletoImagens` no manifesto afeta conjuntamente GitHub Actions, assinatura, `AtualizacaoService` e esta política de backup.
-- Retenção de snapshots e retenção de backups completos são comportamentos diferentes; atualmente apenas a primeira existe.
-
-## Cobertura atual
-
-`src/__tests__/main/backup-atualizacao.service.test.ts` comprova checkpoint WAL, criação de snapshot íntegro com versão/schema/hash e backup completo com imagem registrada. Não há cobertura automatizada para retenção acima de dois, corrupção no destino, falta de espaço, falha parcial durante várias imagens, concorrência com alterações de imagens ou recuperação manual.
+`src/__tests__/main/recuperacao-atualizacao.service.test.ts` protege a restauração completa, a confirmação de saúde, a recusa de snapshot corrompido e o relato sanitizado.

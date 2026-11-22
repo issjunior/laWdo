@@ -39,8 +39,8 @@ jobs:
       - name: Executar lint
         run: npm run lint
 
-      - name: Executar testes com cobertura
-        run: npm run test:coverage
+      - name: Executar testes funcionais
+        run: npm test
 
       - name: Executar testes de release
         run: npm run test:release

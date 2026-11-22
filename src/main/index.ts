@@ -4,14 +4,14 @@ import { normalizarFalhaDiagnosticoGdl, normalizarFalhaDiagnosticoImagem } from 
 import { conectarDiagnosticoGpu, diagnosticoGpu, encerrarDiagnosticoGpu, preparacaoGpu } from './diagnostico-gpu.js';
 import { schemaConsultarGpuEntrada } from '../shared/diagnostico/contratos.js';
 import { configurarObservadorGdl } from './services/gdl-diagnostico.service.js';
-import { app, BrowserWindow, dialog, shell, globalShortcut, ipcMain } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, shell, globalShortcut, ipcMain } from 'electron';
 import path from 'path';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath, pathToFileURL } from 'url';
 import squirrelStartup from 'electron-squirrel-startup';
 import { setupSecurity } from './security/index.js';
-import { CURRENT_SCHEMA_VERSION, setupDatabase } from './database/index.js';
+import { CURRENT_SCHEMA_VERSION, getSchemaVersion, setupDatabase } from './database/index.js';
 import { closeDatabase, executeQuery } from './database/sqlite.js';
 import { getLogger, logDebug, setupLogging } from './utils/logger.js';
 import { registerIpcHandlers } from './ipc/index.js';
@@ -28,6 +28,7 @@ import { iaExecucaoService } from './services/ia-execucao.service.js';
 import { googleDriveService } from './services/google-drive.service.js';
 import { authSessaoService } from './services/auth-sessao.service.js';
 import { concluirRestauracaoPendente, reverterRestauracaoPendente } from './services/backup.service.js';
+import { formatarRelatoRecuperacao, recuperacaoAtualizacaoService } from './services/recuperacao-atualizacao.service.js';
 import { desempenhoService } from './services/desempenho.service.js';
 import { capturaLogsService } from './services/captura-logs.service.js';
 import { EncerramentoAplicativoService } from './services/encerramento-aplicativo.service.js';
@@ -676,6 +677,26 @@ app.whenReady().then(async () => {
     setupSecurity();
     logDebug('Verificando atualização agendada');
     if (await atualizacaoService.processarPendenciaInicializacao()) return;
+    const recuperacaoInterrompida = await recuperacaoAtualizacaoService.restaurarSeInterrompida();
+    if (recuperacaoInterrompida) {
+      log.error('Atualização interrompida: dados locais restaurados.', recuperacaoInterrompida);
+      const diagnostico = formatarRelatoRecuperacao(recuperacaoInterrompida);
+      clipboard.writeText(diagnostico);
+      const escolha = await dialog.showMessageBox({
+        type: 'error',
+        buttons: ['Abrir versão atual', 'Fechar laWdo'],
+        defaultId: 1,
+        cancelId: 1,
+        title: 'Dados restaurados após falha de atualização',
+        message: 'O laWdo detectou que a atualização anterior não concluiu a abertura e restaurou seus dados locais.',
+        detail: `${diagnostico}\n\nO diagnóstico foi copiado. Você pode tentar abrir a versão atual ou fechá-la e reinstalar a versão anterior.`,
+      });
+      if (escolha.response === 1) {
+        app.quit();
+        return;
+      }
+    }
+    recuperacaoAtualizacaoService.iniciarVersaoDestino();
     logDebug('Preparando banco de dados');
     try {
       await setupDatabase();
@@ -736,6 +757,7 @@ app.whenReady().then(async () => {
 
     // Criar janela
     await createWindow();
+    recuperacaoAtualizacaoService.confirmarSaude(await getSchemaVersion());
 
     void criarAtalhoDesktopLinux();
     void criarAtalhoMesaMacOS();
@@ -768,6 +790,20 @@ app.whenReady().then(async () => {
     log.debug('Aplicação Electron inicializada com sucesso');
   } catch (error) {
     const mensagemTecnica = error instanceof Error ? error.message : 'Erro inesperado';
+    let relatoRecuperacao: ReturnType<typeof formatarRelatoRecuperacao> | undefined;
+    try {
+      await closeDatabase();
+      const recuperacao = await recuperacaoAtualizacaoService.restaurarSeInterrompida();
+      if (recuperacao) {
+        log.error('Dados restaurados após falha de atualização.', recuperacao);
+        relatoRecuperacao = formatarRelatoRecuperacao(recuperacao);
+        clipboard.writeText(relatoRecuperacao);
+      }
+    } catch (erroRecuperacao) {
+      log.error('Não foi possível restaurar dados após falha de atualização.', {
+        erro: erroRecuperacao instanceof Error ? erroRecuperacao.message : 'Erro inesperado',
+      });
+    }
     if (modoSmokeSchema) {
       if (caminhoRelatorioSmoke) {
         await mkdir(path.dirname(caminhoRelatorioSmoke), { recursive: true });
@@ -807,7 +843,9 @@ app.whenReady().then(async () => {
       cancelId: 2,
       title: falhaJanela ? 'Não foi possível abrir o laWdo' : 'Não foi possível preparar os dados locais',
       message: falhaJanela ? 'A janela do aplicativo não conseguiu carregar.' : 'Seus dados foram preservados e nenhuma consulta ao GDL foi realizada.',
-      detail: `Código de suporte: ${codigoRecuperacao}. Reinicie o aplicativo. Se a falha persistir, envie o diagnóstico criado ao suporte; não substitua o banco manualmente.`,
+      detail: relatoRecuperacao
+        ? `${relatoRecuperacao}\n\nO diagnóstico foi copiado. Reinicie o aplicativo. Se a falha persistir, envie-o ao suporte; não substitua o banco manualmente.`
+        : `Código de suporte: ${codigoRecuperacao}. Reinicie o aplicativo. Se a falha persistir, envie o diagnóstico criado ao suporte; não substitua o banco manualmente.`,
     });
     if (resposta.response === 0) {
       app.relaunch();

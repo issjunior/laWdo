@@ -38,6 +38,7 @@
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage --no-file-parallelism",
+    "test:e2e:smoke": "node scripts/e2e/executar-smoke.mjs",
     "smoke:schema": "node scripts/release/executar-smoke-schema.mjs",
     "lint": "eslint . --ext .ts,.tsx",
     "lint:fix": "eslint . --ext .ts,.tsx --fix",

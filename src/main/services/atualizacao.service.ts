@@ -19,7 +19,7 @@ import type {
   ProgressoAtualizacao,
 } from '../../shared/atualizacao/atualizacao.types.js';
 import { getLogger } from '../utils/logger.js';
-import { backupAtualizacaoService } from './backup-atualizacao.service.js';
+import { recuperacaoAtualizacaoService } from './recuperacao-atualizacao.service.js';
 
 const log = getLogger('atualizacao');
 const URL_FEED = 'https://issjunior.github.io/laWdo/stable';
@@ -381,8 +381,7 @@ export class AtualizacaoService {
       if (!this.suportaInstalacaoAutomatica(artefato)) throw new Error('A pendência possui formato sem instalação automática.');
       const caminhoDownload = path.join(this.diretorioAtualizacoes, pendencia.nome);
       this.validarArquivoLocal(artefato, caminhoDownload);
-      if (pendencia.requerBackupCompletoImagens) await backupAtualizacaoService.criarBackupCompleto(pendencia.versao);
-      else await backupAtualizacaoService.criarSnapshot(pendencia.versao);
+      await recuperacaoAtualizacaoService.preparar(pendencia.versao);
       await this.executarInstalador(artefato, caminhoDownload);
       fs.rmSync(this.caminhoPendencia, { force: true });
       return true;
@@ -395,11 +394,7 @@ export class AtualizacaoService {
 
   private async criarBackupObrigatorio(): Promise<void> {
     if (!this.atualizacaoDisponivel) throw new Error('Atualização indisponível para backup.');
-    if (this.atualizacaoDisponivel.requerBackupCompletoImagens) {
-      await backupAtualizacaoService.criarBackupCompleto(this.atualizacaoDisponivel.versao);
-    } else {
-      await backupAtualizacaoService.criarSnapshot(this.atualizacaoDisponivel.versao);
-    }
+    await recuperacaoAtualizacaoService.preparar(this.atualizacaoDisponivel.versao);
   }
 
   private suportaInstalacaoAutomatica(artefato: ArtefatoAtualizacao): boolean {

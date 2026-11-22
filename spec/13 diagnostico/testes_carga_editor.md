@@ -2,6 +2,8 @@
 
 Ferramenta de desenvolvimento para reproduzir gargalos no Electron real. A carga gráfica não integra o CI nem aprova ou bloqueia releases. Somente os testes unitários rápidos da ferramenta integram o CI, por `npm run test:carga:unitarios`; os comandos usuais de desenvolvimento e build não iniciam a suíte. Requer Windows, Node/npm nas versões do projeto e uma sessão gráfica disponível.
 
+O smoke E2E automatizado não é teste de carga: `npm run test:e2e:smoke` prepara um perfil temporário, abre o Electron compilado, autentica um perito fictício, cria uma REP e um laudo a partir de template, salva conteúdo marcado e confirma a persistência após reabrir o fluxo. Ele roda no Windows no workflow manual `e2e-smoke.yml` e como gate da preparação de release. Não mede latência, throughput, CPU ou memória e não substitui os cenários desta spec.
+
 O laWdo é de uso individual: a suíte simula um único usuário, em uma instância de teste por vez, com ações sequenciais. A carga vem do tamanho dos documentos, das edições repetidas e dos processamentos internos encadeados. Os vários processos do Electron pertencem à mesma instância.
 
 ```powershell
@@ -41,6 +43,8 @@ O cenário de células faz três edições consecutivas na mesma célula, posici
 
 Cada execução usa `tmp/teste-carga/execucao-*/`, com marcador de isolamento, banco, caches, imagens e configurações próprios. A inicialização recusa caminhos externos, marcadores inválidos e aplicativo empacotado quando o modo de carga é solicitado. Cada repetição começa com uma cópia nova da massa base. Os dados fictícios e evidências são preservados para investigação; a suíte não remove bancos do usuário.
 
+O smoke E2E usa outro diretório isolado, `tmp/teste-carga/e2e-smoke-*/`, e não compartilha banco, sessão ou evidências com uma execução de carga. Em falha, preserva relatório e diagnóstico no diretório; os workflows o enviam como artefato. O perfil é criado por `scripts/e2e/preparar-smoke.mjs`, e `scripts/e2e/executar-smoke.mjs` inicia apenas os processos Electron que criou e os encerra no `finally`.
+
 Na raiz da execução:
 
 - `resultado.json`: contexto, massas, resultados, métricas, limitações e comparação opcional.
@@ -74,7 +78,7 @@ Comece pelas operações de maior p95 e correlacione os horários com as ações
 
 ## Fontes de verdade e integração
 
-`package.json` define os comandos e mantém Playwright somente nas dependências de desenvolvimento. `scripts/carga/executar.mjs` supervisiona sinais e executa o worker; executor.mjs prepara o build, gera bases e lança casos sequenciais; configuracao.mjs define massas, argumentos e compatibilidade; cenarios.mjs exerce a interface e valida integridade; entrada.mjs controla a cadência; diagnostico.mjs coleta e segmenta métricas; relatorio.mjs consolida evidências. preparar.mjs gera apenas o banco fictício. processos.mjs encerra somente handles criados pela execução.
+`package.json` define os comandos e mantém Playwright somente nas dependências de desenvolvimento. `scripts/carga/executar.mjs` supervisiona sinais e executa o worker; executor.mjs prepara o build, gera bases e lança casos sequenciais; configuracao.mjs define massas, argumentos e compatibilidade; cenarios.mjs exerce a interface e valida integridade; entrada.mjs controla a cadência; diagnostico.mjs coleta e segmenta métricas; relatorio.mjs consolida evidências. preparar.mjs gera apenas o banco fictício. processos.mjs encerra somente handles criados pela execução. O smoke fica em `scripts/e2e/`: `preparar-smoke.mjs` popula o banco isolado e `executar-smoke.mjs` orquestra a abertura, criação, salvamento e nova leitura do laudo.
 
 `src/main/utils/teste-carga.ts` é chamado no bootstrap antes de carregar os serviços: sem LAWDO_TESTE_CARGA=1 retorna imediatamente. Quando solicitado, exige execução não empacotada, LAWDO_SMOKE_JANELA=1, userData descendente real de tmp/teste-carga e marcador isolamento.json com finalidade teste-carga e versão 1. Caminhos são resolvidos com realpath para rejeitar escapes por links. O bootstrap isola userData/sessionData, bloqueia fetch global no main e requisições HTTP/HTTPS/WebSocket das sessões Electron. Não constitui bloqueio genérico de todo transporte Node; os cenários não devem adicionar integrações externas. Nenhum canal IPC novo é criado.
 
