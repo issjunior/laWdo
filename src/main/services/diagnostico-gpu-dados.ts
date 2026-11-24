@@ -7,7 +7,7 @@ export function sanitizarTextoGpu(texto: string): string {
     .replace(/(?:https?|file):\/\/[^\s"'<>]+/gi, '[url]')
     .replace(/\b[A-Z]:[\\/][^\s"'<>]+/gi, '[caminho]')
     .replace(/\/(?:Users|home|tmp)\/[^\s"'<>]+/g, '[caminho]')
-    .replace(/\b(?:password|senha|token|secret|api[_-]?key)\s*[=:]\s*[^\s,;]+/gi, '[credencial]')
+    .replace(/\b(?:password|senha|token|secret|api[_-]?key|authorization[_-]?code|code[_-]?(?:verifier|challenge)|oauth[_-]?state|redirect[_-]?uri)\s*[=:]\s*[^\s,;]+/gi, '[credencial]')
     .replace(/[\w.+-]+@[\w.-]+\.[a-z]{2,}/gi, '[email]')
     .replace(/\b\d{3}\.\d{3}\.\d{3}-\d{2}\b/g, '[documento]');
 }

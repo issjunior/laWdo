@@ -637,6 +637,7 @@ export const ModelosIAPage: React.FC = () => {
                         <Input
                           type={mostrarChave ? 'text' : 'password'}
                           placeholder={apiKeyPlaceholder}
+                          className="pr-10"
                           {...field}
                           value={field.value || ''}
                         />

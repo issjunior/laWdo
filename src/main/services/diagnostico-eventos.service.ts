@@ -18,7 +18,7 @@ export interface FiltrosEventosDiagnostico {
   correlacaoId?: string;
 }
 
-const chavesSensiveis = /senha|password|token|secret|api.?key|cpf|rg|email|telefone|foto|avatar|endere[cç]o|textcontent|innertext|\bvalue\b|conteudo(?:editavel)?|mensagem/i;
+const chavesSensiveis = /senha|password|token|secret|api.?key|authorization.?code|code[_-]?(?:verifier|challenge)|oauth.?state|redirect[_-]?uri|callback|cpf|rg|email|telefone|foto|avatar|endere[cç]o|textcontent|innertext|\bvalue\b|conteudo(?:editavel)?|mensagem/i;
 
 export function sanitizarDadosDiagnostico(valor: unknown, profundidade = 0): unknown {
   if (profundidade >= 6) return '[profundidade_maxima]';

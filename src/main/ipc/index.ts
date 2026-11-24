@@ -304,9 +304,17 @@ const registerAuthHandlers = (): void => {
   });
   // Logout
   ipcMain.handle('logout', async event => {
-    authSessaoService.encerrar(event.sender.id);
+    const usuarioId = authSessaoService.exigir(event.sender.id);
+    let desconexaoDrive = { revogacaoRemota: false };
+    try {
+      desconexaoDrive = await googleDriveService.desconectar(usuarioId);
+    } catch (erro) {
+      log.warn('Não foi possível remover a conexão do Google Drive durante o logout.', { usuarioId, erro });
+    } finally {
+      authSessaoService.encerrar(event.sender.id);
+    }
     log.info('Logout solicitado');
-    return { success: true };
+    return { success: true, desconexaoDrive };
   });
 
 };

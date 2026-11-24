@@ -12,14 +12,15 @@ const mocks = vi.hoisted(() => ({
   cifrar: vi.fn(async (_origem: string, destino: string) => writeFile(destino, 'pacote cifrado')),
   decifrar: vi.fn(async (_origem: string, destino: string) => writeFile(destino, 'pacote decifrado')),
   validarJwt: vi.fn(),
-  obterSegredoCliente: vi.fn(),
+  obterConfiguracao: vi.fn(),
+  executarBanco: vi.fn(),
 }));
 
 vi.mock('electron', () => ({ app: { getPath: vi.fn(() => os.tmpdir()), isPackaged: false, getAppPath: vi.fn(() => os.tmpdir()) }, shell: { openExternal: vi.fn() } }));
-vi.mock('../../main/database/sqlite', () => ({ executeQuery: mocks.consultarBanco, executeNonQuery: vi.fn(), withTransaction: async <T>(operacao: () => Promise<T>) => operacao() }));
-vi.mock('../../main/services/configuracao.service', () => ({ configuracaoService: { obter: vi.fn(), salvar: mocks.salvarConfiguracao } }));
-vi.mock('../../main/services/safe-storage.service', () => ({ safeStorageService: { isAvailable: vi.fn(() => true) } }));
-vi.mock('../../main/services/google-drive-oauth.service', () => ({ CLIENT_ID_GOOGLE_DRIVE: 'cliente', obterSegredoClienteGoogleDrive: mocks.obterSegredoCliente }));
+vi.mock('../../main/database/sqlite', () => ({ executeQuery: mocks.consultarBanco, executeNonQuery: mocks.executarBanco, withTransaction: async <T>(operacao: () => Promise<T>) => operacao() }));
+vi.mock('../../main/services/configuracao.service', () => ({ configuracaoService: { obter: mocks.obterConfiguracao, salvar: mocks.salvarConfiguracao } }));
+vi.mock('../../main/services/safe-storage.service', () => ({ safeStorageService: { isSecurelyAvailable: vi.fn(() => true) } }));
+vi.mock('../../main/services/google-drive-oauth.service', () => ({ CLIENT_ID_GOOGLE_DRIVE: 'cliente', obterSegredoClienteGoogleDrive: vi.fn(async () => 'segredo-cliente') }));
 vi.mock('../../main/services/laudo-bkp.service', () => ({ exportarBkpLaudo: mocks.exportarBkp, lerBkpLaudo: mocks.lerBkp }));
 vi.mock('../../main/services/google-drive-pacote.service', () => ({ cifrarPacoteGoogleDrive: mocks.cifrar, decifrarPacoteGoogleDrive: mocks.decifrar, criarChavePacoteGoogleDrive: vi.fn(() => Buffer.alloc(32, 1)) }));
 vi.mock('../../main/utils/logger', () => ({ getLogger: vi.fn(() => ({ warn: vi.fn(), info: vi.fn(), error: vi.fn() })) }));
@@ -50,8 +51,8 @@ type ServicoInterno = {
   verificarAcessoDadosApp: (usuarioId: string) => Promise<void>;
   migrarControleLegado: (usuarioId: string, raizId: string) => Promise<void>;
   estado: (usuarioId: string) => Promise<{ conectado: boolean; email?: string; envioAutomatico: boolean; pendencias: number }>;
-  validarIdentidadeGoogle: (idToken: unknown, nonce: string) => Promise<{ email: string }>;
-  salvarConexao: (usuarioId: string, tokens: { access_token: string; refresh_token?: string; expires_at: number; escopos?: string[] }, email: string) => Promise<void>;
+  validarIdentidadeGoogle: (idToken: unknown, nonce: string) => Promise<{ email: string; sub: string }>;
+  salvarConexao: (usuarioId: string, tokens: { access_token: string; refresh_token?: string; expires_at: number; escopos?: string[] }, identidade: { email: string; sub: string }) => Promise<void>;
   listar: (usuarioId: string, consulta: string, campos: string, sinal?: AbortSignal) => Promise<ArquivoDrive[]>;
   obterArquivoDrive: (usuarioId: string, arquivoId: string, sinal?: AbortSignal) => Promise<ArquivoDrive | null>;
   listarCopiasDoLaudo: (usuarioId: string, raizId: string, laudoId: string, sinal?: AbortSignal) => Promise<CopiaLocalizada[]>;
@@ -69,7 +70,8 @@ beforeEach(() => {
   mocks.cifrar.mockClear();
   mocks.decifrar.mockClear();
   mocks.validarJwt.mockReset();
-  mocks.obterSegredoCliente.mockReset().mockResolvedValue('segredo-de-teste');
+  mocks.obterConfiguracao.mockReset().mockResolvedValue(null);
+  mocks.executarBanco.mockReset().mockResolvedValue(undefined);
   vi.mocked(shell.openExternal).mockReset();
 });
 
@@ -113,11 +115,39 @@ describe('GoogleDriveService', () => {
     expect(mocks.salvarConfiguracao).not.toHaveBeenCalled();
   });
 
-  it('persiste tokens e e-mail na mesma transação após a validação da conexão', async () => {
-    await servico.salvarConexao('usuario-1', { access_token: 'token-novo', refresh_token: 'refresh-novo', expires_at: 1, escopos: [] }, 'perito@policiacientifica.pr.gov.br');
+  it('persiste tokens, e-mail e identificador estável na mesma transação após a validação da conexão', async () => {
+    await servico.salvarConexao('usuario-1', { access_token: 'token-novo', refresh_token: 'refresh-novo', expires_at: 1, escopos: [] }, { email: 'perito@policiacientifica.pr.gov.br', sub: 'conta-google' });
 
     expect(mocks.salvarConfiguracao).toHaveBeenCalledWith('google_drive_tokens_usuario-1', expect.any(String), 'api_key', 'Tokens OAuth do Google Drive');
     expect(mocks.salvarConfiguracao).toHaveBeenCalledWith('google_drive_email_usuario-1', 'perito@policiacientifica.pr.gov.br', 'texto', 'Conta Google Drive autorizada');
+    expect(mocks.salvarConfiguracao).toHaveBeenCalledWith('google_drive_sub_usuario-1', 'conta-google', 'texto', 'Identificador estável da conta Google Drive');
+  });
+
+  it('renova o token com client_id e client_secret provisionado', async () => {
+    mocks.obterConfiguracao.mockResolvedValueOnce(JSON.stringify({ access_token: 'vencido', refresh_token: 'refresh', expires_at: 0, escopos: [] }));
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ access_token: 'novo', expires_in: 3600 }), { status: 200 })));
+
+    await expect(servico.tokenValido('usuario-1')).resolves.toBe('novo');
+
+    const corpo = vi.mocked(fetch).mock.calls[0]?.[1]?.body as URLSearchParams;
+    expect(corpo.get('client_id')).toBe('cliente');
+    expect(corpo.get('client_secret')).toBe('segredo-cliente');
+  });
+
+  it('limpa as credenciais locais quando o Google devolve invalid_grant', async () => {
+    mocks.obterConfiguracao.mockResolvedValueOnce(JSON.stringify({ access_token: 'vencido', refresh_token: 'refresh', expires_at: 0, escopos: [] }));
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ error: 'invalid_grant' }), { status: 400 })));
+
+    await expect(servico.tokenValido('usuario-1')).rejects.toMatchObject({ codigo: 'invalid_grant' } satisfies Partial<ErroGoogleDrive>);
+
+    expect(mocks.executarBanco).toHaveBeenCalledWith('DELETE FROM configuracoes WHERE chave = ?', ['google_drive_tokens_usuario-1']);
+  });
+
+  it('classifica a recusa do cliente sem registrar a descrição OAuth', async () => {
+    mocks.obterConfiguracao.mockResolvedValueOnce(JSON.stringify({ access_token: 'vencido', refresh_token: 'refresh', expires_at: 0, escopos: [] }));
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ error: 'invalid_request', error_description: 'Missing required parameter: client_secret' }), { status: 400 })));
+
+    await expect(servico.tokenValido('usuario-1')).rejects.toMatchObject({ codigo: 'invalid_request_client_secret_rejeitado' } satisfies Partial<ErroGoogleDrive>);
   });
 
   it('abre no navegador a pasta exclusiva do laWdo da conta conectada', async () => {

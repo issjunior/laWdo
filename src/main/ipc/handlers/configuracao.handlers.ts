@@ -2,6 +2,10 @@ import { ipcMain } from 'electron';
 import { logError } from '../../utils/logger.js';
 import { configuracaoService } from '../../services/configuracao.service.js';
 
+function ehConfiguracaoPrivadaGoogleDrive(chave: string): boolean {
+  return chave.startsWith('google_drive_');
+}
+
 /**
  * Registra handlers IPC para operações de configuração
  */
@@ -13,6 +17,9 @@ export const registerConfiguracaoHandlers = (): void => {
     try {
       if (!chave || typeof chave !== 'string') {
         return { success: false, error: 'Chave inválida' };
+      }
+      if (ehConfiguracaoPrivadaGoogleDrive(chave)) {
+        return { success: false, error: 'Esta configuração é administrada pelo Google Drive.' };
       }
 
       const valor = await configuracaoService.obter(chave);
@@ -33,6 +40,9 @@ export const registerConfiguracaoHandlers = (): void => {
     try {
       if (!chave || typeof chave !== 'string') {
         return { success: false, error: 'Chave inválida' };
+      }
+      if (ehConfiguracaoPrivadaGoogleDrive(chave)) {
+        return { success: false, error: 'Esta configuração é administrada pelo Google Drive.' };
       }
 
       await configuracaoService.salvar(

@@ -1176,7 +1176,7 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
               <ListChecks size={16} /> {atualizandoFiguras ? 'Atualizando figuras...' : 'Atualizar Figuras'}
             </Button>
           </div>
-          <div className="space-y-3 max-h-[300px] overflow-y-auto custom-scrollbar px-4">
+          <div className="space-y-3 max-h-[300px] overflow-y-auto custom-scrollbar px-4 py-1">
             {figurasNoEditor.map((fig, idx) => (
               <FiguraEditorItem
                 key={fig.ocorrenciaId || `${fig.id}-${idx}`}

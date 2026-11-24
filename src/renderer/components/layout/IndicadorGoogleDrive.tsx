@@ -127,11 +127,14 @@ export function IndicadorGoogleDrive() {
     void carregarRapido();
     const intervalo = window.setInterval(() => void carregarRapido(), 30_000);
     const aoReceberFoco = () => void carregarRapido();
+    const aoAlterarEstado = () => void carregarRapido();
     window.addEventListener('focus', aoReceberFoco);
+    window.addEventListener('google-drive:estado-alterado', aoAlterarEstado);
     return () => {
       montado.current = false;
       window.clearInterval(intervalo);
       window.removeEventListener('focus', aoReceberFoco);
+      window.removeEventListener('google-drive:estado-alterado', aoAlterarEstado);
     };
   }, [carregarRapido]);
 

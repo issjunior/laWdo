@@ -111,6 +111,23 @@ describe('seleção das imagens do backup completo', () => {
     expect(await backup.previaBackupCompleto(extraido, manifesto)).toMatchObject({ imagens: 0 });
   });
 
+  it('exclui a sessão e os metadados do Google Drive do backup completo', async () => {
+    await sqlite.executeNonQuery('INSERT INTO configuracoes (chave, valor) VALUES (?, ?)', ['google_drive_tokens_perito', 'token-cifrado']);
+    await sqlite.executeNonQuery('INSERT INTO configuracoes (chave, valor) VALUES (?, ?)', ['google_drive_sub_perito', 'conta-google']);
+    await sqlite.executeNonQuery('INSERT INTO configuracoes (chave, valor) VALUES (?, ?)', ['configuracao_comum', 'preservada']);
+
+    const { extraido } = await criarEExtrair();
+    const conexao = await bancoBackup.abrirBancoBackup(path.join(extraido, 'laudopericial.db'), true);
+    try {
+      expect(await bancoBackup.consultarBackup(conexao, "SELECT chave FROM configuracoes WHERE chave LIKE 'google_drive_%'"))
+        .toEqual([]);
+      expect(await bancoBackup.consultarBackup(conexao, "SELECT valor FROM configuracoes WHERE chave = 'configuracao_comum'"))
+        .toEqual([{ valor: 'preservada' }]);
+    } finally {
+      await bancoBackup.encerrarBancoBackup(conexao);
+    }
+  });
+
   it.each(['ausente', 'outro-laudo', 'origem-ausente', 'origem-outro-laudo', 'ciclo', 'id-invalido', 'arquivo-ausente'])(
     'recusa %s sem alterar os dados ativos', async cenario => {
       await adicionarImagem('foto');

@@ -2678,6 +2678,18 @@ export const LaudosPage: React.FC = () => {
     setEditando({ ...laudo, apresentacao_json: laudoCompleto.apresentacao_json });
   }, [navigate, placeholderChaves, buildSingleHtmlFromSecoes, iniciarSessao, montarHtmlEstruturalAtual, placeholders]);
 
+  useEffect(() => {
+    const estadoNavegacao = location.state;
+    const laudoId = isRecord(estadoNavegacao) && isString(estadoNavegacao.abrirLaudoId)
+      ? estadoNavegacao.abrirLaudoId
+      : null;
+    if (!laudoId || loading) return;
+
+    navigate(`${location.pathname}${location.search}`, { replace: true, state: null });
+    const laudo = laudos.find(item => item.id === laudoId);
+    if (laudo) void handleEditar(laudo);
+  }, [handleEditar, laudos, loading, location.pathname, location.search, location.state, navigate]);
+
   const aplicarModoNoEditor = useCallback((editor: TinyMceEditorInstance) => {
     agendarVisualizacaoPlaceholders(editor, {
       modo: modoVisualizacaoPlaceholders,

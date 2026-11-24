@@ -28,6 +28,7 @@ const VERSAO_VALIDACAO_FILA = 2;
 const DURACAO_CACHE_RESUMO_MS = 5 * 60 * 1000;
 const LIMITE_BACKUPS_BYTES = 10 * 1024 ** 3;
 const TEMPO_LIMITE_REQUISICAO_MS = 45_000;
+const MARGEM_RENOVACAO_TOKEN_MS = 90_000;
 const TEMPO_LIMITE_INATIVIDADE_DOWNLOAD_MS = 90_000;
 const TAMANHO_BLOCO_UPLOAD = 8 * 1024 * 1024;
 const TENTATIVAS_RECUPERACAO_UPLOAD = 3;
@@ -99,9 +100,7 @@ function codigoErroOAuth(dados: unknown, status: number): string {
   const descricao = dados && typeof dados === 'object' && 'error_description' in dados && typeof dados.error_description === 'string'
     ? dados.error_description : '';
   const motivos: Array<[RegExp, string]> = [
-    [/^\s*missing required parameter:\s*client_secret\.?\s*$/i, 'client_secret_ausente_confirmado'],
-    [/^\s*(?:the\s+)?client_secret\s+(?:is\s+)?(?:missing|required|not provided)\.?\s*$/i, 'client_secret_ausente_confirmado'],
-    [/client[_ ]secret/i, 'client_secret_mencionado_motivo_desconhecido'],
+    [/client[_ ]secret/i, 'client_secret_rejeitado'],
     [/code[_ ]verifier/i, 'code_verifier_rejeitado'],
     [/redirect[_ ]uri/i, 'redirect_uri_rejeitado'],
     [/client[_ ]id/i, 'client_id_rejeitado'],
@@ -144,6 +143,7 @@ class GoogleDriveService {
   private readonly processamentosFila = new Map<string, Promise<void>>();
   private readonly temporizadoresFila = new Map<string, NodeJS.Timeout>();
   private readonly conexoesEmAndamento = new Map<string, Promise<EstadoGoogleDrive>>();
+  private readonly renovacoesTokens = new Map<string, Promise<string>>();
   private readonly versoesConexao = new Map<string, number>();
   private readonly tokensTemporarios = new Map<string, { versao: number; tokens: Tokens }>();
   private registradorDiagnostico?: RegistradorDiagnosticoGoogleDrive;
@@ -153,7 +153,7 @@ class GoogleDriveService {
   }
 
   private async obterTokens(usuarioId: string): Promise<Tokens | null> {
-    if (!safeStorageService.isAvailable()) return null;
+    if (!safeStorageService.isSecurelyAvailable()) return null;
     const temporario = this.tokensTemporarios.get(usuarioId);
     if (temporario) return temporario.tokens;
     const valor = await configuracaoService.obter(chave('tokens', usuarioId));
@@ -166,7 +166,7 @@ class GoogleDriveService {
   }
 
   private async salvarTokens(usuarioId: string, tokens: Tokens) {
-    if (!safeStorageService.isAvailable()) throw new ErroGoogleDrive('trocar_codigo_oauth', 'A proteção local de credenciais não está disponível neste dispositivo.', 'protecao_local_indisponivel');
+    if (!safeStorageService.isSecurelyAvailable()) throw new ErroGoogleDrive('trocar_codigo_oauth', 'A proteção local de credenciais não está disponível neste dispositivo.', 'protecao_local_indisponivel');
     await configuracaoService.salvar(chave('tokens', usuarioId), JSON.stringify(tokens), 'api_key', 'Tokens OAuth do Google Drive');
   }
 
@@ -176,7 +176,7 @@ class GoogleDriveService {
     }
   }
 
-  private async validarIdentidadeGoogle(idToken: unknown, nonce: string): Promise<{ email: string }> {
+  private async validarIdentidadeGoogle(idToken: unknown, nonce: string): Promise<{ email: string; sub: string }> {
     if (typeof idToken !== 'string') {
       throw new ErroGoogleDrive('validar_conta_institucional', 'O Google não devolveu a identificação da conta autorizada.', 'id_token_ausente');
     }
@@ -197,20 +197,15 @@ class GoogleDriveService {
       || !email.toLowerCase().endsWith(`@${DOMINIO_INSTITUCIONAL}`)) {
       throw new ErroGoogleDrive('validar_conta_institucional', 'Esta conta não é institucional ou não foi autorizada pela organização.', 'conta_institucional_nao_confirmada');
     }
-    return { email };
+    return { email, sub: payload.sub };
   }
 
-  private async salvarConexao(usuarioId: string, tokens: Tokens, email: string): Promise<void> {
+  private async salvarConexao(usuarioId: string, tokens: Tokens, identidade: { email: string; sub: string }): Promise<void> {
     await withTransaction(async () => {
       await this.salvarTokens(usuarioId, tokens);
-      await configuracaoService.salvar(chave('email', usuarioId), email, 'texto', 'Conta Google Drive autorizada');
+      await configuracaoService.salvar(chave('email', usuarioId), identidade.email, 'texto', 'Conta Google Drive autorizada');
+      await configuracaoService.salvar(chave('sub', usuarioId), identidade.sub, 'texto', 'Identificador estável da conta Google Drive');
     });
-  }
-
-  private async segredoClienteObrigatorio(etapa: 'trocar_codigo_oauth' | 'renovar_token'): Promise<string> {
-    const segredo = await obterSegredoClienteGoogleDrive();
-    if (!segredo) throw new ErroGoogleDrive(etapa, 'A integração Google Drive precisa ser configurada pelo responsável pela instalação.', 'configuracao_oauth_indisponivel');
-    return segredo;
   }
 
   private async obterFila(usuarioId: string): Promise<ItemFilaGoogleDrive[]> {
@@ -341,19 +336,50 @@ class GoogleDriveService {
   }
 
   private async tokenValido(usuarioId: string): Promise<string> {
-    if (!safeStorageService.isAvailable()) throw new ErroGoogleDrive('renovar_token', 'A proteção local de credenciais não está disponível neste dispositivo.', 'protecao_local_indisponivel');
+    if (!safeStorageService.isSecurelyAvailable()) throw new ErroGoogleDrive('renovar_token', 'A proteção local de credenciais não está disponível neste dispositivo.', 'protecao_local_indisponivel');
     const tokens = await this.obterTokens(usuarioId);
     if (!tokens) throw new Error('Conecte uma conta institucional do Google Drive.');
-    if (tokens.expires_at > Date.now() + 30_000) return tokens.access_token;
+    if (tokens.expires_at > Date.now() + MARGEM_RENOVACAO_TOKEN_MS) return tokens.access_token;
     if (!tokens.refresh_token) throw new ErroGoogleDrive('renovar_token', 'A autorização do Google Drive expirou. Conecte a conta novamente.', 'refresh_token_ausente');
+    const emAndamento = this.renovacoesTokens.get(usuarioId);
+    if (emAndamento) return emAndamento;
+    const renovacao = this.renovarToken(usuarioId, tokens).finally(() => this.renovacoesTokens.delete(usuarioId));
+    this.renovacoesTokens.set(usuarioId, renovacao);
+    return renovacao;
+  }
+
+  private async obterSegredoClienteObrigatorio(etapa: 'trocar_codigo_oauth' | 'renovar_token'): Promise<string> {
+    const segredo = await obterSegredoClienteGoogleDrive();
+    if (segredo) return segredo;
+    throw new ErroGoogleDrive(etapa, 'A integração Google Drive precisa ser configurada pelo responsável.', 'configuracao_oauth_indisponivel');
+  }
+
+  private async renovarToken(usuarioId: string, tokens: Tokens): Promise<string> {
+    const clientSecret = await this.obterSegredoClienteObrigatorio('renovar_token');
     let resposta: Response;
-    const clientSecret = await this.segredoClienteObrigatorio('renovar_token');
-    try { resposta = await fetch('https://oauth2.googleapis.com/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ client_id: CLIENT_ID, client_secret: clientSecret, grant_type: 'refresh_token', refresh_token: tokens.refresh_token }), signal: AbortSignal.timeout(TEMPO_LIMITE_REQUISICAO_MS) }); }
-    catch { throw new ErroGoogleDrive('renovar_token', 'Não foi possível renovar a autorização do Google Drive.', 'rede_indisponivel'); }
+    try {
+      resposta = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ client_id: CLIENT_ID, client_secret: clientSecret, grant_type: 'refresh_token', refresh_token: tokens.refresh_token! }),
+        signal: AbortSignal.timeout(TEMPO_LIMITE_REQUISICAO_MS),
+      });
+    } catch {
+      throw new ErroGoogleDrive('renovar_token', 'Não foi possível renovar a autorização do Google Drive.', 'rede_indisponivel');
+    }
     const dados: unknown = await resposta.json().catch(() => null);
-    if (!resposta.ok || !dados || typeof dados !== 'object' || typeof (dados as Record<string, unknown>).access_token !== 'string') throw new ErroGoogleDrive('renovar_token', 'O Google recusou a renovação da autorização. Conecte a conta novamente.', codigoErroOAuth(dados, resposta.status));
+    if (!resposta.ok || !dados || typeof dados !== 'object' || typeof (dados as Record<string, unknown>).access_token !== 'string') {
+      const codigo = codigoErroOAuth(dados, resposta.status);
+      if (codigo.startsWith('invalid_grant')) await this.limparConexaoLocal(usuarioId);
+      throw new ErroGoogleDrive('renovar_token', 'A autorização do Google Drive expirou. Conecte a conta novamente.', codigo);
+    }
     const novo = dados as Record<string, unknown>;
-    const atualizados: Tokens = { access_token: String(novo.access_token), refresh_token: typeof novo.refresh_token === 'string' ? novo.refresh_token : tokens.refresh_token, expires_at: Date.now() + Number(novo.expires_in ?? 3600) * 1000, escopos: typeof novo.scope === 'string' ? escoposAutorizados(novo.scope) : tokens.escopos };
+    const atualizados: Tokens = {
+      access_token: String(novo.access_token),
+      refresh_token: typeof novo.refresh_token === 'string' ? novo.refresh_token : tokens.refresh_token,
+      expires_at: Date.now() + Number(novo.expires_in ?? 3600) * 1000,
+      escopos: typeof novo.scope === 'string' ? escoposAutorizados(novo.scope) : tokens.escopos,
+    };
     await this.salvarTokens(usuarioId, atualizados);
     return atualizados.access_token;
   }
@@ -394,8 +420,8 @@ class GoogleDriveService {
   }
 
   private async conectarConta(usuarioId: string, versao: number): Promise<EstadoGoogleDrive> {
-    if (!safeStorageService.isAvailable()) throw new ErroGoogleDrive('trocar_codigo_oauth', 'A proteção local de credenciais não está disponível neste dispositivo.', 'protecao_local_indisponivel');
-    const clientSecret = await this.segredoClienteObrigatorio('trocar_codigo_oauth');
+    if (!safeStorageService.isSecurelyAvailable()) throw new ErroGoogleDrive('trocar_codigo_oauth', 'A proteção local de credenciais não está disponível neste dispositivo.', 'protecao_local_indisponivel');
+    const clientSecret = await this.obterSegredoClienteObrigatorio('trocar_codigo_oauth');
     const servidor = createServer();
     const retorno = await new Promise<{ codigo: string; redirectUri: string; nonce: string }>((resolve, reject) => {
       const state = base64Url(randomBytes(32));
@@ -403,7 +429,10 @@ class GoogleDriveService {
       const verifier = base64Url(randomBytes(64));
       const challenge = base64Url(createHash('sha256').update(verifier).digest());
       let redirectUri = '';
+      let concluido = false;
       const encerrarComErro = (erro: Error) => {
+        if (concluido) return;
+        concluido = true;
         clearTimeout(tempo);
         servidor.close();
         reject(erro);
@@ -411,12 +440,24 @@ class GoogleDriveService {
       const tempo = setTimeout(() => encerrarComErro(new Error('A autorização do Google Drive expirou.')), 300_000);
       servidor.once('error', () => encerrarComErro(new Error('Não foi possível iniciar a autorização segura.')));
       servidor.on('request', async (requisicao, resposta) => {
+        const origem = new URL(redirectUri);
         const url = new URL(requisicao.url ?? '/', redirectUri);
-        const autorizado = url.pathname === '/oauth2callback' && url.searchParams.get('state') === state && Boolean(url.searchParams.get('code'));
+        const autorizado = !concluido
+          && requisicao.method === 'GET'
+          && requisicao.headers.host === origem.host
+          && url.pathname === '/oauth2callback'
+          && url.searchParams.get('state') === state
+          && Boolean(url.searchParams.get('code'));
         const pagina = paginaRetornoOAuth(await obterLogoRetornoOAuth(), autorizado);
-        resposta.writeHead(autorizado ? 200 : 400, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+        resposta.writeHead(autorizado ? 200 : 400, {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Cache-Control': 'no-store',
+          Pragma: 'no-cache',
+          'Referrer-Policy': 'no-referrer',
+        });
         resposta.end(pagina);
         if (!autorizado) return;
+        concluido = true;
         clearTimeout(tempo);
         resolve({ codigo: url.searchParams.get('code')!, redirectUri, nonce });
         servidor.close();
@@ -435,7 +476,7 @@ class GoogleDriveService {
     const verifier = (servidor as unknown as { verifier?: string }).verifier;
     if (!verifier) throw new Error('Não foi possível iniciar a autorização segura.');
     let resposta: Response;
-    try { resposta = await fetch('https://oauth2.googleapis.com/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ client_id: CLIENT_ID, client_secret: clientSecret, code: retorno.codigo, code_verifier: verifier, redirect_uri: retorno.redirectUri, grant_type: 'authorization_code' }) }); }
+    try { resposta = await fetch('https://oauth2.googleapis.com/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ client_id: CLIENT_ID, client_secret: clientSecret, code: retorno.codigo, code_verifier: verifier, redirect_uri: retorno.redirectUri, grant_type: 'authorization_code' }), signal: AbortSignal.timeout(TEMPO_LIMITE_REQUISICAO_MS) }); }
     catch { throw new ErroGoogleDrive('trocar_codigo_oauth', 'Não foi possível concluir a autorização com o Google.', 'rede_indisponivel'); }
     const dados: unknown = await resposta.json().catch(() => null);
     if (!resposta.ok || !dados || typeof dados !== 'object' || typeof (dados as Record<string, unknown>).access_token !== 'string') throw new ErroGoogleDrive('trocar_codigo_oauth', 'O Google não concluiu a autorização. Confira a configuração da integração e tente novamente.', codigoErroOAuth(dados, resposta.status));
@@ -452,7 +493,7 @@ class GoogleDriveService {
       await this.migrarControleLegado(usuarioId, raizId);
     } catch (erro) { throw erro instanceof ErroGoogleDrive ? erro : new ErroGoogleDrive('localizar_raiz_drive', 'Não foi possível preparar a pasta laWdo no Google Drive.', 'falha_nao_classificada'); }
     this.confirmarConexaoAtiva(usuarioId, versao);
-    await this.salvarConexao(usuarioId, tokens, identidade.email);
+    await this.salvarConexao(usuarioId, tokens, identidade);
     await this.invalidarCacheResumo(usuarioId);
     const estado = await this.estado(usuarioId);
     if (!estado.conectado) throw new ErroGoogleDrive('localizar_raiz_drive', estado.aviso ?? 'Não foi possível concluir a conexão com o Google Drive.', 'estado_indisponivel');
@@ -460,12 +501,35 @@ class GoogleDriveService {
     return estado;
   }
 
-  async desconectar(usuarioId: string) {
+  private async limparConexaoLocal(usuarioId: string): Promise<void> {
     this.versoesConexao.set(usuarioId, (this.versoesConexao.get(usuarioId) ?? 0) + 1);
     this.tokensTemporarios.delete(usuarioId);
     await executeNonQuery('DELETE FROM configuracoes WHERE chave = ?', [chave('tokens', usuarioId)]);
     await configuracaoService.salvar(chave('email', usuarioId), '', 'texto', 'Conta Google Drive removida');
+    await configuracaoService.salvar(chave('sub', usuarioId), '', 'texto', 'Identificador da conta Google Drive removido');
     await this.invalidarCacheResumo(usuarioId);
+  }
+
+  async desconectar(usuarioId: string): Promise<{ revogacaoRemota: boolean }> {
+    const tokens = await this.obterTokens(usuarioId);
+    const tokenRevogacao = tokens?.refresh_token ?? tokens?.access_token;
+    let revogacaoRemota = !tokenRevogacao;
+    if (tokenRevogacao) {
+      try {
+        const resposta = await fetch('https://oauth2.googleapis.com/revoke', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({ token: tokenRevogacao }),
+          signal: AbortSignal.timeout(TEMPO_LIMITE_REQUISICAO_MS),
+        });
+        revogacaoRemota = resposta.ok;
+      } catch {
+        revogacaoRemota = false;
+      }
+    }
+    await this.limparConexaoLocal(usuarioId);
+    if (!revogacaoRemota) log.warn('Revogação remota do Google Drive não confirmada.', { usuarioId });
+    return { revogacaoRemota };
   }
 
   private async listar(usuarioId: string, consulta: string, campos: string, sinal?: AbortSignal): Promise<ArquivoDrive[]> {
@@ -958,8 +1022,10 @@ class GoogleDriveService {
     const filaAguardaCorrecao = fila.some(item => item.estado === 'aguardando_correcao');
     const filaAguardaEspaco = fila.some(item => item.motivoEspera === 'cota');
     const base = { conectado: false, envioAutomatico: automatico, pendencias, caminho: 'Meu Drive/laWdo', falhaFila, filaAguardaCorrecao, filaAguardaEspaco };
-    if (!safeStorageService.isAvailable()) return { ...base, protecaoChave: 'indisponivel', aviso: 'A proteção local de credenciais não está disponível neste dispositivo. A conexão com o Google Drive foi bloqueada.' };
-    if (!await obterSegredoClienteGoogleDrive()) return { ...base, protecaoChave: 'indisponivel', aviso: 'A integração Google Drive precisa ser configurada pelo responsável pela instalação.' };
+    if (!safeStorageService.isSecurelyAvailable()) return { ...base, protecaoChave: 'indisponivel', aviso: 'A proteção local de credenciais não está disponível neste dispositivo. A conexão com o Google Drive foi bloqueada.' };
+    if (!await obterSegredoClienteGoogleDrive()) {
+      return { ...base, protecaoChave: 'indisponivel', aviso: 'A integração Google Drive precisa ser configurada pelo responsável.' };
+    }
     const tokens = await this.obterTokens(usuarioId);
     if (!tokens) return base;
     if (!temEscopoDadosApp(tokens)) {

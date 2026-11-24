@@ -8,6 +8,13 @@ class SafeStorageService {
     return safeStorage.isEncryptionAvailable();
   }
 
+  isSecurelyAvailable(): boolean {
+    if (!this.isAvailable()) return false;
+    if (process.platform !== 'linux') return true;
+    const backend = safeStorage.getSelectedStorageBackend();
+    return backend !== 'basic_text' && backend !== 'unknown';
+  }
+
   encrypt(plaintext: string): string {
     if (!this.isAvailable()) {
       log.warn('safeStorage indisponível, armazenando sem criptografia');
