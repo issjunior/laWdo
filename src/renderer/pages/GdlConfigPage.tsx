@@ -75,14 +75,6 @@ interface ValidacaoSessaoGdl {
 
 type EstadoLeitura = 'carregando' | 'pronto' | 'erro';
 
-function lerConfiguracaoGdl(resposta: unknown): string | null {
-  if (!resposta || typeof resposta !== 'object' || !('success' in resposta) || resposta.success !== true || !('data' in resposta)) {
-    throw new Error('Não foi possível ler as credenciais do GDL.');
-  }
-  if (resposta.data !== null && typeof resposta.data !== 'string') throw new Error('As credenciais salvas do GDL são inválidas.');
-  return resposta.data;
-}
-
 function lerValidacaoGdl(resposta: unknown, ambienteEsperado: string): ValidacaoSessaoGdl {
   if (!resposta || typeof resposta !== 'object' || !('success' in resposta) || resposta.success !== true || !('data' in resposta)) {
     throw new Error('Não foi possível ler o estado de validação do GDL.');
@@ -178,7 +170,6 @@ export const GdlConfigPage: React.FC = () => {
   const carregamentoCredenciaisAtual = useRef(0);
   const carregamentoValidacaoAtual = useRef(0);
   const carregamentoListagemAtual = useRef(0);
-  const credenciaisEditadasRef = useRef({ login: false, senha: false, cpf: false });
   const ambienteCarregadoRef = useRef<string | null>(null);
   const ambienteAtualRef = useRef(ambiente);
   ambienteAtualRef.current = ambiente;
@@ -189,20 +180,11 @@ export const GdlConfigPage: React.FC = () => {
     setEstadoCredenciais('carregando');
     setErroCredenciais(null);
     try {
-      const [rLogin, rSenha, rCpf] = await Promise.all([
-        window.ipcAPI.configuracao.obter(`gdl_login_${amb}`),
-        window.ipcAPI.configuracao.obter(`gdl_senha_${amb}`),
-        window.ipcAPI.configuracao.obter(`gdl_cpf_usuario_${amb}`),
-      ]);
+      const resposta = await window.ipcAPI.gdl.obterEstadoCredenciais(amb);
       if (carregamento !== carregamentoCredenciaisAtual.current || ambienteAtualRef.current !== amb) return;
-      const loginLido = lerConfiguracaoGdl(rLogin) ?? '';
-      const senhaLida = lerConfiguracaoGdl(rSenha) ?? '';
-      const cpfLido = lerConfiguracaoGdl(rCpf) ?? '';
-      setCredenciaisSalvas(Boolean(loginLido || senhaLida || cpfLido));
-      setCpfSalvoValido(validarCpf(cpfLido));
-      if (!credenciaisEditadasRef.current.login) setLogin(loginLido);
-      if (!credenciaisEditadasRef.current.senha) setSenha(senhaLida);
-      if (!credenciaisEditadasRef.current.cpf) setCpfUsuario(cpfLido);
+      if (!resposta.success || !resposta.data) throw new Error(resposta.error || 'Não foi possível consultar o estado das credenciais.');
+      setCredenciaisSalvas(resposta.data.configuradas);
+      setCpfSalvoValido(resposta.data.cpfValido);
       setAmbienteCredenciais(amb);
       setEstadoCredenciais('pronto');
     } catch (falha: unknown) {
@@ -293,7 +275,6 @@ export const GdlConfigPage: React.FC = () => {
   useEffect(() => {
     if (estadoPreferencias !== 'pronto') return;
     if (ambienteCarregadoRef.current !== ambiente) {
-      credenciaisEditadasRef.current = { login: false, senha: false, cpf: false };
       setCredenciaisSalvas(false);
       setCpfSalvoValido(false);
       setLogin('');
@@ -354,13 +335,8 @@ export const GdlConfigPage: React.FC = () => {
     setCpfUsuario(formatarCPF(cpfUsuarioNormalizado));
     setSalvando(true);
     try {
-      const respostasCredenciais = await Promise.all([
-        window.ipcAPI.configuracao.salvar(`gdl_login_${ambiente}`, loginNormalizado, 'texto', `Login GDL (${ambLabel})`),
-        window.ipcAPI.configuracao.salvar(`gdl_senha_${ambiente}`, senhaNormalizada, 'senha', `Senha GDL (${ambLabel})`),
-        window.ipcAPI.configuracao.salvar(`gdl_cpf_usuario_${ambiente}`, cpfUsuarioNormalizado, 'texto', `CPF usuário GDL (${ambLabel})`),
-      ]);
-      const falhaCredencial = respostasCredenciais.find(resposta => !resposta.success);
-      if (falhaCredencial) throw new Error(falhaCredencial.error || 'Não foi possível salvar as credenciais.');
+      const respostaCredenciais = await window.ipcAPI.gdl.salvarCredenciais(ambiente, { login: loginNormalizado, senha: senhaNormalizada, cpfUsuario: cpfUsuarioNormalizado });
+      if (!respostaCredenciais.success) throw new Error(respostaCredenciais.error || 'Não foi possível salvar as credenciais.');
       setCredenciaisSalvas(true);
       setCpfSalvoValido(true);
       const respostaAmbiente = await window.ipcAPI.configuracao.salvar('gdl_ambiente', ambiente, 'texto', 'Ambiente da API GDL');
@@ -405,7 +381,6 @@ export const GdlConfigPage: React.FC = () => {
       if (!resposta.success) throw new Error(resposta.error || 'Não foi possível excluir as credenciais.');
       carregamentoCredenciaisAtual.current += 1;
       carregamentoValidacaoAtual.current += 1;
-      credenciaisEditadasRef.current = { login: false, senha: false, cpf: false };
       setLogin('');
       setSenha('');
       setCpfUsuario('');
@@ -616,7 +591,7 @@ export const GdlConfigPage: React.FC = () => {
           <div className="space-y-1.5">
             <CardTitle>Conexão</CardTitle>
             <CardDescription>
-              Credenciais de acesso à API REST do GDL. A senha é armazenada criptografada.
+              Credenciais de acesso à API REST do GDL, armazenadas criptografadas localmente.
             </CardDescription>
           </div>
           <Button
@@ -645,8 +620,11 @@ export const GdlConfigPage: React.FC = () => {
               </AlertDescription>
             </Alert>
           )}
-          {credenciaisProntas && !login && !senha && (
-            <p className="text-sm text-muted-foreground">Não há login e senha salvos para este ambiente.</p>
+          {credenciaisProntas && credenciaisSalvas && !login && !senha && (
+            <p className="text-sm text-muted-foreground">Há credenciais salvas para este ambiente. Preencha os campos para substituí-las.</p>
+          )}
+          {credenciaisProntas && !credenciaisSalvas && !login && !senha && (
+            <p className="text-sm text-muted-foreground">Não há credenciais salvas para este ambiente.</p>
           )}
           {/* ---------- Seleção de ambiente com cards ---------- */}
           <div className="space-y-3">
@@ -721,7 +699,7 @@ export const GdlConfigPage: React.FC = () => {
                 id="gdl-login"
                 required
                 value={login}
-                onChange={e => { credenciaisEditadasRef.current.login = true; setLogin(e.target.value); }}
+                onChange={e => setLogin(e.target.value)}
                 placeholder={estadoCredenciais === 'erro' ? 'Leitura indisponível' : 'Seu usuário do GDL'}
               />
             </div>
@@ -733,7 +711,7 @@ export const GdlConfigPage: React.FC = () => {
                   required
                   type={showPassword ? 'text' : 'password'}
                   value={senha}
-                  onChange={e => { credenciaisEditadasRef.current.senha = true; setSenha(e.target.value); }}
+                  onChange={e => setSenha(e.target.value)}
                   placeholder={estadoCredenciais === 'erro' ? 'Leitura indisponível' : '••••••••'}
                   className="pr-10"
                 />
@@ -758,7 +736,7 @@ export const GdlConfigPage: React.FC = () => {
               aria-describedby="gdl-cpf-ajuda"
               aria-invalid={Boolean(salvarErro) && !validarCpf(cpfUsuario)}
               value={cpfUsuario}
-              onChange={e => { credenciaisEditadasRef.current.cpf = true; setCpfUsuario(formatarCPF(e.target.value)); }}
+              onChange={e => setCpfUsuario(formatarCPF(e.target.value))}
               placeholder="000.000.000-00"
               maxLength={14}
             />

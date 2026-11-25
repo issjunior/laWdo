@@ -25,6 +25,18 @@ function logError(mensagem: string, erro?: unknown): void {
 }
 
 const contextosFotos = new Map<number, Set<string>>();
+
+function validarCpf(valor: string): boolean {
+  if (!/^\d{11}$/.test(valor) || /^(\d)\1{10}$/.test(valor)) return false;
+  for (let posicao = 9; posicao <= 10; posicao += 1) {
+    let soma = 0;
+    for (let indice = 0; indice < posicao; indice += 1) soma += Number(valor[indice]) * (posicao + 1 - indice);
+    const resto = soma % 11;
+    if (Number(valor[posicao]) !== (resto < 2 ? 0 : 11 - resto)) return false;
+  }
+  return true;
+}
+
 function registrarFotos(canal: string, executar: Parameters<typeof ipcMain.handle>[1]): void {
   ipcMain.handle(canal, (evento, ...parametros: unknown[]) => {
     const chave = `gdl:${evento.sender?.id ?? 'teste'}:${typeof parametros[0] === 'string' ? parametros[0] : ''}`;
@@ -108,6 +120,32 @@ async function resolverRepDoLaudo(laudoId: unknown): Promise<{ numero: string; a
 }
 
 export const registerGdlHandlers = (): void => {
+  ipcMain.handle('gdl:obter-estado-credenciais', async (event, ambiente: unknown) => {
+    try {
+      authSessaoService.exigir(event.sender.id);
+      if (ambiente !== 'producao' && ambiente !== 'homologacao') throw new Error('Ambiente GDL inválido.');
+      const estado = await configuracaoService.obterEstadoCredenciaisGdl(ambiente);
+      return { success: true, data: { configuradas: estado.configuradas === true, cpfValido: estado.cpfValido === true } };
+    } catch (erro: unknown) {
+      return { success: false, error: erro instanceof Error ? erro.message : 'Não foi possível consultar o estado das credenciais.' };
+    }
+  });
+  ipcMain.handle('gdl:salvar-credenciais', async (event, ambiente: unknown, credenciais: unknown) => {
+    try {
+      authSessaoService.exigir(event.sender.id);
+      if (ambiente !== 'producao' && ambiente !== 'homologacao' || !credenciais || typeof credenciais !== 'object' || Array.isArray(credenciais)) throw new Error('Credenciais GDL inválidas.');
+      const entrada = credenciais as Record<string, unknown>;
+      if (typeof entrada.login !== 'string' || typeof entrada.senha !== 'string' || typeof entrada.cpfUsuario !== 'string') throw new Error('Credenciais GDL inválidas.');
+      const login = sanitizeInput(entrada.login).trim();
+      const senha = entrada.senha.trim();
+      const cpfUsuario = entrada.cpfUsuario.replace(/\D/g, '');
+      if (!login || !senha || !validarCpf(cpfUsuario)) throw new Error('Credenciais GDL inválidas.');
+      await configuracaoService.salvarCredenciaisGdl(ambiente, { login, senha, cpfUsuario });
+      return { success: true };
+    } catch (erro: unknown) {
+      return { success: false, error: erro instanceof Error ? erro.message : 'Não foi possível salvar as credenciais.' };
+    }
+  });
   ipcMain.handle('gdl:excluir-credenciais', async (event, ambiente: unknown) => {
     try {
       authSessaoService.exigir(event.sender.id);

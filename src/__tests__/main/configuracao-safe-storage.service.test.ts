@@ -61,6 +61,23 @@ describe('configuração e armazenamento seguro', () => {
     expect(mocks.notificarAvisos).not.toHaveBeenCalled()
   })
 
+  it('cifra login, senha e CPF ao salvar as credenciais do GDL', async () => {
+    mocks.criptografar.mockImplementation((valor: string) => Buffer.from(`cifrado:${valor}`))
+    mocks.consultar.mockResolvedValue([])
+    mocks.executar.mockResolvedValue(undefined)
+
+    await configuracaoService.salvarCredenciaisGdl('producao', {
+      login: 'perito.teste', senha: 'senha-ficticia', cpfUsuario: '52998224725',
+    })
+
+    expect(mocks.criptografar).toHaveBeenCalledTimes(3)
+    expect(mocks.criptografar).toHaveBeenCalledWith('perito.teste')
+    expect(mocks.criptografar).toHaveBeenCalledWith('senha-ficticia')
+    expect(mocks.criptografar).toHaveBeenCalledWith('52998224725')
+    expect(mocks.executar).toHaveBeenCalledTimes(3)
+    expect(mocks.executar.mock.calls.map(([, parametros]) => (parametros as string[])[2])).toEqual(['senha', 'senha', 'senha'])
+  })
+
   it('criptografa segredos e atualiza uma configuração já existente', async () => {
     mocks.criptografar.mockReturnValue(Buffer.from('valor-cifrado'))
     mocks.consultar.mockResolvedValue([{ chave: 'gemini_api_key' }])

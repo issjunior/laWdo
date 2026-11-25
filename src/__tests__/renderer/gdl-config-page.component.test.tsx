@@ -12,6 +12,19 @@ const salvarConfiguracao = vi.fn(async (chave: string, valor: string) => {
   configuracoes.set(chave, valor)
   return { success: true }
 })
+const obterEstadoCredenciais = vi.fn<(ambiente: string) => Promise<{ success: boolean; data?: { configuradas: boolean; cpfValido: boolean }; error?: string }>>(async ambiente => ({
+  success: true,
+  data: {
+    configuradas: Boolean(configuracoes.get(`gdl_login_${ambiente}`) && configuracoes.get(`gdl_senha_${ambiente}`)),
+    cpfValido: Boolean(configuracoes.get(`gdl_cpf_usuario_${ambiente}`) === '52998224725'),
+  },
+}))
+const salvarCredenciais = vi.fn(async (ambiente: string, credenciais: { login: string; senha: string; cpfUsuario: string }) => {
+  configuracoes.set(`gdl_login_${ambiente}`, credenciais.login)
+  configuracoes.set(`gdl_senha_${ambiente}`, credenciais.senha)
+  configuracoes.set(`gdl_cpf_usuario_${ambiente}`, credenciais.cpfUsuario)
+  return { success: true }
+})
 
 describe('GdlConfigPage', () => {
   beforeEach(() => {
@@ -19,6 +32,15 @@ describe('GdlConfigPage', () => {
     obterConfiguracao.mockClear()
     obterConfiguracao.mockImplementation(async (chave: string) => ({ success: true, data: configuracoes.get(chave) ?? null }))
     salvarConfiguracao.mockClear()
+    obterEstadoCredenciais.mockClear()
+    obterEstadoCredenciais.mockImplementation(async ambiente => ({
+      success: true,
+      data: {
+        configuradas: Boolean(configuracoes.get(`gdl_login_${ambiente}`) && configuracoes.get(`gdl_senha_${ambiente}`)),
+        cpfValido: configuracoes.get(`gdl_cpf_usuario_${ambiente}`) === '52998224725',
+      },
+    }))
+    salvarCredenciais.mockClear()
     Object.defineProperty(window, 'ipcAPI', {
       value: {
         ...ipcApiOriginal,
@@ -29,6 +51,8 @@ describe('GdlConfigPage', () => {
           obterEstadoConexao: vi.fn().mockResolvedValue({ success: true, data: { ambiente: 'producao', revisao: 0, versaoEstado: 0,
             rede: 'desconhecida', redeVerificadaEm: null, credenciais: 'pendentes', credenciaisValidadasEm: null, web: 'desconhecida', verificando: false } }),
           verificarConexao: vi.fn().mockResolvedValue({ success: false }),
+          obterEstadoCredenciais,
+          salvarCredenciais,
           excluirCredenciais: vi.fn().mockResolvedValue({ success: true }),
           obterPreferenciaListagem: vi.fn().mockResolvedValue({ success: true, data: { habilitada: false } }),
           definirPreferenciaListagem: vi.fn(async (habilitada: boolean) => ({ success: true, data: { habilitada } })),
@@ -53,7 +77,7 @@ describe('GdlConfigPage', () => {
     fireEvent.change(screen.getByLabelText('CPF do usuário do GDL'), { target: { value: '529.982.247-25' } })
     fireEvent.click(salvar)
     await waitFor(() => expect(window.ipcAPI.gdl.definirPreferenciaListagem).toHaveBeenCalledWith(true))
-    expect(configuracoes.get('gdl_login_producao')).toBe('usuario')
+    await waitFor(() => expect(salvarCredenciais).toHaveBeenCalledWith('producao', { login: 'usuario', senha: 'senha', cpfUsuario: '52998224725' }))
     expect(configuracoes.get('gdl_ambiente')).toBe('producao')
     expect(configuracoes.get('gdl_cpf_usuario_producao')).toBe('52998224725')
     expect(screen.getByRole('button', { name: 'Desativar listagem' })).toBeEnabled()
@@ -77,7 +101,7 @@ describe('GdlConfigPage', () => {
     fireEvent.change(screen.getByLabelText('CPF do usuário do GDL'), { target: { value: cpf } })
     fireEvent.click(salvar)
     expect(await screen.findByText(cpf ? /Informe um CPF válido/ : /Preencha CPF/)).toBeInTheDocument()
-    expect(salvarConfiguracao).not.toHaveBeenCalled()
+    expect(salvarCredenciais).not.toHaveBeenCalled()
     expect(window.ipcAPI.gdl.definirPreferenciaListagem).not.toHaveBeenCalled()
     expect(screen.getByLabelText('CPF do usuário do GDL')).toHaveAttribute('aria-invalid', 'true')
   })
@@ -91,10 +115,11 @@ describe('GdlConfigPage', () => {
     expect(screen.getByRole('button', { name: 'Desativar listagem' })).toBeEnabled()
     expect(salvarConfiguracao).not.toHaveBeenCalled()
     expect(window.ipcAPI.gdl.definirPreferenciaListagem).not.toHaveBeenCalled()
+    fireEvent.change(screen.getByLabelText('Login'), { target: { value: 'usuario' } })
+    fireEvent.change(screen.getByLabelText('Senha'), { target: { value: 'senha' } })
     fireEvent.change(screen.getByLabelText('CPF do usuário do GDL'), { target: { value: '52998224725' } })
     fireEvent.click(screen.getByRole('button', { name: 'Salvar Configurações' }))
-    await waitFor(() => expect(screen.queryByText(/Complete seu cadastro com um CPF válido/)).not.toBeInTheDocument())
-    expect(configuracoes.get('gdl_cpf_usuario_producao')).toBe('52998224725')
+    await waitFor(() => expect(salvarCredenciais).toHaveBeenCalledWith('producao', { login: 'usuario', senha: 'senha', cpfUsuario: '52998224725' }))
   })
 
   it('exclui as credenciais somente após confirmar e limpa os campos', async () => {
@@ -102,7 +127,7 @@ describe('GdlConfigPage', () => {
     configuracoes.set('gdl_senha_producao', 'senha')
     configuracoes.set('gdl_cpf_usuario_producao', '12345678901')
     render(<GdlConfigPage />)
-    await waitFor(() => expect(screen.getByLabelText('Login')).toHaveValue('usuario'))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Excluir credenciais' })).toBeEnabled())
     fireEvent.click(screen.getByRole('button', { name: 'Excluir credenciais' }))
     expect(window.ipcAPI.gdl.excluirCredenciais).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: /^Excluir$/ }))
@@ -117,13 +142,13 @@ describe('GdlConfigPage', () => {
     configuracoes.set('gdl_senha_producao', 'senha')
     vi.mocked(window.ipcAPI.gdl.excluirCredenciais).mockResolvedValueOnce({ success: false, error: 'Banco indisponível' })
     render(<GdlConfigPage />)
-    await waitFor(() => expect(screen.getByLabelText('Login')).toHaveValue('usuario'))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Excluir credenciais' })).toBeEnabled())
     fireEvent.click(screen.getByRole('button', { name: 'Excluir credenciais' }))
     fireEvent.click(screen.getByRole('button', { name: /^Excluir$/ }))
     expect(await screen.findByText('Banco indisponível')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^Excluir$/ })).toBeEnabled()
-    expect(screen.getByLabelText('Login')).toHaveValue('usuario')
-    expect(screen.getByLabelText('Senha')).toHaveValue('senha')
+    expect(screen.getByLabelText('Login')).toHaveValue('')
+    expect(screen.getByLabelText('Senha')).toHaveValue('')
   })
 
   it('inicia com Homologação desabilitada quando não há configuração salva', async () => {
@@ -224,23 +249,19 @@ describe('GdlConfigPage', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Ativar listagem' })).toBeEnabled())
   })
 
-  it('falha ao ler senha sem tratá-la como ausente e preserva edição na nova tentativa', async () => {
-    obterConfiguracao.mockImplementation(async (chave: string) => chave === 'gdl_senha_producao'
-      ? { success: false, data: null }
-      : { success: true, data: configuracoes.get(chave) ?? null })
+  it('falha ao ler o estado das credenciais e preserva edição na nova tentativa', async () => {
+    obterEstadoCredenciais.mockResolvedValueOnce({ success: false, error: 'Falha de leitura' })
     render(<GdlConfigPage />)
 
-    expect(await screen.findByText('Não foi possível ler as credenciais do GDL.')).toBeInTheDocument()
+    expect(await screen.findByText('Falha de leitura')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Salvar Configurações' })).toBeDisabled()
     fireEvent.change(screen.getByLabelText('Login'), { target: { value: 'edicao-local' } })
-    configuracoes.set('gdl_login_producao', 'login-salvo')
-    configuracoes.set('gdl_senha_producao', 'senha-salva')
-    obterConfiguracao.mockImplementation(async (chave: string) => ({ success: true, data: configuracoes.get(chave) ?? null }))
+    obterEstadoCredenciais.mockResolvedValue({ success: true, data: { configuradas: true, cpfValido: true } })
     fireEvent.click(screen.getByRole('button', { name: 'Tentar novamente' }))
 
     await waitFor(() => expect(screen.getByRole('button', { name: 'Salvar Configurações' })).toBeEnabled())
     expect(screen.getByLabelText('Login')).toHaveValue('edicao-local')
-    expect(screen.getByLabelText('Senha')).toHaveValue('senha-salva')
+    expect(screen.getByLabelText('Senha')).toHaveValue('')
   })
 
   it('distingue falha de leitura da validação de sessão e recupera por nova tentativa', async () => {
@@ -257,30 +278,28 @@ describe('GdlConfigPage', () => {
     expect(screen.getByRole('button', { name: 'Validar Credenciais' })).toBeEnabled()
   })
 
-  it('ignora credenciais e validação atrasadas do ambiente anterior', async () => {
+  it('ignora estado de credenciais e validação atrasados do ambiente anterior', async () => {
     configuracoes.set('gdl_homologacao_habilitada', 'true')
-    configuracoes.set('gdl_login_producao', 'usuario-producao')
-    let concluirLoginHomologacao: ((valor: { success: boolean; data: string }) => void) | undefined
-    obterConfiguracao.mockImplementation(async (chave: string) => {
-      if (chave === 'gdl_login_homologacao') return new Promise(resolve => { concluirLoginHomologacao = resolve })
-      return { success: true, data: configuracoes.get(chave) ?? null }
-    })
+    let concluirEstadoHomologacao: ((valor: { success: boolean; data: { configuradas: boolean; cpfValido: boolean } }) => void) | undefined
+    obterEstadoCredenciais.mockImplementation((ambiente: string) => ambiente === 'homologacao'
+      ? new Promise(resolve => { concluirEstadoHomologacao = resolve })
+      : Promise.resolve({ success: true, data: { configuradas: true, cpfValido: true } }))
     const obterValidacao = window.ipcAPI.gdl.obterValidacaoSessao as ReturnType<typeof vi.fn>
     let concluirValidacaoHomologacao: ((valor: { success: boolean; data: { ambiente: string; validado: boolean } }) => void) | undefined
     obterValidacao.mockImplementation((ambiente: string) => ambiente === 'homologacao'
       ? new Promise(resolve => { concluirValidacaoHomologacao = resolve })
       : Promise.resolve({ success: true, data: { ambiente: 'Produção', validado: false } }))
     render(<GdlConfigPage />)
-    await waitFor(() => expect(screen.getByLabelText('Login')).toHaveValue('usuario-producao'))
+    await waitFor(() => expect(screen.getByText(/Há credenciais salvas/)).toBeInTheDocument())
 
     fireEvent.click(screen.getByRole('button', { name: /Homologação.*Ambiente de testes/s }))
-    await waitFor(() => expect(concluirLoginHomologacao).toBeDefined())
+    await waitFor(() => expect(concluirEstadoHomologacao).toBeDefined())
     await waitFor(() => expect(concluirValidacaoHomologacao).toBeDefined())
     fireEvent.click(screen.getByRole('button', { name: /Produção.*Ambiente real/s }))
-    concluirLoginHomologacao?.({ success: true, data: 'usuario-antigo' })
+    concluirEstadoHomologacao?.({ success: true, data: { configuradas: false, cpfValido: false } })
     concluirValidacaoHomologacao?.({ success: true, data: { ambiente: 'Homologação', validado: true } })
 
-    await waitFor(() => expect(screen.getByLabelText('Login')).toHaveValue('usuario-producao'))
+    await waitFor(() => expect(screen.getByText(/Há credenciais salvas/)).toBeInTheDocument())
     expect(screen.getByText('Pendente')).toBeInTheDocument()
     expect(screen.queryByText('Validada')).not.toBeInTheDocument()
   })

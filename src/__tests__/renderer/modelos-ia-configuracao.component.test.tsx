@@ -5,14 +5,14 @@ import { ImagensPage } from '@/pages/ImagensPage';
 
 const obter = vi.fn<(chave: string) => Promise<{ success: boolean; data?: unknown }>>();
 const salvar = vi.fn().mockResolvedValue({ success: true });
+const obterEstadoCredenciais = vi.fn();
 
 beforeEach(() => {
   obter.mockReset();
   salvar.mockReset().mockResolvedValue({ success: true });
-  obter.mockImplementation(async chave => chave === 'api_key_groq'
-    ? { success: false }
-    : { success: true, data: null });
-  Object.assign(window.ipcAPI, { configuracao: { obter, salvar } });
+  obter.mockResolvedValue({ success: true, data: null });
+  obterEstadoCredenciais.mockReset().mockResolvedValue({ success: false });
+  Object.assign(window.ipcAPI, { configuracao: { obter, salvar }, ia: { obterEstadoCredenciais } });
 });
 
 describe('configurações de IA', () => {
@@ -104,7 +104,7 @@ describe('configurações de IA', () => {
     expect(screen.getByRole('button', { name: 'Salvar Configurações' })).toBeDisabled();
     expect(salvar).not.toHaveBeenCalled();
 
-    obter.mockResolvedValue({ success: true, data: null });
+    obterEstadoCredenciais.mockResolvedValue({ success: true, data: { groqConfigurada: false, geminiConfigurada: false } });
     fireEvent.click(screen.getByRole('button', { name: 'Tentar novamente' }));
 
     await waitFor(() => expect(screen.getByRole('button', { name: 'Salvar Configurações' })).toBeEnabled());
