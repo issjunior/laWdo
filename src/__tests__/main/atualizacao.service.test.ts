@@ -5,12 +5,39 @@ import os from 'node:os';
 import path from 'node:path';
 import { app, shell } from 'electron';
 import { AtualizacaoService } from '../../main/services/atualizacao.service';
-import type { AtualizacaoDisponivel, EstadoAtualizacao } from '../../shared/atualizacao/atualizacao.types';
+import type { AtualizacaoDisponivel, EstadoAtualizacao, ManifestoAtualizacao } from '../../shared/atualizacao/atualizacao.types';
+
+const mocks = vi.hoisted(() => ({ verificarAssinatura: vi.fn(() => true) }));
+
+vi.mock('node:crypto', async importarOriginal => ({
+  ...await importarOriginal<typeof import('node:crypto')>(),
+  verify: mocks.verificarAssinatura,
+}));
 
 const fetchOriginal = globalThis.fetch;
+const assinaturaValidaTeste = Buffer.alloc(64).toString('base64');
+
+function criarManifestoAssinado(atualizacao: AtualizacaoDisponivel): { manifesto: ManifestoAtualizacao; assinatura: string } {
+  return {
+    manifesto: {
+      versaoManifesto: 1,
+      versao: atualizacao.versao,
+      commit: 'a'.repeat(40),
+      dataPublicacao: atualizacao.dataPublicacao,
+      canais: ['stable'],
+      versaoSchema: atualizacao.versaoSchema,
+      requerBackupCompletoImagens: atualizacao.requerBackupCompletoImagens,
+      notas: atualizacao.notas,
+      artefatos: [atualizacao.artefato],
+    },
+    assinatura: assinaturaValidaTeste,
+  };
+}
 
 afterEach(() => {
   globalThis.fetch = fetchOriginal;
+  mocks.verificarAssinatura.mockReset();
+  mocks.verificarAssinatura.mockReturnValue(true);
 });
 
 describe('AtualizacaoService', () => {
@@ -67,6 +94,7 @@ describe('AtualizacaoService', () => {
     const interno = service as unknown as {
       estado: EstadoAtualizacao;
       atualizacaoDisponivel: AtualizacaoDisponivel;
+      manifestoAssinado: { manifesto: ManifestoAtualizacao; assinatura: string };
     };
     interno.estado = 'disponivel';
     interno.atualizacaoDisponivel = {
@@ -77,6 +105,7 @@ describe('AtualizacaoService', () => {
         tamanho: conteudo.length, hashSha256: createHash('sha256').update(conteudo).digest('hex'), url: 'https://example.invalid/arquivo',
       },
     };
+    interno.manifestoAssinado = criarManifestoAssinado(interno.atualizacaoDisponivel);
     const percentuais: number[] = [];
     service.onProgresso(progresso => percentuais.push(progresso.percentual));
     globalThis.fetch = vi.fn().mockResolvedValue(new Response(conteudo));
@@ -100,17 +129,65 @@ describe('AtualizacaoService', () => {
     const diretorioAtualizacoes = path.join(diretorio, 'atualizacoes');
     fs.mkdirSync(diretorioAtualizacoes, { recursive: true });
     fs.writeFileSync(path.join(diretorioAtualizacoes, nome), conteudo);
-    fs.writeFileSync(path.join(diretorio, 'atualizacao-pacote-pronto.json'), JSON.stringify({
-      atualizacao: {
-        versao: '0.1.2', dataPublicacao: '2026-07-24T00:00:00.000Z', notas: 'Teste', versaoSchema: 1,
-        requerBackupCompletoImagens: false,
-        artefato: { plataforma: 'windows', arquitetura: 'x64', formato: 'nsis', canal: 'stable', nome, tamanho: conteudo.length, hashSha256, url: 'https://example.invalid/arquivo' },
-      },
-    }));
+    const atualizacao: AtualizacaoDisponivel = {
+      versao: '0.1.2', dataPublicacao: '2026-07-24T00:00:00.000Z', notas: 'Teste', versaoSchema: 1,
+      requerBackupCompletoImagens: false,
+      artefato: { plataforma: 'windows', arquitetura: 'x64', formato: 'nsis', canal: 'stable', nome, tamanho: conteudo.length, hashSha256, url: 'https://example.invalid/arquivo' },
+    };
+    fs.writeFileSync(path.join(diretorio, 'atualizacao-pacote-pronto.json'), JSON.stringify(criarManifestoAssinado(atualizacao)));
 
     const service = new AtualizacaoService();
 
     expect(service.obterEstado()).toMatchObject({ estado: 'baixada', atualizacaoDisponivel: { versao: '0.1.2' } });
+    expect(mocks.verificarAssinatura).toHaveBeenCalledTimes(1);
+    fs.rmSync(diretorio, { recursive: true, force: true });
+  });
+
+  it('descarta o pacote alterado depois do reinício', () => {
+    const diretorio = fs.mkdtempSync(path.join(os.tmpdir(), 'lawdo-pacote-modificado-'));
+    vi.mocked(app.getPath).mockReturnValue(diretorio);
+    const nome = 'laWdo-0.1.2-setup.exe';
+    const conteudoOriginal = Buffer.from('instalador validado');
+    const diretorioAtualizacoes = path.join(diretorio, 'atualizacoes');
+    fs.mkdirSync(diretorioAtualizacoes, { recursive: true });
+    fs.writeFileSync(path.join(diretorioAtualizacoes, nome), Buffer.from('instalador adulterado'));
+    const atualizacao: AtualizacaoDisponivel = {
+      versao: '0.1.2', dataPublicacao: '2026-07-24T00:00:00.000Z', notas: 'Teste', versaoSchema: 1,
+      requerBackupCompletoImagens: false,
+      artefato: { plataforma: 'windows', arquitetura: 'x64', formato: 'nsis', canal: 'stable', nome, tamanho: conteudoOriginal.length, hashSha256: createHash('sha256').update(conteudoOriginal).digest('hex'), url: 'https://example.invalid/arquivo' },
+    };
+    fs.writeFileSync(path.join(diretorio, 'atualizacao-pacote-pronto.json'), JSON.stringify(criarManifestoAssinado(atualizacao)));
+
+    const service = new AtualizacaoService();
+
+    expect(service.obterEstado().estado).toBe('ociosa');
+    expect(fs.existsSync(path.join(diretorio, 'atualizacao-pacote-pronto.json'))).toBe(false);
+    fs.rmSync(diretorio, { recursive: true, force: true });
+  });
+
+  it('descarta pacote persistido sem uma assinatura válida após reiniciar', () => {
+    const diretorio = fs.mkdtempSync(path.join(os.tmpdir(), 'lawdo-pacote-adulterado-'));
+    vi.mocked(app.getPath).mockReturnValue(diretorio);
+    fs.writeFileSync(path.join(diretorio, 'atualizacao-pacote-pronto.json'), JSON.stringify({ atualizacao: {} }));
+
+    const service = new AtualizacaoService();
+
+    expect(service.obterEstado().estado).toBe('ociosa');
+    expect(fs.existsSync(path.join(diretorio, 'atualizacao-pacote-pronto.json'))).toBe(false);
+    fs.rmSync(diretorio, { recursive: true, force: true });
+  });
+
+  it('não executa uma atualização agendada sem manifesto assinado após reiniciar', async () => {
+    const diretorio = fs.mkdtempSync(path.join(os.tmpdir(), 'lawdo-pendencia-adulterada-'));
+    vi.mocked(app.getPath).mockReturnValue(diretorio);
+    fs.writeFileSync(path.join(diretorio, 'atualizacao-pendente.json'), JSON.stringify({
+      formato: 'nsis', nome: 'laWdo-0.1.2-setup.exe', tamanho: 1, hashSha256: 'a'.repeat(64), versao: '0.1.2',
+    }));
+
+    const service = new AtualizacaoService();
+
+    await expect(service.processarPendenciaInicializacao()).resolves.toBe(false);
+    expect(shell.openPath).not.toHaveBeenCalled();
     fs.rmSync(diretorio, { recursive: true, force: true });
   });
 
@@ -151,6 +228,7 @@ describe('AtualizacaoService', () => {
       estado: EstadoAtualizacao;
       atualizacaoDisponivel: AtualizacaoDisponivel;
       caminhoDownload: string;
+      manifestoAssinado: { manifesto: ManifestoAtualizacao; assinatura: string };
     };
     interno.estado = 'baixada';
     interno.caminhoDownload = caminhoDownload;
@@ -159,11 +237,12 @@ describe('AtualizacaoService', () => {
       requerBackupCompletoImagens: false,
       artefato: { plataforma: 'windows', arquitetura: 'x64', formato: 'nsis', canal: 'stable', nome, tamanho: conteudo.length, hashSha256, url: 'https://example.invalid/arquivo' },
     };
+    interno.manifestoAssinado = criarManifestoAssinado(interno.atualizacaoDisponivel);
 
     const estado = service.agendarParaProximaInicializacao();
 
     expect(estado.estado).toBe('aguardando_reinicio');
-    expect(JSON.parse(fs.readFileSync(path.join(diretorio, 'atualizacao-pendente.json'), 'utf8'))).toMatchObject({ nome, hashSha256, versao: '0.1.2' });
+    expect(JSON.parse(fs.readFileSync(path.join(diretorio, 'atualizacao-pendente.json'), 'utf8'))).toMatchObject({ assinatura: assinaturaValidaTeste, manifesto: { versao: '0.1.2', artefatos: [expect.objectContaining({ nome, hashSha256 })] } });
     fs.rmSync(diretorio, { recursive: true, force: true });
   });
 
