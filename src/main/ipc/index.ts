@@ -33,6 +33,7 @@ import { registerDesempenhoHandlers } from './handlers/desempenho.handlers.js';
 import { registerCapturaLogsHandlers } from './handlers/captura-logs.handlers.js';
 import { registerProjetilHandlers } from './handlers/projetil.handlers.js';
 import { registrarCorretorHandlers } from './handlers/corretor.handlers.js';
+import { registerNotebookLmHandlers } from './handlers/notebooklm.handlers.js';
 import { getSchemaVersion } from '../database/index.js';
 import { userService } from '../services/user.service.js';
 import {
@@ -74,7 +75,7 @@ export const registerIpcHandlers = (options: {
   registerSystemHandlers();
 
   // Autenticação
-  registerAuthHandlers();
+  registrarHandlersAutenticacao();
 
   // Handlers específicos por entidade
   registerUserHandlers();
@@ -91,6 +92,7 @@ export const registerIpcHandlers = (options: {
   registrarLaudoBkpHandlers();
   registrarGoogleDriveHandlers();
   registerIAHandlers(options);
+  registerNotebookLmHandlers();
   registerBackupHandlers();
   registerLogSystemHandlers();
   registerDesempenhoHandlers();
@@ -256,7 +258,7 @@ const registerSystemHandlers = (): void => {
 /**
  * Handlers de autenticação
  */
-const registerAuthHandlers = (): void => {
+export const registrarHandlersAutenticacao = (): void => {
   // Login
   ipcMain.handle('login', async (event, username: string, password: string) => {
     try {
@@ -304,17 +306,10 @@ const registerAuthHandlers = (): void => {
   });
   // Logout
   ipcMain.handle('logout', async event => {
-    const usuarioId = authSessaoService.exigir(event.sender.id);
-    let desconexaoDrive = { revogacaoRemota: false };
-    try {
-      desconexaoDrive = await googleDriveService.desconectar(usuarioId);
-    } catch (erro) {
-      log.warn('Não foi possível remover a conexão do Google Drive durante o logout.', { usuarioId, erro });
-    } finally {
-      authSessaoService.encerrar(event.sender.id);
-    }
+    authSessaoService.exigir(event.sender.id);
+    authSessaoService.encerrar(event.sender.id);
     log.info('Logout solicitado');
-    return { success: true, desconexaoDrive };
+    return { success: true };
   });
 
 };

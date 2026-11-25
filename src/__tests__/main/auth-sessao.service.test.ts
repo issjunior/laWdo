@@ -2,8 +2,12 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { authSessaoService } from '../../main/services/auth-sessao.service';
 
 const janelaId = 345;
+const janelaFilhaId = 346;
 
-afterEach(() => authSessaoService.encerrar(janelaId));
+afterEach(() => {
+  authSessaoService.encerrar(janelaFilhaId);
+  authSessaoService.encerrar(janelaId);
+});
 
 describe('sessão do backup', () => {
   it('permanece ativa ao mudar de rota dentro do mesmo documento', () => {
@@ -28,5 +32,16 @@ describe('sessão do backup', () => {
     authSessaoService.aoIniciarNavegacao(janelaId, { isMainFrame: true, isSameDocument: false });
 
     expect(() => authSessaoService.exigir(janelaId)).toThrow('Faça login novamente');
+  });
+
+  it('compartilha a sessão apenas com uma janela filha vinculada e a revoga junto com a janela principal', () => {
+    authSessaoService.iniciar(janelaId, 'perito-1');
+    authSessaoService.vincularJanelaFilha(janelaId, janelaFilhaId);
+
+    expect(authSessaoService.exigir(janelaFilhaId)).toBe('perito-1');
+
+    authSessaoService.encerrar(janelaId);
+
+    expect(() => authSessaoService.exigir(janelaFilhaId)).toThrow('Faça login novamente');
   });
 });

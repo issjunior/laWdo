@@ -9,7 +9,10 @@ const log = getLogger('solicitante')
  */
 class SolicitanteService extends BaseService<SolicitanteRow> {
   constructor() {
-    super('solicitantes', 'id')
+    super('solicitantes', 'id', {
+      campos: ['id', 'nome', 'tipo', 'endereco', 'telefone', 'email', 'ativo', 'created_at', 'updated_at'],
+      ordenacaoPadrao: 'created_at',
+    })
   }
 
   /**

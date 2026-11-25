@@ -10,10 +10,23 @@ const log = getLogger('database')
 export abstract class BaseService<T extends object> {
   protected tableName: string
   protected primaryKey: string
+  private readonly camposListagem: ReadonlySet<string> | null
+  private readonly ordenacaoPadrao: string
 
-  constructor(tableName: string, primaryKey: string = 'id') {
+  constructor(
+    tableName: string,
+    primaryKey: string = 'id',
+    opcoesListagem?: { campos: readonly string[]; ordenacaoPadrao: string },
+  ) {
     this.tableName = tableName
     this.primaryKey = primaryKey
+    this.camposListagem = opcoesListagem ? new Set(opcoesListagem.campos) : null
+    this.ordenacaoPadrao = opcoesListagem?.ordenacaoPadrao ?? 'created_at'
+  }
+
+  private validarCampoListagem(campo: string, tipo: 'filtro' | 'ordenação'): void {
+    if (!this.camposListagem) return
+    if (!this.camposListagem.has(campo)) throw new Error(`Campo de ${tipo} inválido.`)
   }
 
   /**
@@ -32,9 +45,14 @@ export abstract class BaseService<T extends object> {
       const {
         limit = 100,
         offset = 0,
-        orderBy = 'created_at',
+        orderBy = this.ordenacaoPadrao,
         orderDirection = 'DESC'
       } = options
+
+      if (!Number.isInteger(limit) || limit < 1 || limit > 500) throw new Error('Limite de paginação inválido.')
+      if (!Number.isInteger(offset) || offset < 0) throw new Error('Deslocamento de paginação inválido.')
+      if (orderDirection !== 'ASC' && orderDirection !== 'DESC') throw new Error('Direção de ordenação inválida.')
+      this.validarCampoListagem(orderBy, 'ordenação')
 
       let whereClause = ''
       const params: unknown[] = []
@@ -43,6 +61,7 @@ export abstract class BaseService<T extends object> {
       const filterEntries = Object.entries(filters).filter(([_, value]) => value !== undefined)
       if (filterEntries.length > 0) {
         const conditions = filterEntries.map(([key, value], _index) => {
+          this.validarCampoListagem(key, 'filtro')
           params.push(value)
           return `${key} = ?`
         })
@@ -188,6 +207,7 @@ export abstract class BaseService<T extends object> {
       const filterEntries = Object.entries(filters).filter(([_, value]) => value !== undefined)
       if (filterEntries.length > 0) {
         const conditions = filterEntries.map(([key, value]) => {
+          this.validarCampoListagem(key, 'filtro')
           params.push(value)
           return `${key} = ?`
         })

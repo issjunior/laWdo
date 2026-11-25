@@ -61,8 +61,9 @@ export const registerLaudoHandlers = (): void => {
   /**
    * Buscar laudo por ID
    */
-  ipcMain.handle('laudo:findById', async (_event, id: string) => {
+  ipcMain.handle('laudo:findById', async (event, id: string) => {
     try {
+      authSessaoService.exigir(event.sender.id);
       if (!id) return { success: false, error: 'ID inválido' };
       const laudo = await laudoService.findById(id);
       return { success: true, data: laudo };
@@ -75,8 +76,9 @@ export const registerLaudoHandlers = (): void => {
   /**
    * Buscar laudo por REP (retorna o primeiro — compatibilidade legada)
    */
-  ipcMain.handle('laudo:findByRepId', async (_event, repId: string) => {
+  ipcMain.handle('laudo:findByRepId', async (event, repId: string) => {
     try {
+      authSessaoService.exigir(event.sender.id);
       if (!repId) return { success: false, error: 'ID da REP inválido' };
       const laudo = await laudoService.findByRepId(repId);
       return { success: true, data: laudo };
@@ -92,8 +94,9 @@ export const registerLaudoHandlers = (): void => {
   /**
    * Buscar todos os laudos de uma REP (template + wizard)
    */
-  ipcMain.handle('laudo:findAllByRepId', async (_event, repId: string) => {
+  ipcMain.handle('laudo:findAllByRepId', async (event, repId: string) => {
     try {
+      authSessaoService.exigir(event.sender.id);
       if (!repId) return { success: false, error: 'ID da REP inválido' };
       const laudos = await laudoService.findAllByRepId(repId);
       return { success: true, data: laudos };
@@ -109,8 +112,9 @@ export const registerLaudoHandlers = (): void => {
   /**
    * Listar todos os laudos com dados da REP e template
    */
-  ipcMain.handle('laudo:findAll', async () => {
+  ipcMain.handle('laudo:findAll', async event => {
     try {
+      authSessaoService.exigir(event.sender.id);
       const laudos = await laudoService.findAllComRep();
       return { success: true, data: laudos };
     } catch (error) {
@@ -125,8 +129,9 @@ export const registerLaudoHandlers = (): void => {
   /**
    * Atualizar conteúdo HTML de um laudo
    */
-  ipcMain.handle('laudo:updateConteudo', async (_event, laudoId: string, conteudo: string) => {
+  ipcMain.handle('laudo:updateConteudo', async (event, laudoId: string, conteudo: string) => {
     try {
+      const usuarioId = authSessaoService.exigir(event.sender.id);
       if (!laudoId) return { success: false, error: 'ID do laudo inválido' };
       if (typeof conteudo !== 'string') return { success: false, error: 'Conteúdo inválido' };
       const laudo = await laudoService.updateConteudo(laudoId, conteudo);
@@ -134,7 +139,7 @@ export const registerLaudoHandlers = (): void => {
       const rep = await repService.findById(laudo.rep_id);
       const repNumero = rep?.numero ?? laudo.rep_id;
 
-      auditCicloVida('', 'laudo', laudoId, 'atualizacao',
+      auditCicloVida(usuarioId, 'laudo', laudoId, 'atualizacao',
         `Laudo da Requisição ${repNumero} salvo (versão ${laudo?.versao ?? '?'})`,
         null,
         { versao: laudo?.versao },
@@ -153,25 +158,25 @@ export const registerLaudoHandlers = (): void => {
   /**
    * Criar laudo para uma REP existente (via botão "Criar Laudo" na tabela de REPs)
    */
-  ipcMain.handle('laudo:create', async (_event, data: { rep_id: string; perito_id: string; template_id: string }) => {
+  ipcMain.handle('laudo:create', async (event, data: { rep_id: string; template_id: string }) => {
     try {
+      const usuarioId = authSessaoService.exigir(event.sender.id);
       if (!data.rep_id) return { success: false, error: 'ID da REP é obrigatório' };
-      if (!data.perito_id) return { success: false, error: 'ID do perito é obrigatório' };
       if (!data.template_id) return { success: false, error: 'ID do template é obrigatório' };
 
       const laudo = await laudoService.criarLaudoInicial({
         rep_id: data.rep_id,
-        perito_id: data.perito_id,
+        perito_id: usuarioId,
         template_id: data.template_id,
       });
 
       const rep = await repService.findById(data.rep_id);
       const repNumero = rep?.numero ?? data.rep_id;
 
-      auditCicloVida('', 'laudo', laudo.id, 'criacao',
+      auditCicloVida(usuarioId, 'laudo', laudo.id, 'criacao',
         `Laudo da Requisição ${repNumero} iniciado`,
         null,
-        { rep_id: data.rep_id, perito_id: data.perito_id, template_id: data.template_id, status: 'Em andamento', versao: 1 },
+        { rep_id: data.rep_id, perito_id: usuarioId, template_id: data.template_id, status: 'Em andamento', versao: 1 },
       );
 
       return { success: true, data: laudo };
@@ -187,8 +192,9 @@ export const registerLaudoHandlers = (): void => {
   /**
    * Gerar laudo wizard (preenche laudo existente com peças)
    */
-  ipcMain.handle('laudo:gerarWizard', async (_event, params: GerarWizardParams) => {
+  ipcMain.handle('laudo:gerarWizard', async (event, params: GerarWizardParams) => {
     try {
+      authSessaoService.exigir(event.sender.id);
       const laudo = await laudoService.gerarLaudoWizard(params);
       return { success: true, data: laudo };
     } catch (error) {
@@ -200,8 +206,9 @@ export const registerLaudoHandlers = (): void => {
   /**
    * Salvar progresso do wizard (respostas parciais)
    */
-  ipcMain.handle('laudo:salvarProgressoWizard', async (_event, laudoId: string, respostas: RespostasWizard) => {
+  ipcMain.handle('laudo:salvarProgressoWizard', async (event, laudoId: string, respostas: RespostasWizard) => {
     try {
+      authSessaoService.exigir(event.sender.id);
       await laudoService.salvarProgressoWizard(laudoId, respostas);
       return { success: true, message: 'Progresso salvo' };
     } catch (error) {
@@ -213,8 +220,9 @@ export const registerLaudoHandlers = (): void => {
   /**
    * Buscar respostas salvas de um laudo wizard
    */
-  ipcMain.handle('laudo:getRespostasWizard', async (_event, laudoId: string) => {
+  ipcMain.handle('laudo:getRespostasWizard', async (event, laudoId: string) => {
     try {
+      authSessaoService.exigir(event.sender.id);
       const respostas = await laudoService.getRespostasWizard(laudoId);
       return { success: true, data: respostas };
     } catch (error) {
@@ -228,8 +236,9 @@ export const registerLaudoHandlers = (): void => {
    * @param laudoId ID do laudo
    * @param userId ID do usuário (opcional, para auditoria)
    */
-  ipcMain.handle('laudo:delete', async (_event, laudoId: string, userId?: string) => {
+  ipcMain.handle('laudo:delete', async (event, laudoId: string) => {
     try {
+      const usuarioId = authSessaoService.exigir(event.sender.id);
       if (!laudoId) return { success: false, error: 'ID do laudo inválido' };
 
       const laudo = await laudoService.findById(laudoId);
@@ -242,12 +251,11 @@ export const registerLaudoHandlers = (): void => {
       const rep = await repService.findById(rep_id);
       const repNumero = rep?.numero ?? rep_id;
 
-      const uid = userId || '';
       logDebug('Laudo excluído e REP resetada para Pendente', { laudoId, repId: rep_id, status: statusAnterior });
-      auditDelete(uid, 'laudos', laudoId,
+      auditDelete(usuarioId, 'laudos', laudoId,
         `Laudo da Requisição ${repNumero} excluído. Requisição ${repNumero} voltou a Pendente`,
         `REP ${rep_id} resetada para Pendente`);
-      auditCicloVida(uid, 'rep', rep_id, 'transicao_status',
+      auditCicloVida(usuarioId, 'rep', rep_id, 'transicao_status',
         `Requisição ${repNumero} voltou a Pendente`,
         { status: statusAnterior },
         { status: 'Pendente', motivo: 'laudo_excluido' },
@@ -265,9 +273,10 @@ export const registerLaudoHandlers = (): void => {
   /**
    * Atualizar status do laudo (Em andamento → Concluído → Entregue)
    */
-  ipcMain.handle('laudo:updateStatus', async (_event, laudoId: string, novoStatus: string) => {
+  ipcMain.handle('laudo:updateStatus', async (event, laudoId: string, novoStatus: string) => {
     let preparacao: Awaited<ReturnType<typeof prepararConclusaoImagensLaudo>> | undefined;
     try {
+      const usuarioId = authSessaoService.exigir(event.sender.id);
       if (!laudoId) return { success: false, error: 'ID do laudo inválido' };
       if (!STATUS_LAUDO.includes(novoStatus as typeof STATUS_LAUDO[number])) {
         return { success: false, error: `Status inválido. Use: ${STATUS_LAUDO.join(', ')}` };
@@ -300,7 +309,7 @@ export const registerLaudoHandlers = (): void => {
       const rep = await repService.findById(laudoAntes.rep_id);
       const repNumero = rep?.numero ?? laudoAntes.rep_id;
 
-      auditCicloVida('', 'laudo', laudoId, 'transicao_status',
+      auditCicloVida(usuarioId, 'laudo', laudoId, 'transicao_status',
         `Laudo da Requisição ${repNumero}: ${statusAnterior ?? '?'} → ${novoStatus}`,
         { status: statusAnterior, data_conclusao: laudoAntes.data_conclusao, data_entrega: laudoAntes.data_entrega },
         { status: novoStatus, data_conclusao: laudo.data_conclusao, data_entrega: laudo.data_entrega },
@@ -320,8 +329,9 @@ export const registerLaudoHandlers = (): void => {
   /**
    * Exportar laudo (PDF, DOCX ou ODT)
    */
-  ipcMain.handle('laudo:exportar', async (_event, params: unknown) => {
+  ipcMain.handle('laudo:exportar', async (event, params: unknown) => {
     try {
+      authSessaoService.exigir(event.sender.id);
       if (!params || typeof params !== 'object') {
         return { success: false, error: 'Parâmetros inválidos' };
       }
@@ -340,8 +350,9 @@ export const registerLaudoHandlers = (): void => {
   /**
    * Sincronizar seções condicionais/repetíveis do laudo com o template e dados da REP
    */
-  ipcMain.handle('laudo:sincronizarSecoes', async (_event, laudoId: string) => {
+  ipcMain.handle('laudo:sincronizarSecoes', async (event, laudoId: string) => {
     try {
+      authSessaoService.exigir(event.sender.id);
       if (!laudoId) return { success: false, error: 'ID do laudo inválido' };
       await laudoService.sincronizarSecoesCondicionais(laudoId);
       return { success: true, message: 'Seções sincronizadas com sucesso' };
@@ -354,8 +365,9 @@ export const registerLaudoHandlers = (): void => {
   /**
    * Verificar se LibreOffice está disponível (para habilitar opção ODT)
    */
-  ipcMain.handle('laudo:verificarLibreOffice', async () => {
+  ipcMain.handle('laudo:verificarLibreOffice', async event => {
     try {
+      authSessaoService.exigir(event.sender.id);
       const disponivel = await verificarLibreOffice();
       return { success: true, data: disponivel };
     } catch {

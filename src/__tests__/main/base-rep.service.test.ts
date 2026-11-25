@@ -14,6 +14,9 @@ import { repService } from '../../main/services/rep.service'
 
 type RegistroTeste = { id: string; nome: string; status?: string; created_at: string; updated_at: string }
 class ServicoTeste extends BaseService<RegistroTeste> { constructor() { super('registros') } }
+class ServicoProtegido extends BaseService<RegistroTeste> {
+  constructor() { super('registros', 'id', { campos: ['id', 'nome', 'status', 'created_at', 'updated_at'], ordenacaoPadrao: 'created_at' }) }
+}
 
 describe('BaseService e RepService', () => {
   beforeEach(() => vi.resetAllMocks())
@@ -23,6 +26,15 @@ describe('BaseService e RepService', () => {
     await new ServicoTeste().findAll({ nome: 'A', status: undefined }, { limit: 20, offset: 40, orderBy: 'nome', orderDirection: 'ASC' })
     expect(mocks.consultar).toHaveBeenCalledWith(expect.stringContaining('WHERE nome = ?'), ['A', 20, 40])
     expect(mocks.consultar.mock.calls[0]?.[0]).toContain('ORDER BY nome ASC')
+  })
+
+  it('rejeita campos, ordenação e paginação fora do contrato antes de consultar o SQLite', async () => {
+    const servico = new ServicoProtegido()
+
+    await expect(servico.findAll({ 'nome; DROP TABLE registros' : 'A' } as never)).rejects.toThrow('Campo de filtro inválido')
+    await expect(servico.findAll({}, { orderBy: 'nome; DROP TABLE registros' })).rejects.toThrow('Campo de ordenação inválido')
+    await expect(servico.findAll({}, { limit: 0 })).rejects.toThrow('Limite de paginação inválido')
+    expect(mocks.consultar).not.toHaveBeenCalled()
   })
 
   it('não atualiza nem exclui registros ausentes e preserva atualização vazia', async () => {

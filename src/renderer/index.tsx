@@ -132,7 +132,7 @@ interface IpcAPIRendererLegada {
   openDevTools?: () => void;
   login: (username: string, password: string) => Promise<IpcRespostaLegada>;
   logout: () => Promise<{ success: boolean }>;
-  verifyPassword: (userId: string, password: string) => Promise<IpcRespostaLegada>;
+  verifyPassword: (password: string) => Promise<IpcRespostaLegada>;
   user: IpcGrupoLegado;
   solicitante: IpcGrupoLegado;
   tipoExame: IpcGrupoLegado;
@@ -178,6 +178,9 @@ interface IpcAPIRendererLegada {
     onPainelComando: (callback: (comando: ComandoPainelIa) => void) => () => void;
     onPainelReencaixar: (callback: (sessionId: string) => void) => () => void;
     onPainelFechado: (callback: (sessionId: string) => void) => () => void;
+  };
+  notebooklm: {
+    abrir: () => Promise<{ success: boolean; reutilizada?: boolean; error?: string }>;
   };
   backup: {
     criar: (tipo: 'completo' | 'configuracao', senha: string) => Promise<{ success: boolean; path?: string; error?: string; canceled?: boolean }>;
@@ -328,6 +331,7 @@ const initApp = async () => {
             success: false,
             error: 'A ponte segura com o aplicativo não está disponível.',
           }),
+          temUsuarios: async () => ({ success: true, data: false }),
           updateProfile: async () => ({ success: false, error: 'Mock mode' }),
           uploadAvatar: async () => ({ success: true, data: { foto_url: '' } }),
           getAvatar: async () => ({ success: false, error: 'Mock mode' }),

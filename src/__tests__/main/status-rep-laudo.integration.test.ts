@@ -9,6 +9,7 @@ describe('status local da REP vinculada ao laudo', () => {
   let banco: typeof import('../../main/database/index');
   let sqlite: typeof import('../../main/database/sqlite');
   let laudos: typeof import('../../main/services/laudo.service')['laudoService'];
+  let authSessaoService: typeof import('../../main/services/auth-sessao.service')['authSessaoService'];
 
   const statusRep = async (id: string) => {
     const linhas = await sqlite.executeQuery<{ status: string }>('SELECT status FROM reps WHERE id = ?', [id]);
@@ -25,6 +26,7 @@ describe('status local da REP vinculada ao laudo', () => {
     vi.resetModules();
     banco = await import('../../main/database/index');
     sqlite = await import('../../main/database/sqlite');
+    authSessaoService = (await import('../../main/services/auth-sessao.service')).authSessaoService;
     await banco.setupDatabase();
     laudos = (await import('../../main/services/laudo.service')).laudoService;
     await sqlite.executeNonQuery("INSERT INTO users (id, nome, email, username, senha_hash) VALUES ('perito', 'Perito', 'perito@teste.local', 'perito', 'hash')");
@@ -51,20 +53,23 @@ describe('status local da REP vinculada ao laudo', () => {
     };
     const atualizar = obterHandler('laudo:updateStatus');
     const excluir = obterHandler('laudo:delete');
+    const evento = { sender: { id: 765 } } as Electron.IpcMainInvokeEvent;
+    authSessaoService.iniciar(evento.sender.id, 'perito');
 
-    expect((await atualizar({} as Electron.IpcMainInvokeEvent, laudo.id, 'Concluído')).success).toBe(true);
+    expect((await atualizar(evento, laudo.id, 'Concluído')).success).toBe(true);
     expect(await statusRep('rep-ciclo')).toBe('Concluído');
-    expect((await atualizar({} as Electron.IpcMainInvokeEvent, laudo.id, 'Entregue')).success).toBe(true);
+    expect((await atualizar(evento, laudo.id, 'Entregue')).success).toBe(true);
     expect(await statusRep('rep-ciclo')).toBe('Concluído');
-    expect((await atualizar({} as Electron.IpcMainInvokeEvent, laudo.id, 'Em andamento')).success).toBe(true);
+    expect((await atualizar(evento, laudo.id, 'Em andamento')).success).toBe(true);
     expect(await statusRep('rep-ciclo')).toBe('Em Andamento');
     const repService = (await import('../../main/services/rep.service')).repService;
     const falhaRep = vi.spyOn(repService, 'updateStatus').mockResolvedValueOnce(null);
-    expect((await atualizar({} as Electron.IpcMainInvokeEvent, laudo.id, 'Concluído')).success).toBe(false);
+    expect((await atualizar(evento, laudo.id, 'Concluído')).success).toBe(false);
     expect(await laudos.findById(laudo.id)).toMatchObject({ status: 'Em andamento' });
     expect(await statusRep('rep-ciclo')).toBe('Em Andamento');
     falhaRep.mockRestore();
-    expect((await excluir({} as Electron.IpcMainInvokeEvent, laudo.id)).success).toBe(true);
+    expect((await excluir(evento, laudo.id)).success).toBe(true);
+    authSessaoService.encerrar(evento.sender.id);
     expect(await statusRep('rep-ciclo')).toBe('Pendente');
   });
 

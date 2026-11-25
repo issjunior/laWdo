@@ -8,7 +8,6 @@ import { Upload, X, Camera } from 'lucide-react'
 interface AvatarUploadDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  userId: string
   currentFotoUrl: string | null
   userName: string
   onAvatarUpdated: (fotoUrl: string) => void
@@ -59,7 +58,6 @@ function resizeImage(file: File, maxSize: number): Promise<string> {
 export function AvatarUploadDialog({
   open,
   onOpenChange,
-  userId,
   currentFotoUrl,
   userName,
   onAvatarUpdated,
@@ -101,7 +99,7 @@ export function AvatarUploadDialog({
 
     try {
       setIsUploading(true)
-      const result = await window.ipcAPI.user.uploadAvatar(userId, previewUrl)
+      const result = await window.ipcAPI.user.uploadAvatar(previewUrl)
 
       if (!result.success) {
         throw new Error(result.error || 'Erro ao salvar avatar')
@@ -115,7 +113,7 @@ export function AvatarUploadDialog({
     } finally {
       setIsUploading(false)
     }
-  }, [previewUrl, userId, onAvatarUpdated, onOpenChange])
+  }, [previewUrl, onAvatarUpdated, onOpenChange])
 
   const handleRemovePreview = useCallback(() => {
     setPreviewUrl(null)
