@@ -3,7 +3,10 @@ import type { ResultadoImportacaoGdl } from '@shared/types/gdl-importacao.types'
 import type { PecaBalistica } from '@shared/types/pecas-balistica.types';
 import { mesclarPecasBalisticaDoGdl } from '@/components/rep/exam-fields/pecas-balistica-gdl.utils';
 import { criarDadosB601, lerDadosB601, type DadosB601 } from '@shared/types/b601.types';
+import { criarDadosI801, lerDadosI801 } from '@/components/rep/exam-fields/services/i801.service';
+import type { DadosI801, PecaI801 } from '@shared/types/i801.types';
 import { obterPendenciaPecaB601 } from '@shared/catalogos/b601.catalogo';
+import { obterPendenciaPecaI801 } from '@shared/catalogos/i801.catalogo';
 import { useRegistrarAlteracoesPendentes } from '@/contexts/AlteracoesPendentesContext';
 import { codigoExameParaFormulario, normalizarCodigoExame } from '@shared/gdl/natureza-exame';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
@@ -124,12 +127,15 @@ type CampoRep = Path<REPFormData>;
 const esquemaTiposExameResumo = z.array(z.object({ id: z.string(), nome: z.string(), codigo: z.string() }));
 const esquemaTemplatesResumo = z.array(z.object({ id: z.string(), nome: z.string(), chave_integrada: z.string().nullish() }));
 
-function obterTemplatePadraoBalistica(codigoExame: string | undefined, templates: TemplateResumo[]): TemplateResumo | undefined {
+function obterTemplatePadraoIntegrado(codigoExame: string | undefined, templates: TemplateResumo[]): TemplateResumo | undefined {
   const codigo = normalizarCodigoExame(codigoExame ?? '');
   if (codigo === 'B601') return templates.find(template => template.nome === 'Laudo Padrão B-601');
-  if (codigo !== 'B602') return undefined;
-  return templates.find(template => template.chave_integrada === 'laudo-padrao-b602')
-    ?? templates.find(template => template.nome === 'Laudo Padrão B-602');
+  const chaveIntegrada = codigo === 'B602' ? 'laudo-padrao-b602'
+    : codigo === 'I801' ? 'laudo-padrao-i801'
+      : undefined;
+  if (!chaveIntegrada) return undefined;
+  return templates.find(template => template.chave_integrada === chaveIntegrada)
+    ?? templates.find(template => template.nome === (codigo === 'I801' ? 'Laudo Padrão I-801' : 'Laudo Padrão B-602'));
 }
 
 function ehRegistro(valor: unknown): valor is Record<string, unknown> {
@@ -220,7 +226,7 @@ function buildRepHtml(rep: RegistroRep, solicitanteNome: string, tipoExameNome: 
         html += `<table style="${REP_TABLE_STYLES.table}">`;
         html += buildRepTableTitle('DADOS DO VEÍCULO', 4);
         html += buildRepTwoCol('Veículo', s(veic.veiculo), 'Placa', s(veic.placa));
-        html += buildRepTwoCol('Fabricação/Modelo', s(veic.fabricacao_modelo), 'Cor', s(veic.cor));
+        html += buildRepTwoCol('Fabricação/Modelo', s(veic.fabricacao_modelo || veic.fabricacao), 'Cor', s(veic.cor));
         html += buildRepTwoCol('Conservação', s(veic.conservacao), '', '');
         html += buildRepTwoCol('Chassi', s(veic.chassi), 'Chassi Revelado', s(veic.chassi_revelado));
         html += buildRepTwoCol('Motor', s(veic.motor), 'Motor Revelado', s(veic.motor_revelado));
@@ -422,6 +428,7 @@ function prepareForApi(
   data: REPFormData,
   codigo: string | undefined,
   pecasB602: PecaB602[],
+  contextoI801: { dados: DadosI801; raiz: Record<string, unknown>; metadadosIntegracaoGdl: MetadadosIntegracaoGdl | null },
   metadadosIntegracaoGdl: MetadadosIntegracaoGdl | null,
   contextoB601?: { dados: DadosB601; raiz: Record<string, unknown> },
 ) {
@@ -455,7 +462,8 @@ function prepareForApi(
       data,
       codigo === 'B-602'
         ? { b602: { pecas: pecasB602, metadadosIntegracaoGdl } }
-        : codigo === 'B-601' ? { b601: contextoB601 } : undefined,
+        : codigo === 'B-601' ? { b601: contextoB601 }
+          : codigo === 'I-801' ? { i801: contextoI801 } : undefined,
     );
     payload.campos_especificos = serializado || null;
   }
@@ -531,6 +539,7 @@ function listarCamposObrigatoriosPendentes(
   data: Partial<REPFormData>,
   tipoExameCodigo?: string,
   pecasB602: PecaB602[] = [],
+  dadosI801?: DadosI801,
 ): CampoObrigatorioPendente[] {
   const pendentes: CampoObrigatorioPendente[] = [];
 
@@ -541,10 +550,6 @@ function listarCamposObrigatoriosPendentes(
 
   if (tipoExameCodigo === 'LOC' && !campoPreenchido(data.local_fato)) {
     pendentes.push({ campo: 'local_fato', label: 'Local do Fato', stepId: 'section-local_fato' });
-  }
-
-  if (tipoExameCodigo === 'I-801' && !campoPreenchido(data.numeracao_veiculo)) {
-    pendentes.push({ campo: 'numeracao_veiculo', label: 'Veículo', stepId: 'section-numeracao' });
   }
 
   if (tipoExameCodigo === 'B-602') {
@@ -558,6 +563,12 @@ function listarCamposObrigatoriosPendentes(
     if (!campoPreenchido(data.b602_numero_bo) && !campoPreenchido(data.b602_numero_ip)) {
       pendentes.push({ campo: 'b602_numero_bo', label: 'Nº do BO ou Nº do IP', stepId: 'section-dados_investigacao' });
     }
+  }
+
+  if (tipoExameCodigo === 'I-801' && (
+    !dadosI801?.pecas.length || dadosI801.pecas.some(obterPendenciaPecaI801)
+  )) {
+    pendentes.push({ campo: 'i801_pecas_validas', label: 'Itens I-801 válidos', stepId: 'section-numeracao' });
   }
 
   return pendentes;
@@ -637,6 +648,8 @@ export const REPsPage: React.FC = () => {
   const [editingRep, setEditingRep] = useState<REP | null>(null);
   const [pecasB602, setPecasB602] = useState<PecaB602[]>([]);
   const [dadosB601, setDadosB601] = useState<DadosB601>(criarDadosB601);
+  const [dadosI801, setDadosI801] = useState<DadosI801>(criarDadosI801);
+  const raizI801Ref = useRef<Record<string, unknown>>({});
   const raizB601Ref = useRef<Record<string, unknown>>({});
   const [erroB601, setErroB601] = useState<string | null>(null);
   const [editandoPecaB601, setEditandoPecaB601] = useState(false);
@@ -738,9 +751,6 @@ export const REPsPage: React.FC = () => {
 
     if (sections.includes('local_fato') && !data.local_fato?.trim()) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Local do fato é obrigatório para este tipo de exame', path: ['local_fato'] });
-    }
-    if (sections.includes('numeracao') && !data.numeracao_veiculo?.trim()) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Veículo é obrigatório', path: ['numeracao_veiculo'] });
     }
     if (sections.includes('dados_investigacao')) {
       if (!data.b602_envolvidos_0?.trim()) {
@@ -882,7 +892,7 @@ export const REPsPage: React.FC = () => {
           form.setValue('template_id', '', { shouldValidate: false });
         }
         const codigoExame = tiposExame.find(tipo => tipo.id === tipoExameId)?.codigo;
-        const templatePadrao = obterTemplatePadraoBalistica(codigoExame, ordenados);
+        const templatePadrao = obterTemplatePadraoIntegrado(codigoExame, ordenados);
         if (templatePadrao && !form.getValues('template_id')) form.setValue('template_id', templatePadrao.id, { shouldValidate: false });
       } else {
         setTemplatesVinculados([]);
@@ -905,14 +915,14 @@ export const REPsPage: React.FC = () => {
   const valoresFormulario = form.watch();
   const camposObrigatoriosPendentes = useMemo(
     () => {
-      const pendencias = listarCamposObrigatoriosPendentes(valoresFormulario, tipoExameSelecionado?.codigo, pecasB602);
+      const pendencias = listarCamposObrigatoriosPendentes(valoresFormulario, tipoExameSelecionado?.codigo, pecasB602, dadosI801);
       if (tipoExameSelecionado?.codigo === 'B-601' && (erroB601 || editandoPecaB601
         || (!dadosB601.semPecas && (dadosB601.pecas.length === 0 || dadosB601.pecas.some(peca => obterPendenciaPecaB601(peca)))))) {
         pendencias.push({ campo: 'b601_pecas_validas', label: erroB601 ? 'Revisar dados B-601' : editandoPecaB601 ? 'Confirmar edição da peça' : 'Peças válidas ou declaração sem peças', stepId: 'section-pecas_b601' });
       }
       return pendencias;
     },
-    [dadosB601, erroB601, editandoPecaB601, pecasB602, tipoExameSelecionado?.codigo, valoresFormulario]
+    [dadosB601, dadosI801, erroB601, editandoPecaB601, pecasB602, tipoExameSelecionado?.codigo, valoresFormulario]
   );
   const alterarDadosB601 = useCallback((dados: DadosB601) => {
     setDadosB601(dados);
@@ -1001,7 +1011,9 @@ export const REPsPage: React.FC = () => {
     setOrigensSolicitacaoGdl([]);
     setPecasB602([]);
     setDadosB601(criarDadosB601());
+    setDadosI801(criarDadosI801());
     raizB601Ref.current = {};
+    raizI801Ref.current = {};
     setErroB601(null);
     setEditandoPecaB601(false);
     setMetadadosIntegracaoGdl(null);
@@ -1053,7 +1065,9 @@ export const REPsPage: React.FC = () => {
     setOrigensSolicitacaoGdl([]);
     setPecasB602([]);
     setDadosB601(criarDadosB601());
+    setDadosI801(criarDadosI801());
     raizB601Ref.current = {};
+    raizI801Ref.current = {};
     setErroB601(null);
     setEditandoPecaB601(false);
     setMetadadosIntegracaoGdl(null);
@@ -1108,6 +1122,8 @@ export const REPsPage: React.FC = () => {
     setEditandoPecaB601(false);
     setDadosB601(criarDadosB601());
     raizB601Ref.current = {};
+    setDadosI801(criarDadosI801());
+    raizI801Ref.current = {};
     if (tipo?.codigo === 'B-601') {
       try {
         const carregado = lerDadosB601(rep.campos_especificos);
@@ -1118,8 +1134,17 @@ export const REPsPage: React.FC = () => {
         setErroB601(mensagemErro(falha, 'Não foi possível ler os dados B-601.'));
       }
     }
+    if (tipo?.codigo === 'I-801') {
+      try {
+        const carregado = lerDadosI801(rep.campos_especificos);
+        setDadosI801(carregado.dados);
+        raizI801Ref.current = carregado.raiz;
+      } catch (falha: unknown) {
+        setError(mensagemErro(falha, 'Não foi possível ler os dados I-801.'));
+      }
+    }
     setPecasB602(tipo?.codigo === 'B-602' ? extrairPecasB602(rep.campos_especificos) : []);
-    const metadadosGdl = ['B-601', 'B-602'].includes(tipo?.codigo ?? '') ? extrairMetadadosIntegracaoGdl(rep.campos_especificos) : null;
+    const metadadosGdl = ['B-601', 'B-602', 'I-801'].includes(tipo?.codigo ?? '') ? extrairMetadadosIntegracaoGdl(rep.campos_especificos) : null;
     setMetadadosIntegracaoGdl(metadadosGdl);
     setOrigensSolicitacaoGdl(metadadosGdl?.dadosSolicitacao?.origensDisponiveis ?? []);
 
@@ -1267,7 +1292,7 @@ export const REPsPage: React.FC = () => {
           const ordenados = [...(r.data as TemplateResumo[])].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
           setCriarLaudoTemplates(ordenados);
           const codigoExame = tiposExame.find(tipo => tipo.id === rep.tipo_exame_id)?.codigo;
-          const templatePadrao = obterTemplatePadraoBalistica(codigoExame, ordenados);
+          const templatePadrao = obterTemplatePadraoIntegrado(codigoExame, ordenados);
           if (templatePadrao) setCriarLaudoTemplateId(templatePadrao.id);
         }
       })();
@@ -1321,7 +1346,7 @@ export const REPsPage: React.FC = () => {
       const ordenados = [...(r.data as TemplateResumo[])].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
       setCriarLaudoTemplates(ordenados);
       const codigoExame = tiposExame.find(tipo => tipo.id === tipoExameId)?.codigo;
-      const templatePadrao = obterTemplatePadraoBalistica(codigoExame, ordenados);
+      const templatePadrao = obterTemplatePadraoIntegrado(codigoExame, ordenados);
       if (templatePadrao) setCriarLaudoTemplateId(templatePadrao.id);
     } else {
       setCriarLaudoTemplates([]);
@@ -1400,7 +1425,14 @@ export const REPsPage: React.FC = () => {
       if (codigo === 'B-601' && (editandoPecaB601 || (!dadosB601.semPecas && (dadosB601.pecas.length === 0 || dadosB601.pecas.some(peca => obterPendenciaPecaB601(peca)))))) {
         throw new Error('Confirme as peças válidas ou declare ausência de itens antes de salvar.');
       }
-      const apiData = prepareForApi(data, codigo, pecasB602, metadadosIntegracaoGdl, { dados: dadosB601, raiz: raizB601Ref.current });
+      if (codigo === 'I-801' && dadosI801.pecas.length === 0) {
+        throw new Error('Adicione ao menos uma peça I-801 antes de salvar.');
+      }
+      const apiData = prepareForApi(data, codigo, pecasB602, {
+        dados: dadosI801,
+        raiz: raizI801Ref.current,
+        metadadosIntegracaoGdl,
+      }, metadadosIntegracaoGdl, { dados: dadosB601, raiz: raizB601Ref.current });
 
       if (editingRep) {
         const r = await window.ipcAPI.rep.update(editingRep.id, apiData);
@@ -1540,8 +1572,9 @@ export const REPsPage: React.FC = () => {
     pecasImportadasSelecionadas: PecaBalistica[],
   ) => {
     const novosPreenchidos = new Set<string>();
+    const pecasAtuaisGdl = resultado.codigoExame === 'B-601' ? dadosB601.pecas : resultado.codigoExame === 'I-801' ? dadosI801.pecas : pecasB602;
     const substituirDadosGdl = modo === 'substituir'
-      || !(formularioTemDadosRelevantesParaGdl(form.getValues(), resultado.codigoExame === 'B-601' ? dadosB601.pecas : pecasB602) || (resultado.codigoExame === 'B-601' && dadosB601.semPecas));
+      || !(formularioTemDadosRelevantesParaGdl(form.getValues(), pecasAtuaisGdl) || (resultado.codigoExame === 'B-601' && dadosB601.semPecas));
     const codigoExameGdl = resultado.codigoExame.trim().toUpperCase();
     if (resultado.codigoExame === 'B-601' && (erroB601 || editandoPecaB601)) {
       throw new Error(erroB601 || 'Confirme ou cancele a edição da peça antes de importar.');
@@ -1582,13 +1615,13 @@ export const REPsPage: React.FC = () => {
       }
     }
 
-    if (['B-601', 'B-602'].includes(resultado.codigoExame) && !form.getValues('template_id')) {
+    if (['B-601', 'B-602', 'I-801'].includes(resultado.codigoExame) && !form.getValues('template_id')) {
       const respostaTemplates = await window.ipcAPI.template.findByTipoExame(tipoExameGdl.id);
       if (respostaTemplates.success && respostaTemplates.data) {
         const validacaoTemplates = esquemaTemplatesResumo.safeParse(respostaTemplates.data);
         const templates = [...(validacaoTemplates.success ? validacaoTemplates.data : [])]
           .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
-        const templatePadrao = obterTemplatePadraoBalistica(codigoExameGdl, templates);
+        const templatePadrao = obterTemplatePadraoIntegrado(codigoExameGdl, templates);
         if (templatePadrao) {
           setTemplatesVinculados(templates);
           form.setValue('template_id', templatePadrao.id, { shouldValidate: false });
@@ -1596,15 +1629,17 @@ export const REPsPage: React.FC = () => {
       }
     }
 
-    const prefixo = resultado.codigoExame === 'B-601' ? 'b601' : 'b602';
-    await form.trigger(['tipo_solicitacao', `${prefixo}_numero_bo`, `${prefixo}_numero_ip`]);
+    await form.trigger();
 
     if (resultado.codigoExame === 'B-601') {
       const pecas = mesclarPecasBalisticaDoGdl(dadosB601.pecas, resultado.camposEspecificos.pecas, substituirDadosGdl, modo === 'substituir', pecasImportadasSelecionadas, true);
       raizB601Ref.current = { ...raizB601Ref.current, integracaoGdl: resultado.metadadosIntegracaoGdl ?? metadadosIntegracaoGdl };
       alterarDadosB601({ ...dadosB601, pecas, semPecas: pecas.length === 0 && dadosB601.semPecas });
-    } else {
+    } else if (resultado.codigoExame === 'B-602') {
       setPecasB602(atuais => mesclarPecasB602DoGdl(atuais, resultado.camposEspecificos.pecas, substituirDadosGdl, modo === 'substituir', pecasImportadasSelecionadas));
+    } else {
+      const pecas = mesclarPecasBalisticaDoGdl(dadosI801.pecas, resultado.camposEspecificos.pecas, substituirDadosGdl, modo === 'substituir', pecasImportadasSelecionadas, true);
+      setDadosI801({ pecas });
     }
     setMetadadosIntegracaoGdl(resultado.metadadosIntegracaoGdl ?? metadadosIntegracaoGdl);
 
@@ -1640,10 +1675,12 @@ export const REPsPage: React.FC = () => {
       const pecas = mesclarPecasBalisticaDoGdl(dadosB601.pecas, pecasRetornadasSelecionadas, true, true, pecasImportadasSelecionadas, true);
       raizB601Ref.current = { ...raizB601Ref.current, integracaoGdl: resultado.metadadosIntegracaoGdl ?? metadadosIntegracaoGdl };
       alterarDadosB601({ ...dadosB601, pecas, semPecas: pecas.length === 0 && dadosB601.semPecas });
-    } else {
+    } else if (resultado.codigoExame === 'B-602') {
       const ids = new Set(pecasRetornadasSelecionadas.map(peca => peca.idLocal));
       const recebidas = resultado.camposEspecificos.pecas.filter(peca => ids.has(peca.idLocal));
       setPecasB602(atuais => mesclarPecasB602DoGdl(atuais, recebidas, true, true, pecasImportadasSelecionadas));
+    } else {
+      setDadosI801({ pecas: mesclarPecasBalisticaDoGdl(dadosI801.pecas, pecasRetornadasSelecionadas as PecaI801[], true, true, pecasImportadasSelecionadas, true) });
     }
     setMetadadosIntegracaoGdl(resultado.metadadosIntegracaoGdl ?? metadadosIntegracaoGdl);
     setSuccess('Seleção de peças do GDL aplicada ao formulário.');
@@ -2436,8 +2473,10 @@ export const REPsPage: React.FC = () => {
                           mostrarPlaceholders={mostrarPlaceholders}
                           pecasB602={pecasB602}
                           dadosB601={dadosB601}
+                          dadosI801={dadosI801}
                           onPecasB602Change={setPecasB602}
                           onDadosB601Change={alterarDadosB601}
+                          onDadosI801Change={setDadosI801}
                           onEdicaoPecaB601Change={alterarEdicaoPecaB601}
                           onRevisarPecasGdl={() => setGdlPecasModalOpen(true)}
                           camposPreenchidosGdl={camposPreenchidosGdl}
@@ -2587,9 +2626,10 @@ export const REPsPage: React.FC = () => {
           if (!aberto) setRepInicialGdl(null);
         }}
         onAplicar={handleAplicarGdl}
-        temDadosExistentes={formularioTemDadosRelevantesParaGdl(valoresFormulario, tipoExameSelecionado?.codigo === 'B-601' ? dadosB601.pecas : pecasB602) || (tipoExameSelecionado?.codigo === 'B-601' && dadosB601.semPecas)}
+        temDadosExistentes={formularioTemDadosRelevantesParaGdl(valoresFormulario, tipoExameSelecionado?.codigo === 'B-601' ? dadosB601.pecas : tipoExameSelecionado?.codigo === 'I-801' ? dadosI801.pecas : pecasB602) || (tipoExameSelecionado?.codigo === 'B-601' && dadosB601.semPecas)}
         pecasB602={pecasB602}
         pecasB601={dadosB601.pecas}
+        pecasI801={dadosI801.pecas}
         onConfigurarCredenciais={() => {
           setGdlModalOpen(false);
           navigate('/gdl-config');
@@ -2610,8 +2650,8 @@ export const REPsPage: React.FC = () => {
         open={gdlPecasModalOpen}
         onOpenChange={setGdlPecasModalOpen}
         numeroRepCompleto={valoresFormulario.numero}
-        codigoExame={tipoExameSelecionado?.codigo === 'B-601' ? 'B-601' : 'B-602'}
-        pecasAtuais={tipoExameSelecionado?.codigo === 'B-601' ? dadosB601.pecas : pecasB602}
+        codigoExame={tipoExameSelecionado?.codigo === 'B-601' ? 'B-601' : tipoExameSelecionado?.codigo === 'I-801' ? 'I-801' : 'B-602'}
+        pecasAtuais={tipoExameSelecionado?.codigo === 'B-601' ? dadosB601.pecas : tipoExameSelecionado?.codigo === 'I-801' ? dadosI801.pecas : pecasB602}
         onAplicar={handleAplicarPecasGdl}
       />
       <AlertDialog open={repDuplicadaNumero !== null} onOpenChange={(open) => {

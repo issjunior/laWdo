@@ -12,7 +12,7 @@ O mecanismo permite variar o formulário de REP sem levar detalhes de cada exame
 | menu de placeholders | `EXAM_MENU_REGISTRY` |
 | contrato textual do formulário | `REPFormData` |
 | contexto de coleções externas ao formulário | `ContextoSerializacaoCamposEspecificos` |
-| coleção estruturada de peças B-602 | `PecaB602[]` mantido por `REPsPage` |
+| coleção estruturada de peças B-602 / I-801 | `PecaB602[]` / `DadosI801.pecas` mantidos por `REPsPage` |
 
 `SECTION_REGISTRY` é catálogo, não a lista de funcionalidades ativas. Uma seção só aparece no formulário e no stepper quando seu id também está em `EXAM_FIELD_MAP`.
 
@@ -21,7 +21,7 @@ O mecanismo permite variar o formulário de REP sem levar detalhes de cada exame
 | Código | Seções renderizadas | Persistência específica |
 |---|---|---|
 | `LOC` | `local_fato`, `acionamento` | colunas nativas de `reps` |
-| `I-801` | `numeracao` | JSON por `numeracaoService` |
+| `I-801` | `numeracao` (coleção de peças) | `i801.pecas[]` por `i801Service`, fora de `REPFormData` |
 | `B-602` | `dados_investigacao`, `pecas_b602` | JSON canônico por `b602Service`, com peças e metadados recebidos por contexto |
 | `B-601` | `dados_investigacao_b601`, `pecas_b601` | JSON de versão 1 por `b601Service`, com estado estruturado recebido por contexto |
 
@@ -58,11 +58,11 @@ No B-602, cada envolvido ocupa `b602_envolvidos_qualificacao_N` e `b602_envolvid
 
 ## Pipeline de persistência
 
-`serializeCamposEspecificos(codigo, data, contexto?)` aplica defaults e delega ao service. Para B-602, `prepareForApi()` fornece `pecas` e `metadadosIntegracaoGdl` em `ContextoSerializacaoCamposEspecificos`; o próprio `b602Service.serialize()` remove os arrays legados e produz, numa única passagem, `b602.pecas` e o `integracaoGdl` opcional.
+`serializeCamposEspecificos(codigo, data, contexto?)` aplica defaults e delega ao service. Para B-602, `prepareForApi()` fornece `pecas` e `metadadosIntegracaoGdl` em `ContextoSerializacaoCamposEspecificos`; o próprio `b602Service.serialize()` remove os arrays legados e produz, numa única passagem, `b602.pecas` e o `integracaoGdl` opcional. Para I-801, a coleção `DadosI801` segue no contexto de serialização e `i801Service` grava `i801.pecas`, preservando as demais propriedades JSON e metadados locais da integração.
 
 Sem contexto B-602, o service ainda consegue serializar o formato legado. Esse caminho é usado por verificações legadas da página e não representa a escrita canônica de criação/edição.
 
-`deserializeCamposEspecificos()` protege o parse e retorna `{}` quando o conteúdo é ausente, inválido ou não possui service. Peças e metadados B-602 são restaurados por extratores próprios com validação na fronteira JSON.
+`deserializeCamposEspecificos()` protege o parse e retorna `{}` quando o conteúdo é ausente, inválido ou não possui service. Peças e metadados B-602 são restaurados por extratores próprios com validação na fronteira JSON. I-801 lê `campos_especificos.i801.pecas`; JSON malformado ou raiz que não seja objeto gera erro visível, e peças inválidas são filtradas durante a normalização.
 
 ## Inclusão ou alteração de exame
 
@@ -98,3 +98,9 @@ JSON inválido é tolerado na leitura, mas pode resultar em formulário vazio. U
 ## Particularidades do B-601
 
 O contexto b601 é obrigatório para serializar a coleção; não há fallback para arrays de B-602. Dados e propriedades da raiz são conservados, enquanto campos textuais do formulário atualizam os escalares de investigação. Leitura inválida impede sobrescrita e mantém erro visível na página. DadosInvestigacaoFields usa codigoExame para compartilhar a apresentação sem herdar a obrigatoriedade do B-602. O contrato e os limites estão em spec/02 rep/b601.md.
+
+## Peças I-801 recebidas do GDL
+
+I-801 tem seção dinâmica `numeracao`, rotulada “Numerações Identificadoras”, que edita uma coleção de peças e fica concluída quando há ao menos uma peça. `i801.catalogo.ts` centraliza os tipos de peça e seus campos próprios. Cada campo declara o id persistido no JSON local, rótulo do formulário, chave/aliases esperados do GDL e se a API foi confirmada para preenchê-lo. O editor, os modais de seleção e o normalizador usam esse mesmo catálogo; por isso, um novo campo ou alias não deve ser duplicado nessas camadas.
+
+O estado local mantém `personalizados` e `extrasGdl` em cada peça. A importação só grava em `personalizados` campo marcado como confirmado cujo valor passa pela conversão do domínio. Campos candidatos ainda não certificados, valores incompatíveis e propriedades desconhecidas ficam em `extrasGdl` e são mostrados no componente `DadosAdicionaisPecaI801Gdl` para revisão pelo usuário antes do salvamento local. Essa preservação é compatível com o JSON já salvo: campos adicionais continuam sendo lidos e gravados sem migração.

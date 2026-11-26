@@ -3,11 +3,11 @@ import React from 'react';
 import { MapPin, Clock, Hash, Search, Package, CircleDot, Cylinder, Crosshair } from 'lucide-react';
 import { LocalFatoFields } from './local-fato';
 import { AcionamentoFields } from './acionamento';
-import { NumeracaoFields } from './numeracao';
+import { PecasI801Fields } from './pecas-i801';
 import { DadosInvestigacaoFields, MaterialEncFields, CartuchosFields, EstojosFields, ArmasFields, B602_MENU_STRUCTURE } from './b602';
 import { PecasB602Fields } from './pecas-b602';
 import { pecaB602EstaCompleta } from '@shared/catalogos/b602-gdl.catalogo';
-import { numeracaoService } from './services/numeracao.service';
+import { i801Service } from './services/i801.service';
 import { b602Service } from './services/b602.service';
 import { b601Service } from './services/b601.service';
 import { DadosInvestigacaoFields as DadosInvestigacaoBalisticaFields } from './dados-investigacao';
@@ -74,9 +74,10 @@ export const SECTION_REGISTRY: Record<string, ExamSection> = {
     label: 'Numerações Identificadoras',
     icon: Hash,
     description: 'Dados específicos para exame de numeração (I-801)',
-    component: NumeracaoFields,
+    component: PecasI801Fields,
     group: undefined,
-    requiredFields: ['numeracao_veiculo'],
+    requiredFields: [],
+    isComplete: (_data, { dadosI801 }) => Boolean(dadosI801?.pecas.length),
   },
   dados_investigacao: {
     id: 'dados_investigacao',
@@ -148,13 +149,18 @@ export const EXAM_FIELD_MAP: Record<string, string[]> = {
 
 const EXAM_SERVICE_REGISTRY: Record<string, ExamService> = {
   'B-601': b601Service,
-  'I-801': numeracaoService,
+  'I-801': i801Service,
   'B-602': b602Service,
 };
 
 export type { MenuSection } from './types';
 
 export const EXAM_MENU_REGISTRY: Record<string, MenuSection[]> = {
+  'I-801': [
+    { id: 'i801-pecas', label: 'Itens examinados', items: [{ type: 'field', name: 'i801_tabela_pecas', label: 'Tabela de peças' }, { type: 'group', label: 'Item', prefix: 'i801_item_', fields: [
+      { name: 'tipo', label: 'Tipo' }, { name: 'identificacao', label: 'Identificação' }, { name: 'placa', label: 'Placa' }, { name: 'chassi_aparente', label: 'Chassi aparente' }, { name: 'chassi_revelado', label: 'Chassi revelado' }, { name: 'marca', label: 'Marca' }, { name: 'modelo', label: 'Modelo' }, { name: 'numero_serie', label: 'Nº série' }, { name: 'cor', label: 'Cor' }, { name: 'ano_fabricacao', label: 'Ano de fabricação' }, { name: 'resultado_psa', label: 'Resultado PSA' },
+    ] }] },
+  ],
   'B-601': [
     { id: 'b601-investigacao', label: 'Dados da investigação', items: [
       { type: 'field', name: 'b601_envolvidos', label: 'Envolvidos' },

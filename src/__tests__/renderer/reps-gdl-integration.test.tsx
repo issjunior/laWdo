@@ -251,6 +251,37 @@ describe('integração da consulta geral GDL com REPsPage', () => {
     expect(criarRep).not.toHaveBeenCalled();
   });
 
+  it('seleciona o template integrado I-801 após importar', async () => {
+    vi.mocked(window.ipcAPI.tipoExame.findAll).mockResolvedValue({ success: true, error: '', data: [
+      { id: 'tipo-i801', codigo: 'I-801', nome: 'Numerações identificadoras' },
+    ] });
+    vi.mocked(window.ipcAPI.template.findByTipoExame).mockResolvedValue({ success: true, error: '', data: [
+      { id: 'template-outro', nome: 'Outro modelo' },
+      { id: 'template-i801', nome: 'Laudo Padrão I-801', chave_integrada: 'laudo-padrao-i801' },
+    ] });
+    identificarRep.mockResolvedValue({ success: true, data: {
+      consultaId: '11111111-1111-4111-8111-111111111111', identificacao: identificarNaturezaExame('I801 - EXAME NAS NUMERAÇÕES IDENTIFICADORAS'),
+      tiposLocais: [{ id: 'tipo-i801', codigo: 'I-801', nome: 'Numerações identificadoras' }], avisos: [],
+    } });
+    consultarRep.mockResolvedValue({ success: true, data: {
+      ...resultadoConsulta, codigoExame: 'I-801',
+      camposGerais: Object.fromEntries(Object.entries(resultadoConsulta.camposGerais)
+        .map(([chave, valor]) => [chave.replace('b602_', 'i801_'), valor])),
+    } });
+
+    render(<MemoryRouter><REPsPage /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole('button', { name: 'Nova REP' }));
+    fireEvent.click(screen.getByRole('button', { name: 'GDL' }));
+    fireEvent.change(await screen.findByLabelText('Nº da REP'), { target: { value: '109026' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Buscar' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirmar tipo e revisar dados' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Preencher formulário' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('combobox', { name: /template/i })).toHaveTextContent('Laudo Padrão I-801'));
+    expect(criarRep).not.toHaveBeenCalled();
+  });
+
   it('preserva a UF informada pelo GDL durante a importação', async () => {
     consultarRep.mockResolvedValue({ success: true, data: {
       ...resultadoConsulta,

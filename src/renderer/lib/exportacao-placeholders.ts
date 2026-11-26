@@ -1,7 +1,7 @@
 import { limparConteudoInterativo } from './conteudo-interativo-limpeza';
 import { projetarB601ParaLaudo } from '@shared/utils/b601-pecas-projecao';
 import { CAMPOS_ESPECIFICOS_PLACEHOLDERS } from '@/components/rep/exam-fields/placeholders';
-import { buildDadosInvestigacaoTable, buildNumberedTable, buildArmasTabela } from '@/lib/tabelas-placeholder';
+import { buildDadosInvestigacaoTable, buildNumberedTable, buildArmasTabela, buildTabelaPecasI801 } from '@/lib/tabelas-placeholder';
 import { projetarB602ParaLaudo } from '@shared/utils/b602-pecas-projecao';
 import { lerUsuarioSessao } from '@/lib/usuario-sessao';
 import { obterFormasPerito, type FormaTratamentoLaudo } from '@/lib/perito-tratamento';
@@ -270,6 +270,24 @@ export function buildPlaceholderMapping(ctx: ExportacaoContext): Record<string, 
         }
       }
 
+      const numeracao = isRecord(especificos) && isRecord(especificos.numeracao)
+        ? especificos.numeracao
+        : undefined;
+      if (numeracao) {
+        const textoNumeracao = (chave: string): string => (
+          typeof numeracao[chave] === 'string' ? numeracao[chave] : ''
+        );
+        mapping.veiculo = textoNumeracao('veiculo');
+        mapping.placa = textoNumeracao('placa');
+        mapping.fabricacao_modelo = textoNumeracao('fabricacao_modelo') || textoNumeracao('fabricacao');
+        mapping.cor = textoNumeracao('cor');
+        mapping.conservacao = textoNumeracao('conservacao');
+        mapping.chassi = textoNumeracao('chassi');
+        mapping.chassi_revelado = textoNumeracao('chassi_revelado');
+        mapping.motor = textoNumeracao('motor');
+        mapping.motor_revelado = textoNumeracao('motor_revelado');
+      }
+
       if (especificos.b601) {
         const { dados, pecas } = projetarB601ParaLaudo(especificos.b601);
         const escapar = (texto: string): string => texto.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
@@ -487,15 +505,19 @@ export function buildPlaceholderMapping(ctx: ExportacaoContext): Record<string, 
 
       const i801 = especificos.i801 as Record<string, unknown> | undefined;
       if (i801) {
-        mapping['veiculo'] = String(i801.veiculo || '');
-        mapping['placa'] = String(i801.placa || '');
-        mapping['fabricacao_modelo'] = String(i801.fabricacao_modelo || '');
-        mapping['cor'] = String(i801.cor || '');
-        mapping['conservacao'] = String(i801.conservacao || '');
-        mapping['chassi'] = String(i801.chassi || '');
-        mapping['chassi_revelado'] = String(i801.chassi_revelado || '');
-        mapping['motor'] = String(i801.motor || '');
-        mapping['motor_revelado'] = String(i801.motor_revelado || '');
+        const pecas = Array.isArray(i801.pecas) ? i801.pecas.filter(item => typeof item === 'object' && item !== null) as Array<Record<string, unknown>> : [];
+        mapping.i801_tabela_pecas = buildTabelaPecasI801(pecas);
+        pecas.forEach((peca, indice) => {
+          const item = indice + 1;
+          const comuns = isRecord(peca.comuns) ? peca.comuns : {};
+          const personalizados = isRecord(peca.personalizados) ? peca.personalizados : {};
+          mapping[`i801_item_${item}_tipo`] = String(peca.tipoPeca || '');
+          mapping[`i801_item_${item}_identificacao`] = String(comuns.identificacao || '');
+          mapping[`i801_item_${item}_quantidade`] = String(comuns.quantidade || '');
+          mapping[`i801_item_${item}_medida`] = String(comuns.unidadeMedida || '');
+          mapping[`i801_item_${item}_data_entrada`] = formatarData(String(comuns.dataEntrada || ''));
+          for (const campo of ['placa', 'chassi_aparente', 'chassi_revelado', 'marca', 'modelo', 'numero_serie', 'cor', 'ano_fabricacao', 'resultado_psa']) mapping[`i801_item_${item}_${campo}`] = String(personalizados[campo] || '');
+        });
       }
     } catch { /* mantém mapping atual */ }
   }

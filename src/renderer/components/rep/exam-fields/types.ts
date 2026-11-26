@@ -1,6 +1,7 @@
 import type { UseFormReturn } from 'react-hook-form';
 import type { PecaB602 } from '@shared/types/b602-gdl.types';
 import type { DadosB601 } from '@shared/types/b601.types';
+import type { DadosI801 } from '@shared/types/i801.types';
 
 export interface REPFormData {
   [key: string]: string;
@@ -67,7 +68,9 @@ export interface ExamSectionProps {
   mostrarPlaceholders: boolean;
   pecasB602?: PecaB602[];
   dadosB601?: DadosB601;
+  dadosI801?: DadosI801;
   onDadosB601Change?: (dados: DadosB601) => void;
+  onDadosI801Change?: (dados: DadosI801) => void;
   onEdicaoPecaB601Change?: (pendente: boolean) => void;
   onPecasB602Change?: (pecas: PecaB602[]) => void;
   onRevisarPecasGdl?: () => void;
@@ -82,7 +85,7 @@ export interface ExamSection {
   component: React.FC<ExamSectionProps>;
   group?: string;
   requiredFields: string[];
-  isComplete?: (data: REPFormData, contexto: { pecasB602: PecaB602[]; dadosB601?: DadosB601 }) => boolean;
+  isComplete?: (data: REPFormData, contexto: { pecasB602: PecaB602[]; dadosB601?: DadosB601; dadosI801?: DadosI801 }) => boolean;
 }
 
 interface MenuField {

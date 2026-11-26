@@ -18,7 +18,7 @@ Arquivos centrais:
 |---|---|
 | todos | Dados da Solicitação |
 | `LOC` | Local do Fato; Linha do Tempo |
-| `I-801` | Numerações Identificadoras |
+| `I-801` | Numerações Identificadoras (peças e campos condicionais por tipo) |
 | `B-602` | Dados da Investigação; Peças |
 
 Sem tipo selecionado, somente o passo fixo é montado.
@@ -36,7 +36,7 @@ O stepper usa:
 - conclusão automática quando o array está vazio
 - `isComplete` para estado externo, como `PecaB602[]`
 
-O bloqueio final acrescenta regras de negócio que não cabem em um único `requiredFields`. No B-602, ele exige peças válidas, primeiro envolvido, data, cidade, UF e pelo menos um entre BO e IP.
+O bloqueio final acrescenta regras de negócio que não cabem em um único `requiredFields`. No B-602, ele exige peças válidas, primeiro envolvido, data, cidade, UF e pelo menos um entre BO e IP. No I-801, `isComplete` exige pelo menos uma peça; campos condicionais visíveis variam conforme o tipo selecionado, enquanto dados candidatos importados do GDL exigem revisão local.
 
 Consequência atual: um passo pode parecer concluído e ainda existir pendência de salvamento. O caso concreto é Dados da Investigação, cujo stepper não inclui a alternativa BO-ou-IP, mas o bloqueio final inclui.
 

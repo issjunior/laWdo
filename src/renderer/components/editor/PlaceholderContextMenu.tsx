@@ -214,7 +214,7 @@ const ExamSectionSubmenu: React.FC<{
 
         if (item.type === 'group') {
           const group = item as MenuGroup;
-          const count = group.prefix === 'b601_peca_'
+          const count = group.prefix === 'b601_peca_' || group.prefix === 'i801_item_'
             ? (Array.isArray(b602Data?.pecas) ? b602Data.pecas.length : b602Data === undefined ? 1 : 0)
             : getGroupCount(group.prefix, b602Data);
 

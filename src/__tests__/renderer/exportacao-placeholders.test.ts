@@ -106,6 +106,22 @@ describe('placeholders de exportação', () => {
     expect(placeholders.nome_laboratorio).toBe('Núcleo de Perícias')
   })
 
+  it('resolve os placeholders legados I-801 do bloco numeracao, inclusive fabricacao', () => {
+    const placeholders = buildPlaceholderMapping({
+      repData: { campos_especificos: JSON.stringify({
+        numeracao: {
+          veiculo: 'MOTOCICLETA', placa: 'ABC1D23', fabricacao: '2020/2021', cor: 'PRETA',
+          conservacao: 'regular', chassi: 'CHASSI1', chassi_revelado: 'CHASSI2', motor: 'MOTOR1', motor_revelado: 'MOTOR2',
+        },
+      }) },
+    })
+
+    expect(placeholders).toMatchObject({
+      veiculo: 'MOTOCICLETA', placa: 'ABC1D23', fabricacao_modelo: '2020/2021', cor: 'PRETA',
+      chassi: 'CHASSI1', chassi_revelado: 'CHASSI2', motor: 'MOTOR1', motor_revelado: 'MOTOR2',
+    })
+  })
+
   it('resolve as expressões do perito conforme o perfil da sessão', () => {
     const usuario = { id: 'perita-1', username: 'perita', nome: 'Ana', email: 'ana@example.test', cargo: 'Perito Oficial Criminal', forma_tratamento: 'feminino' }
     try {

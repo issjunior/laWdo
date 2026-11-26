@@ -10,15 +10,8 @@ interface CampoEspecificoPlaceholder {
 
 export const CAMPOS_ESPECIFICOS_PLACEHOLDERS: CampoEspecificoPlaceholder[] = [
   ...PLACEHOLDERS_B601,
-  { chave: 'veiculo',                    label: 'Veículo',            descricao: 'Marca, modelo ou tipo do veículo periciado',       jsonPath: 'numeracao.veiculo',          categoria_exam_codigo: 'I-801' },
-  { chave: 'placa',                      label: 'Placa',              descricao: 'Placa de identificação do veículo',                 jsonPath: 'numeracao.placa',            categoria_exam_codigo: 'I-801' },
-  { chave: 'fabricacao_modelo',          label: 'Fabricação/Modelo',  descricao: 'Ano de fabricação e modelo do veículo',             jsonPath: 'numeracao.fabricacao',       categoria_exam_codigo: 'I-801' },
-  { chave: 'cor',                        label: 'Cor',                descricao: 'Cor do veículo',                                     jsonPath: 'numeracao.cor',              categoria_exam_codigo: 'I-801' },
-  { chave: 'conservacao',                label: 'Conservação',        descricao: 'Estado de conservação do veículo',                   jsonPath: 'numeracao.conservacao',      categoria_exam_codigo: 'I-801' },
-  { chave: 'chassi',                     label: 'Chassi',             descricao: 'Nº do chassi (até 17 caracteres alfanuméricos)',    jsonPath: 'numeracao.chassi',           categoria_exam_codigo: 'I-801' },
-  { chave: 'chassi_revelado',            label: 'Chassi Revelado',    descricao: 'Chassi após revelação química',                      jsonPath: 'numeracao.chassi_revelado',  categoria_exam_codigo: 'I-801' },
-  { chave: 'motor',                      label: 'Motor',              descricao: 'Nº do motor (até 12 caracteres alfanuméricos)',     jsonPath: 'numeracao.motor',            categoria_exam_codigo: 'I-801' },
-  { chave: 'motor_revelado',             label: 'Motor Revelado',     descricao: 'Motor após revelação química',                       jsonPath: 'numeracao.motor_revelado',   categoria_exam_codigo: 'I-801' },
+  { chave: 'i801_tabela_pecas', label: 'Tabela de Peças (I-801)', descricao: 'Tabela HTML de todos os itens examinados', computed: true, categoria_exam_codigo: 'I-801' },
+  ...['tipo', 'identificacao', 'quantidade', 'medida', 'data_entrada', 'placa', 'chassi_aparente', 'chassi_revelado', 'marca', 'modelo', 'numero_serie', 'cor', 'ano_fabricacao', 'resultado_psa'].map(campo => ({ chave: `i801_item_N_${campo}`, label: `${campo.replaceAll('_', ' ')} do Item (I-801)`, descricao: `Valor do item I-801 indicado por N`, computed: true as const, categoria_exam_codigo: 'I-801' })),
   { chave: 'b602_envolvidos',           label: 'Envolvidos (B-602)',            descricao: 'Lista de nomes dos envolvidos',                     jsonPath: 'b602.envolvidos',            categoria_exam_codigo: 'B-602' },
   { chave: 'b602_data_ocorrencia',      label: 'Data Ocorrência (B-602)',       descricao: 'Data da ocorrência',                                jsonPath: 'b602.data_ocorrencia',       categoria_exam_codigo: 'B-602' },
   { chave: 'b602_local',                label: 'Local (B-602)',                  descricao: 'Local completo (bairro / cidade / UF)',            jsonPath: 'b602.local',                 categoria_exam_codigo: 'B-602' },

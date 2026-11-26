@@ -292,14 +292,14 @@ export function criarCamposComuns(peca: GdlPecaValidada): CamposComunsPecaB602 {
   }
 }
 
-export function montarImportacaoBalistica<T extends PecaBalistica, TCodigo extends 'B-601' | 'B-602'>(
+export function montarImportacaoBalistica<T extends PecaBalistica, TCodigo extends 'B-601' | 'B-602' | 'I-801'>(
   rep: GdlRepValidada,
   codigoExame: TCodigo,
   pecas: T[],
   metadadosIntegracaoGdl?: MetadadosIntegracaoGdl,
   avisosPecas: AvisoImportacao[] = [],
 ): ResultadoImportacaoExame<DadosImportacaoBalistica<T>> & { codigoExame: TCodigo } {
-  const prefixo = codigoExame === 'B-601' ? 'b601' : 'b602'
+  const prefixo = codigoExame === 'B-601' ? 'b601' : codigoExame === 'B-602' ? 'b602' : 'i801'
   const dadosSolicitacao = extrairDadosSolicitacao(rep)
   const dadosInvestigacao = extrairDadosInvestigacao(rep)
   const dataExecucaoLaudo = extrairDataExecucaoLaudo(rep)

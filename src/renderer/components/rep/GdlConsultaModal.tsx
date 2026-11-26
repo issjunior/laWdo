@@ -1,6 +1,8 @@
 import { DadosAdicionaisPecaGdl } from './DadosAdicionaisPecaGdl';
+import { DadosAdicionaisPecaI801Gdl } from './DadosAdicionaisPecaI801Gdl';
 import type { ResultadoImportacaoGdl } from '@shared/types/gdl-importacao.types';
 import type { PecaBalistica } from '@shared/types/pecas-balistica.types';
+import type { PecaI801 } from '@shared/types/i801.types';
 import { esquemaConsultaIdentificacaoRepGdl, normalizarCodigoExame } from '@shared/gdl/natureza-exame';
 import type { ConsultaIdentificacaoRepGdl } from '@shared/gdl/natureza-exame';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -110,10 +112,19 @@ interface GdlConsultaModalProps {
   temDadosExistentes: boolean;
   pecasB602: PecaB602[];
   pecasB601?: PecaBalistica[];
+  pecasI801?: PecaI801[];
   onConfigurarCredenciais: () => void;
 }
 
 type Passo = 'busca' | 'identificacao' | 'revisao';
+
+type PrefixoImportacaoGdl = 'b601' | 'b602' | 'i801';
+
+function obterPrefixoImportacaoGdl(codigoExame: ResultadoImportacaoGdl['codigoExame']): PrefixoImportacaoGdl {
+  if (codigoExame === 'B-601') return 'b601';
+  if (codigoExame === 'I-801') return 'i801';
+  return 'b602';
+}
 
 interface PreTesteResultado {
   ok: boolean;
@@ -191,7 +202,7 @@ function montarCamposMapeados(
   resultado: ResultadoImportacaoGdl,
   origemSelecionada?: ReferenciaOrigemGdl,
 ): CampoMapeado[] {
-  const prefixo = resultado.codigoExame === 'B-601' ? 'b601' : 'b602'
+  const prefixo = obterPrefixoImportacaoGdl(resultado.codigoExame)
   const camposGerais: Record<string, string> = {
     ...resultado.camposGerais,
     ...(origemSelecionada ? {
@@ -264,7 +275,7 @@ function montarEnvolvidosRevisao(
 ): EnvolvidoRevisao[] {
   if (!resultado) return []
 
-  const prefixo = resultado.codigoExame === 'B-601' ? 'b601' : 'b602'
+  const prefixo = obterPrefixoImportacaoGdl(resultado.codigoExame)
   const envolvidosGdl = resultado.camposEspecificos.dadosInvestigacao.envolvidos
   const quantidade = Math.max(envolvidosGdl.length, 10)
   return Array.from({ length: quantidade }, (_, indice) => {
@@ -313,6 +324,7 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
   temDadosExistentes,
   pecasB602,
   pecasB601 = [],
+  pecasI801 = [],
   onConfigurarCredenciais,
 }) => {
   const geracaoConsulta = useRef(0);
@@ -338,8 +350,8 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
   const [ambienteCarregado, setAmbienteCarregado] = useState(false);
 
   const [resultadoConsulta, setResultadoConsulta] = useState<ResultadoImportacaoGdl | null>(null);
-  const prefixo = resultadoConsulta?.codigoExame === 'B-601' ? 'b601' : 'b602';
-  const pecasAtuais = resultadoConsulta?.codigoExame === 'B-601' ? pecasB601 : pecasB602;
+  const prefixo = resultadoConsulta ? obterPrefixoImportacaoGdl(resultadoConsulta.codigoExame) : 'b602';
+  const pecasAtuais = resultadoConsulta?.codigoExame === 'B-601' ? pecasB601 : resultadoConsulta?.codigoExame === 'I-801' ? pecasI801 : pecasB602;
   const [idsPecasSelecionadas, setIdsPecasSelecionadas] = useState<Set<string>>(new Set());
   const [indicesEnvolvidosSelecionados, setIndicesEnvolvidosSelecionados] = useState<Set<number>>(new Set());
   const [indiceOrigemSelecionada, setIndiceOrigemSelecionada] = useState<number | null>(null);
@@ -572,7 +584,7 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
           .map(envolvido => envolvido.indice),
       ));
       setCamposMapeados(mapeados);
-      setCamposNaoPreenchidos(montarCamposNaoPreenchidos(mapeados, resultado.codigoExame === 'B-601' ? 'b601' : 'b602'));
+      setCamposNaoPreenchidos(montarCamposNaoPreenchidos(mapeados, obterPrefixoImportacaoGdl(resultado.codigoExame)));
       setPasso('revisao');
     } catch (erro: unknown) {
       if (geracao === geracaoConsulta.current) {
@@ -631,9 +643,11 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
 
       const adicionais = { camposGerais: camposGeraisComEnvolvidos, ...(limpezasSelecionadas.length ? { limpezasSelecionadas } : {}) };
       const selecionada = (peca: PecaBalistica) => idsPecasSelecionadas.has(`gdl-${peca.codPecaGdl ?? peca.idLocal}`);
-      const resultadoSelecionado: ResultadoImportacaoGdl = resultadoComOrigem.codigoExame === 'B-601'
-        ? { ...resultadoComOrigem, ...adicionais, camposEspecificos: { ...resultadoComOrigem.camposEspecificos, pecas: resultadoComOrigem.camposEspecificos.pecas.filter(selecionada) } }
-        : { ...resultadoComOrigem, ...adicionais, camposEspecificos: { ...resultadoComOrigem.camposEspecificos, pecas: resultadoComOrigem.camposEspecificos.pecas.filter(selecionada) } };
+      const resultadoSelecionado = {
+        ...resultadoComOrigem,
+        ...adicionais,
+        camposEspecificos: { ...resultadoComOrigem.camposEspecificos, pecas: resultadoComOrigem.camposEspecificos.pecas.filter(selecionada) },
+      } as ResultadoImportacaoGdl;
       await onAplicar(resultadoSelecionado, modo, pecasImportadasSelecionadas);
       onOpenChange(false);
     } catch (falha: unknown) {
@@ -712,6 +726,7 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
     `${prefixo}_solicitante_nome`, 'autoridade_solicitante', `${prefixo}_local_cidade`, 'local_fato', 'latitude', 'longitude',
   ]);
   const camposInvestigacao = obterCamposDoGrupo([`${prefixo}_numero_bo`, `${prefixo}_numero_ip`]);
+  const exibirInvestigacao = camposInvestigacao.length > 0 || envolvidosRevisao.length > 0;
   const camposJaAgrupados = new Set([
     ...camposIdentificacao,
     ...camposSolicitacao,
@@ -1039,7 +1054,7 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
                     </CardContent>
                   </Card>
 
-                  <div className="grid grid-cols-1 items-stretch gap-2 xl:grid-cols-[3fr_2fr]">
+                  <div className={exibirInvestigacao ? 'grid grid-cols-1 items-stretch gap-2 xl:grid-cols-[3fr_2fr]' : 'grid grid-cols-1 items-stretch gap-2'}>
                     <Card className="h-full shadow-none">
                       <CardHeader className="p-3 pb-2">
                         <CardTitle className="flex items-center gap-1.5 text-sm">
@@ -1094,7 +1109,7 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
                       </CardContent>
                     </Card>
 
-                    {(camposInvestigacao.length > 0 || envolvidosRevisao.length > 0) && (
+                    {exibirInvestigacao && (
                       <Card className="h-full shadow-none">
                         <CardHeader className="p-3 pb-2">
                           <CardTitle className="flex items-center gap-1.5 text-sm">
@@ -1176,6 +1191,7 @@ export const GdlConsultaModal: React.FC<GdlConsultaModalProps> = ({
                           </dl>
                         </div>
                         {resultadoConsulta?.codigoExame === 'B-601' && <DadosAdicionaisPecaGdl dados={peca.extrasGdl} tipoCodigo={peca.tipoCodigo} personalizados={peca.personalizados} />}
+                        {resultadoConsulta?.codigoExame === 'I-801' && <DadosAdicionaisPecaI801Gdl dados={peca.extrasGdl} tipoCodigo={peca.tipoCodigo} personalizados={peca.personalizados} />}
                       </label>
                     ))}
                   </CardContent>
