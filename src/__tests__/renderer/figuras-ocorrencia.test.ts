@@ -107,6 +107,22 @@ describe('ocorrências de figuras', () => {
     expect(documento.querySelector('td')?.colSpan).toBe(2);
   });
 
+  it('mantém sem bordas o quadro do I-801 quando uma figura do par é excluída', () => {
+    const documento = new DOMParser().parseFromString(
+      '<table border="0" data-layout-pares-figuras="true" style="border-collapse:collapse;width:100%;table-layout:fixed;border-width:0px">'
+      + '<tbody><tr><td style="text-align:center;vertical-align:top;padding:2px;border-width:0px"><figure class="laudo-figure"><img></figure></td>'
+      + '<td style="text-align:center;vertical-align:top;padding:2px;border-width:0px"><figure class="laudo-figure"><img></figure></td></tr></tbody></table>',
+      'text/html',
+    );
+    documento.querySelector('figure')?.remove();
+
+    expect(centralizarFigurasSozinhas(documento.body)).toBe(true);
+    expect(documento.querySelector('table')?.hasAttribute('data-layout-pares-figuras')).toBe(false);
+    expect(documento.querySelector('table')?.getAttribute('data-tabela-sem-borda')).toBe('true');
+    expect(documento.querySelector('table')?.style.border).toBe('0px');
+    expect(documento.querySelector('td')?.style.border).toBe('0px');
+  });
+
   it('previsualiza continuamente e persiste o percentual nas duas figuras apenas no commit', () => {
     const documento = new DOMParser().parseFromString(
       '<table><tr><td><figure class="laudo-figure"><img></figure></td>'

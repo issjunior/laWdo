@@ -1,13 +1,16 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { useState } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TemplatesPage } from '@/pages/TemplatesPage';
 import { juntarComplementoB601 } from '@/components/template/b601-complemento.utils';
 
-interface EditorSimulado { editorId: string; value?: string; onChange: (html: string) => void }
+interface EditorSimulado { editorId: string; initialValue?: string; onChange: (html: string) => void }
 const estado = vi.hoisted(() => ({ editores: new Map<string, EditorSimulado>() }));
 vi.mock('@/components/editor/TinyMceEditor', () => ({ TinyMceEditor: (propriedades: EditorSimulado) => {
-  estado.editores.set(propriedades.editorId, propriedades);
-  return <textarea aria-label={propriedades.editorId} value={propriedades.value || ''} onChange={evento => propriedades.onChange(evento.target.value)} />;
+  const [conteudoInicial] = useState(propriedades.initialValue);
+  const editor = { ...propriedades, initialValue: conteudoInicial };
+  estado.editores.set(propriedades.editorId, editor);
+  return <textarea aria-label={propriedades.editorId} defaultValue={conteudoInicial || ''} onChange={evento => propriedades.onChange(evento.target.value)} />;
 } }));
 vi.mock('@/components/editor/PlaceholderContextMenu', () => ({ PlaceholderContextMenu: ({ children }: { children: React.ReactNode }) => children }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
@@ -72,8 +75,42 @@ describe('edições simultâneas do template', () => {
     await waitFor(() => expect(salvar).toHaveBeenCalledTimes(1));
     const entrada: unknown = salvar.mock.calls[0][0];
     expect(entrada).toEqual(expect.objectContaining({ secoes: expect.arrayContaining([expect.objectContaining({ id: 'secao', conteudo: expect.stringContaining('local.png') })]) }));
-    const editorAtual = estado.editores.get(complemento.editorId)!;
-    expect(editorAtual.value).toBe('<p>Complemento novo</p>');
-    expect(estado.editores.get(necropsia.editorId)?.value).toBe('');
+    expect(estado.editores.get(complemento.editorId)?.initialValue).toBe('<p>Antigo</p>');
+    expect(estado.editores.get(necropsia.editorId)?.initialValue).not.toBe('');
+  });
+
+  it('mantém as chaves locais após sincronizar o primeiro salvamento e não duplica seções na gravação seguinte', async () => {
+    const salvar = await abrir('<p>Conteúdo inicial</p>', '');
+    const buscarSecoes = vi.mocked(window.ipcAPI.template.findSecoes);
+    salvar.mockResolvedValue({ success: true, data: { id: 'template' } });
+    buscarSecoes.mockResolvedValue({
+      success: true,
+      error: '',
+      data: [
+        { id: 'principal-persistida', template_id: 'template', nome: 'Exames', ordem: 1, conteudo: '<p>Exames</p>' },
+        { id: 'secao-persistida', parent_id: 'principal-persistida', template_id: 'template', nome: 'Descrição', ordem: 2, conteudo: '<p>Conteúdo inicial</p>' },
+      ],
+    });
+
+    const editor = estado.editores.get('template-secao-secao')!;
+    act(() => editor.onChange('<p>Primeira gravação</p>'));
+    fireEvent.click(screen.getByRole('button', { name: 'Atualizar Template' }));
+    await waitFor(() => expect(salvar).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(buscarSecoes).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(estado.editores.get('template-secao-secao')?.onChange).not.toBe(editor.onChange));
+
+    const editorSincronizado = estado.editores.get('template-secao-secao')!;
+    act(() => editorSincronizado.onChange('<p>Segunda gravação</p>'));
+    fireEvent.click(screen.getByRole('button', { name: 'Atualizar Template' }));
+    await waitFor(() => expect(salvar).toHaveBeenCalledTimes(2));
+
+    const secoesPrimeiraGravacao = salvar.mock.calls[0][0].secoes;
+    const secoesSegundaGravacao = salvar.mock.calls[1][0].secoes;
+    expect(secoesPrimeiraGravacao).toHaveLength(2);
+    expect(secoesSegundaGravacao).toHaveLength(2);
+    expect(secoesSegundaGravacao).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'principal-persistida' }),
+      expect.objectContaining({ id: 'secao-persistida' }),
+    ]));
   });
 });

@@ -55,19 +55,20 @@ const ATRIBUTO_LAYOUT_LINHA = 'data-layout-figuras';
 const ATRIBUTO_ALTURA_PAR = 'data-altura-par-figuras';
 const ATRIBUTO_AJUSTE_VISUAL_PAR = 'data-ajuste-visual-par';
 const ATRIBUTO_LAYOUT_TABELA = 'data-layout-pares-figuras';
+const ATRIBUTO_TABELA_SEM_BORDA = 'data-tabela-sem-borda';
 const ATRIBUTO_QUADRO_IMAGEM = 'data-quadro-figura';
 const ATRIBUTO_CONTÊINER_QUADRO = 'data-conteiner-quadro-figura';
 
 export function obterAtributosObservadosFiguras(): string[] {
   return [
     'src', 'style', 'data-image-id', 'data-image-original-id', 'data-dummy',
-    ATRIBUTO_LAYOUT_TABELA, ATRIBUTO_LAYOUT_LINHA, ATRIBUTO_ALTURA_PAR, ATRIBUTO_AJUSTE_VISUAL_PAR, ATRIBUTO_ENQUADRAMENTO,
+    ATRIBUTO_LAYOUT_TABELA, ATRIBUTO_TABELA_SEM_BORDA, ATRIBUTO_LAYOUT_LINHA, ATRIBUTO_ALTURA_PAR, ATRIBUTO_AJUSTE_VISUAL_PAR, ATRIBUTO_ENQUADRAMENTO,
     ATRIBUTO_QUADRO_IMAGEM, ATRIBUTO_CONTÊINER_QUADRO,
   ];
 }
 type PropriedadeEstiloEnquadramento = 'width' | 'height' | 'aspectRatio' | 'objectFit' | 'objectPosition'
   | 'backgroundColor' | 'boxSizing' | 'display' | 'verticalAlign' | 'overflow' | 'paddingBottom'
-  | 'position' | 'top' | 'left' | 'tableLayout' | 'margin' | 'padding';
+  | 'position' | 'top' | 'left' | 'tableLayout' | 'margin' | 'padding' | 'border';
 
 function definirEstilo(elemento: HTMLElement, propriedade: PropriedadeEstiloEnquadramento, valor: string): boolean {
   if (elemento.style[propriedade] === valor) return false;
@@ -214,9 +215,15 @@ function centralizarFiguraRestante(
   });
   const tabela = linha.closest<HTMLTableElement>('table');
   if (tabela && !Array.from(tabela.rows).some(obterParFotografico)) {
+    const eraLayoutDePar = tabela.hasAttribute(ATRIBUTO_LAYOUT_TABELA);
     tabela.removeAttribute(ATRIBUTO_LAYOUT_TABELA);
     if (tabela.style.tableLayout === 'fixed') removerEstilo(tabela, 'tableLayout');
+    if (eraLayoutDePar) {
+      tabela.setAttribute(ATRIBUTO_TABELA_SEM_BORDA, 'true');
+      definirEstilo(tabela, 'border', '0px');
+    }
   }
+  if (tabela?.hasAttribute('border') && tabela.getAttribute('border') === '0') definirEstilo(celulaFigura, 'border', '0px');
   celulaVazia.remove();
   celulaFigura.colSpan = 2;
   celulaFigura.style.textAlign = 'center';

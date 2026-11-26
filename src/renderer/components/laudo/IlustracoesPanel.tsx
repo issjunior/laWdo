@@ -914,16 +914,18 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
     if (falha) toast.error(falha.error || 'Não foi possível arquivar as imagens inseridas.');
   };
 
-  const handleDeleteFiguraEditor = async (id: string, indice: number) => {
+  const handleDeleteFiguraEditor = async (id: string, indice: number): Promise<boolean> => {
     const figura = figurasNoEditor?.[indice];
-    if (!figura || figura.id !== id) return;
+    if (!figura || figura.id !== id) return false;
     try {
       if (!await onDeleteImage?.(id, indice, figura.ocorrenciaId)) throw new Error('A figura não está mais disponível no documento.');
       if (!figura.dummy) {
         setImagens(atuais => atuais.some(imagem => imagem.id === id) ? atuais : [...atuais, { ...figura, ocorrenciaId: undefined }]);
       }
+      return true;
     } catch (erro) {
       toast.error(erro instanceof Error ? erro.message : 'Não foi possível remover a figura.');
+      return false;
     }
   };
 
@@ -1264,6 +1266,12 @@ export const IlustracoesPanel: React.FC<IlustracoesPanelProps> = ({
         onSelecionar={setImagemSubstituicaoId}
         onBuscarGdl={() => { setSeletorInsercaoAberto(false); setModalGdlAberto(true); }}
         onGerarLegenda={onGerarLegenda}
+        onExcluirFigura={async () => {
+          const indice = figuraSubstituicaoIndice;
+          const figura = figurasNoEditor?.find(item => figuraSubstituicaoOcorrencia ? item.ocorrenciaId === figuraSubstituicaoOcorrencia : item.id === figuraSubstituicaoId);
+          if (indice === null || indice === undefined || !figura) return false;
+          return handleDeleteFiguraEditor(figura.id, indice);
+        }}
         onCarregarArquivo={async arquivo => {
           const [imagem] = await carregarArquivosLocais([arquivo]);
           if (imagem) setImagemSubstituicaoId(imagem.id);

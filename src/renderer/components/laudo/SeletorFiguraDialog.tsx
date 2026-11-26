@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowRight, Check, Image as ImageIcon, ImageDown, ImageOff, LoaderCircle, Sparkles, Upload } from 'lucide-react';
+import { ArrowRight, Check, Image as ImageIcon, ImageDown, ImageOff, LoaderCircle, Sparkles, Trash2, Upload } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -24,6 +24,7 @@ interface SeletorFiguraDialogProps {
   onBuscarGdl: () => void;
   onCarregarArquivo?: (arquivo: File) => Promise<void>;
   onGerarLegenda?: (imagemId: string) => Promise<string | null>;
+  onExcluirFigura?: () => Promise<boolean> | boolean;
 }
 
 function ImagemPreview({ src, alt, textoFallback }: { src: string; alt: string; textoFallback: string }) {
@@ -59,6 +60,7 @@ export function SeletorFiguraDialog({
   onBuscarGdl,
   onCarregarArquivo,
   onGerarLegenda,
+  onExcluirFigura,
 }: SeletorFiguraDialogProps) {
   const imagemSelecionada = imagens.find(imagem => imagem.id === imagemSelecionadaId) || null;
   const [legenda, setLegenda] = useState('');
@@ -67,6 +69,7 @@ export function SeletorFiguraDialog({
   const [editorImagemAberto, setEditorImagemAberto] = useState(false);
   const [imagemOriginal, setImagemOriginal] = useState('');
   const [imagemEditada, setImagemEditada] = useState<{ dataUri: string; ajustes: AjustesFigura } | undefined>();
+  const [excluindoFigura, setExcluindoFigura] = useState(false);
   const entradaArquivoRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -106,6 +109,16 @@ export function SeletorFiguraDialog({
       setErroLegenda(error instanceof Error ? error.message : 'Não foi possível gerar a descrição da imagem.');
     } finally {
       setGerandoLegenda(false);
+    }
+  };
+
+  const excluirFigura = async () => {
+    if (!figuraAlvo || !onExcluirFigura || !window.confirm('Deseja remover esta figura do laudo?')) return;
+    setExcluindoFigura(true);
+    try {
+      if (await onExcluirFigura()) onAbertoChange(false);
+    } finally {
+      setExcluindoFigura(false);
     }
   };
 
@@ -172,7 +185,12 @@ export function SeletorFiguraDialog({
           </div>
         </div>
 
-        <DialogFooter><Button variant="outline" onClick={() => onAbertoChange(false)}>Cancelar</Button><Button variant="secondary" onClick={() => void abrirEditorImagem()} disabled={!imagemSelecionada}>Editar imagem</Button><Button onClick={() => onConfirmar(legenda.trim(), imagemEditada)} disabled={!imagemSelecionada || gerandoLegenda}>{modo === 'inserir' ? 'Inserir figura' : 'Substituir figura'}</Button></DialogFooter>
+        <DialogFooter>
+          {modo === 'substituir' && figuraAlvo && onExcluirFigura && <Button variant="destructive" className="mr-auto" onClick={() => void excluirFigura()} disabled={excluindoFigura}><Trash2 className="h-4 w-4" />{excluindoFigura ? 'Excluindo figura' : 'Excluir figura'}</Button>}
+          <Button variant="outline" onClick={() => onAbertoChange(false)}>Cancelar</Button>
+          <Button variant="secondary" onClick={() => void abrirEditorImagem()} disabled={!imagemSelecionada}>Editar imagem</Button>
+          <Button onClick={() => onConfirmar(legenda.trim(), imagemEditada)} disabled={!imagemSelecionada || gerandoLegenda}>{modo === 'inserir' ? 'Inserir figura' : 'Substituir figura'}</Button>
+        </DialogFooter>
         <EditorFiguraDialog aberto={editorImagemAberto} origem={imagemOriginal} onAbertoChange={setEditorImagemAberto} onAplicar={(dataUri, ajustes) => setImagemEditada({ dataUri, ajustes })} />
       </DialogContent>
       </TooltipProvider>

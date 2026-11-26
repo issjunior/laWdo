@@ -80,13 +80,17 @@ describe('padrão das figuras nos novos templates', () => {
     const estilo = document.createElement('style');
     estilo.textContent = `table td, table th { border:1px solid #ddd } ${ESTILOS_TABELAS_PLACEHOLDER_PDF}`;
     document.head.append(estilo);
-    document.body.innerHTML = '<table border="0"><thead><tr><th>Título</th></tr></thead><tbody><tr><td>Foto</td><td style="border:2px solid red">Borda escolhida</td></tr></tbody></table><table><tbody><tr><td>Dados</td></tr></tbody></table>';
+    document.body.innerHTML = '<table border="0"><thead><tr><th>Título</th></tr></thead><tbody><tr><td>Foto</td><td style="border:2px solid red">Borda escolhida</td></tr></tbody></table><table><tbody><tr><td>Dados</td></tr></tbody></table><table data-layout-pares-figuras="true"><tbody><tr><td>Foto</td><td>Foto</td></tr></tbody></table><table data-tabela-sem-borda="true"><tbody><tr><td>Foto</td></tr></tbody></table><table style="border-width:0px"><tbody><tr><td>Foto</td></tr></tbody></table>';
     const celulas = document.querySelectorAll('th, td');
     try {
       expect(getComputedStyle(celulas[0]).borderTopWidth).toBe('0px');
       expect(getComputedStyle(celulas[1]).borderTopWidth).toBe('0px');
       expect(getComputedStyle(celulas[2]).borderTopWidth).toBe('2px');
       expect(getComputedStyle(celulas[3]).borderTopWidth).toBe('1px');
+      expect(getComputedStyle(celulas[4]).borderTopWidth).toBe('0px');
+      expect(getComputedStyle(celulas[5]).borderTopWidth).toBe('0px');
+      expect(getComputedStyle(celulas[6]).borderTopWidth).toBe('0px');
+      expect(getComputedStyle(celulas[7]).borderTopWidth).toBe('0px');
     } finally {
       estilo.remove();
       document.body.innerHTML = '';

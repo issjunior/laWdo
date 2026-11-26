@@ -1,6 +1,19 @@
 import { distribuirLargurasColunas, ESTILOS_TABELAS_BALISTICA, pesoColunaTabela, planejarGruposColunas } from '../../shared/utils/tabelas-balistica-layout.js';
 
 export const ESTILOS_TABELAS_PLACEHOLDER_PDF = `
+  table[data-layout-pares-figuras="true"],
+  table[data-tabela-sem-borda="true"],
+  table[style*="border: 0px"],
+  table[style*="border-width: 0px"],
+  table[style*="border-width:0px"],
+  table[data-layout-pares-figuras="true"] > :is(thead, tbody, tfoot) > tr > :is(th, td),
+  table[data-tabela-sem-borda="true"] > :is(thead, tbody, tfoot) > tr > :is(th, td),
+  table[style*="border: 0px"] > :is(thead, tbody, tfoot) > tr > :is(th, td),
+  table[style*="border-width: 0px"] > :is(thead, tbody, tfoot) > tr > :is(th, td),
+  table[style*="border-width:0px"] > :is(thead, tbody, tfoot) > tr > :is(th, td) {
+    border: 0 !important;
+    outline: 0 !important;
+  }
   table[border="0"] > tr > :is(th, td),
   table[border="0"] > :is(thead, tbody, tfoot) > tr > :is(th, td) { border: 0; }
   table:not([data-tabela-laudo="balistica"]):has([data-placeholder-celula-fixa]) {
