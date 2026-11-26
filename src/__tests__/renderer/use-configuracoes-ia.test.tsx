@@ -8,6 +8,7 @@ import {
 } from '@/hooks/useConfiguracoesIa';
 
 const obter = vi.fn<(chave: string) => Promise<{ success: boolean; data?: unknown }>>();
+const obterEstadoCredenciais = vi.fn();
 
 function useConfiguracoesTeste() {
   const formulario = useForm<CamposProvedorIa>({ defaultValues: CONFIGURACAO_PROVEDOR_IA_PADRAO });
@@ -17,7 +18,9 @@ function useConfiguracoesTeste() {
 beforeEach(() => {
   obter.mockReset();
   obter.mockResolvedValue({ success: true, data: null });
-  Object.assign(window.ipcAPI, { configuracao: { obter } });
+  obterEstadoCredenciais.mockReset();
+  obterEstadoCredenciais.mockResolvedValue({ success: true, data: { groqConfigurada: false, geminiConfigurada: false } });
+  Object.assign(window.ipcAPI, { configuracao: { obter }, ia: { obterEstadoCredenciais } });
 });
 
 describe('useConfiguracoesIa', () => {
@@ -27,24 +30,24 @@ describe('useConfiguracoesIa', () => {
     await waitFor(() => expect(Object.values(result.current.estados)).toEqual(['pronto', 'pronto', 'pronto', 'pronto']));
     expect(result.current.formulario.getValues()).toEqual(CONFIGURACAO_PROVEDOR_IA_PADRAO);
     expect(result.current.privacidade.enviarConteudoIntegral).toBe(true);
-    expect(obter).toHaveBeenCalledTimes(8);
+    expect(obter).toHaveBeenCalledTimes(6);
+    expect(obterEstadoCredenciais).toHaveBeenCalledTimes(1);
   });
 
-  it('isola falha parcial e preserva uma chave editada na nova tentativa', async () => {
-    obter.mockImplementation(async chave => chave === 'api_key_groq'
-      ? { success: false }
-      : { success: true, data: null });
+  it('isola falha parcial e preserva um campo editado na nova tentativa', async () => {
+    obterEstadoCredenciais.mockResolvedValueOnce({ success: false });
     const { result } = renderHook(useConfiguracoesTeste);
     await waitFor(() => expect(result.current.estados.provedor).toBe('erro'));
     expect(result.current.motivosErro.provedor).toBe('falha_leitura');
     expect(result.current.estados.perfil).toBe('pronto');
 
-    act(() => result.current.formulario.setValue('apiKeyGroq', 'chave editada', { shouldDirty: true }));
-    obter.mockImplementation(async chave => ({ success: true, data: chave === 'api_key_groq' ? 'chave antiga' : null }));
+    act(() => result.current.formulario.setValue('modeloGroq', 'modelo editado', { shouldDirty: true }));
+    obterEstadoCredenciais.mockResolvedValue({ success: true, data: { groqConfigurada: true, geminiConfigurada: false } });
     await act(async () => { await result.current.recarregarGrupo('provedor'); });
 
     expect(result.current.estados.provedor).toBe('pronto');
-    expect(result.current.formulario.getValues('apiKeyGroq')).toBe('chave editada');
+    expect(result.current.formulario.getValues('modeloGroq')).toBe('modelo editado');
+    expect(result.current.chavesConfiguradas.groq).toBe(true);
   });
 
   it('recusa valores estruturados inválidos e preserva uma edição após recuperar a leitura', async () => {

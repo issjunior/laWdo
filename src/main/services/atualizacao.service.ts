@@ -19,7 +19,7 @@ import type {
   ProgressoAtualizacao,
 } from '../../shared/atualizacao/atualizacao.types.js';
 import { getLogger } from '../utils/logger.js';
-import { backupAtualizacaoService } from './backup-atualizacao.service.js';
+import { recuperacaoAtualizacaoService } from './recuperacao-atualizacao.service.js';
 
 const log = getLogger('atualizacao');
 const URL_FEED = 'https://issjunior.github.io/laWdo/stable';
@@ -96,22 +96,18 @@ function calcularHash(caminho: string): string {
   return createHash('sha256').update(fs.readFileSync(caminho)).digest('hex');
 }
 
-interface PendenciaInstalacao {
-  formato: ArtefatoAtualizacao['formato'];
-  nome: string;
-  tamanho: number;
-  hashSha256: string;
-  versao: string;
-  requerBackupCompletoImagens: boolean;
+interface RegistroManifestoAssinado {
+  manifesto: ManifestoAtualizacao;
+  assinatura: string;
 }
+
+type PendenciaInstalacao = RegistroManifestoAssinado;
 
 interface RegistroUltimaVerificacao {
   verificadoEm: string;
 }
 
-interface RegistroPacotePronto {
-  atualizacao: AtualizacaoDisponivel;
-}
+type RegistroPacotePronto = RegistroManifestoAssinado;
 
 function compararVersoes(primeira: string, segunda: string): number {
   const primeiraPartes = primeira.match(SEMVER);
@@ -187,6 +183,19 @@ function normalizarManifesto(valor: unknown): ManifestoAtualizacao {
   return { versaoManifesto: 1, versao, commit: textoObrigatorio(manifesto.commit, 'commit').toLowerCase(), dataPublicacao: new Date(dataPublicacao).toISOString(), canais: [...canais] as ManifestoAtualizacao['canais'], versaoSchema: manifesto.versaoSchema as number, requerBackupCompletoImagens: manifesto.requerBackupCompletoImagens, notas: textoObrigatorio(manifesto.notas, 'notas'), artefatos };
 }
 
+function validarManifestoAssinado(valorManifesto: unknown, valorAssinatura: unknown): RegistroManifestoAssinado {
+  const manifesto = normalizarManifesto(valorManifesto);
+  const assinatura = textoObrigatorio(valorAssinatura, 'assinatura');
+  if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(assinatura)) {
+    throw new Error('Assinatura do manifesto inválida.');
+  }
+  const bytesAssinatura = Buffer.from(assinatura, 'base64');
+  if (bytesAssinatura.length !== 64 || !verify(null, Buffer.from(serializarCanonico(manifesto), 'utf8'), createPublicKey(chavePublicaRelease), bytesAssinatura)) {
+    throw new Error('Assinatura do manifesto inválida.');
+  }
+  return { manifesto, assinatura };
+}
+
 export class AtualizacaoService {
   private estado: EstadoAtualizacao = 'ociosa';
   private atualizacaoDisponivel?: AtualizacaoDisponivel;
@@ -195,6 +204,7 @@ export class AtualizacaoService {
   private progresso?: number;
   private progressoDetalhado?: ProgressoAtualizacao;
   private verificadoEm?: string;
+  private manifestoAssinado?: RegistroManifestoAssinado;
   private readonly ouvintesProgresso = new Set<(progresso: ProgressoAtualizacao) => void>();
 
   constructor() {
@@ -243,15 +253,15 @@ export class AtualizacaoService {
       this.definirProgresso(45, 'validando', 'Validando a atualização encontrada.');
       const manifestoBruto = await manifestoResposta.json() as unknown;
       const assinatura = (await assinaturaResposta.text()).trim();
-      const manifesto = normalizarManifesto(manifestoBruto);
-      const assinaturaValida = verify(null, Buffer.from(serializarCanonico(manifesto), 'utf8'), createPublicKey(chavePublicaRelease), Buffer.from(assinatura, 'base64'));
-      if (!assinaturaValida) throw new Error('Assinatura do índice inválida.');
+      const manifestoAssinado = validarManifestoAssinado(manifestoBruto, assinatura);
+      const { manifesto } = manifestoAssinado;
       const artefato = manifesto.artefatos.find(item => item.plataforma === plataforma && item.arquitetura === arquitetura);
       if (!artefato) throw new Error('Índice não possui artefato compatível com este dispositivo.');
       this.registrarUltimaVerificacao();
       if (compararVersoes(manifesto.versao, app.getVersion()) <= 0) {
         this.atualizacaoDisponivel = undefined;
         this.caminhoDownload = undefined;
+        this.manifestoAssinado = undefined;
         this.removerPacotePronto();
         this.definirEstado('ociosa');
         return this.obterEstado();
@@ -265,6 +275,7 @@ export class AtualizacaoService {
         this.removerPacotePronto();
         this.definirEstado('disponivel');
       }
+      this.manifestoAssinado = manifestoAssinado;
       this.definirProgresso(100, 'validando', 'Atualização pronta para baixar.');
     } catch (erro) {
       this.definirFalha(erro, 'verificacao', 'verificar');
@@ -346,14 +357,7 @@ export class AtualizacaoService {
       throw new Error('Este formato requer instalação manual e não pode ser agendado.');
     }
     this.validarArquivoLocal(this.atualizacaoDisponivel.artefato, this.caminhoDownload);
-    const pendencia: PendenciaInstalacao = {
-      formato: this.atualizacaoDisponivel.artefato.formato,
-      nome: this.atualizacaoDisponivel.artefato.nome,
-      tamanho: this.atualizacaoDisponivel.artefato.tamanho,
-      hashSha256: this.atualizacaoDisponivel.artefato.hashSha256,
-      versao: this.atualizacaoDisponivel.versao,
-      requerBackupCompletoImagens: this.atualizacaoDisponivel.requerBackupCompletoImagens,
-    };
+    const pendencia = this.obterManifestoAssinado();
     fs.mkdirSync(path.dirname(this.caminhoPendencia), { recursive: true });
     const temporario = `${this.caminhoPendencia}.parcial`;
     fs.writeFileSync(temporario, JSON.stringify(pendencia), 'utf8');
@@ -368,21 +372,14 @@ export class AtualizacaoService {
     try {
       const bruto = JSON.parse(fs.readFileSync(this.caminhoPendencia, 'utf8')) as unknown;
       const pendencia = this.normalizarPendencia(bruto);
-      const artefato: ArtefatoAtualizacao = {
-        plataforma: plataformaAtual(),
-        arquitetura: process.arch === 'arm64' ? 'arm64' : 'x64',
-        formato: pendencia.formato,
-        canal: 'stable',
-        nome: pendencia.nome,
-        tamanho: pendencia.tamanho,
-        hashSha256: pendencia.hashSha256,
-        url: 'https://arquivo-local.invalid',
-      };
+      const plataforma = plataformaAtual();
+      const arquitetura = process.arch === 'arm64' ? 'arm64' : 'x64';
+      const artefato = pendencia.manifesto.artefatos.find(item => item.plataforma === plataforma && item.arquitetura === arquitetura && item.canal === 'stable');
+      if (!artefato || compararVersoes(pendencia.manifesto.versao, app.getVersion()) <= 0) throw new Error('A pendência não corresponde a uma atualização compatível.');
       if (!this.suportaInstalacaoAutomatica(artefato)) throw new Error('A pendência possui formato sem instalação automática.');
-      const caminhoDownload = path.join(this.diretorioAtualizacoes, pendencia.nome);
+      const caminhoDownload = path.join(this.diretorioAtualizacoes, artefato.nome);
       this.validarArquivoLocal(artefato, caminhoDownload);
-      if (pendencia.requerBackupCompletoImagens) await backupAtualizacaoService.criarBackupCompleto(pendencia.versao);
-      else await backupAtualizacaoService.criarSnapshot(pendencia.versao);
+      await recuperacaoAtualizacaoService.preparar(pendencia.manifesto.versao);
       await this.executarInstalador(artefato, caminhoDownload);
       fs.rmSync(this.caminhoPendencia, { force: true });
       return true;
@@ -395,11 +392,7 @@ export class AtualizacaoService {
 
   private async criarBackupObrigatorio(): Promise<void> {
     if (!this.atualizacaoDisponivel) throw new Error('Atualização indisponível para backup.');
-    if (this.atualizacaoDisponivel.requerBackupCompletoImagens) {
-      await backupAtualizacaoService.criarBackupCompleto(this.atualizacaoDisponivel.versao);
-    } else {
-      await backupAtualizacaoService.criarSnapshot(this.atualizacaoDisponivel.versao);
-    }
+    await recuperacaoAtualizacaoService.preparar(this.atualizacaoDisponivel.versao);
   }
 
   private suportaInstalacaoAutomatica(artefato: ArtefatoAtualizacao): boolean {
@@ -427,14 +420,7 @@ export class AtualizacaoService {
   private normalizarPendencia(valor: unknown): PendenciaInstalacao {
     if (typeof valor !== 'object' || valor === null || Array.isArray(valor)) throw new Error('Registro de atualização agendada inválido.');
     const pendencia = valor as Record<string, unknown>;
-    const formato = textoObrigatorio(pendencia.formato, 'formato');
-    const nome = textoObrigatorio(pendencia.nome, 'nome');
-    const hashSha256 = textoObrigatorio(pendencia.hashSha256, 'hashSha256').toLowerCase();
-    const versao = textoObrigatorio(pendencia.versao, 'versao');
-    if (!['nsis', 'AppImage'].includes(formato) || path.basename(nome) !== nome || !HASH_SHA256.test(hashSha256)
-      || !Number.isSafeInteger(pendencia.tamanho) || (pendencia.tamanho as number) < 0 || !SEMVER.test(versao)
-      || typeof pendencia.requerBackupCompletoImagens !== 'boolean') throw new Error('Registro de atualização agendada inválido.');
-    return { formato: formato as PendenciaInstalacao['formato'], nome, tamanho: pendencia.tamanho as number, hashSha256, versao, requerBackupCompletoImagens: pendencia.requerBackupCompletoImagens };
+    return validarManifestoAssinado(pendencia.manifesto, pendencia.assinatura);
   }
 
   private async executarInstalador(artefato: ArtefatoAtualizacao, caminhoArquivo: string): Promise<void> {
@@ -469,8 +455,9 @@ export class AtualizacaoService {
   private salvarPacotePronto(): void {
     if (!this.atualizacaoDisponivel || !this.caminhoDownload) return;
     this.validarArquivoLocal(this.atualizacaoDisponivel.artefato, this.caminhoDownload);
+    const registro = this.obterManifestoAssinado();
     const temporario = `${this.caminhoPacotePronto}.parcial`;
-    fs.writeFileSync(temporario, JSON.stringify({ atualizacao: this.atualizacaoDisponivel } satisfies RegistroPacotePronto), 'utf8');
+    fs.writeFileSync(temporario, JSON.stringify(registro satisfies RegistroPacotePronto), 'utf8');
     fs.renameSync(temporario, this.caminhoPacotePronto);
   }
 
@@ -482,26 +469,18 @@ export class AtualizacaoService {
     try {
       if (!fs.existsSync(this.caminhoPacotePronto)) return;
       const bruto = JSON.parse(fs.readFileSync(this.caminhoPacotePronto, 'utf8')) as unknown;
-      if (typeof bruto !== 'object' || bruto === null || Array.isArray(bruto) || !('atualizacao' in bruto)) throw new Error('Registro de pacote pronto inválido.');
-      const atualizacaoBruta = (bruto as Record<string, unknown>).atualizacao;
-      const manifesto = normalizarManifesto({
-        versaoManifesto: 1,
-        versao: (atualizacaoBruta as Record<string, unknown>)?.versao,
-        commit: 'pacote-local-validado',
-        dataPublicacao: (atualizacaoBruta as Record<string, unknown>)?.dataPublicacao,
-        canais: ['stable'],
-        versaoSchema: (atualizacaoBruta as Record<string, unknown>)?.versaoSchema,
-        requerBackupCompletoImagens: (atualizacaoBruta as Record<string, unknown>)?.requerBackupCompletoImagens,
-        notas: (atualizacaoBruta as Record<string, unknown>)?.notas,
-        artefatos: [(atualizacaoBruta as Record<string, unknown>)?.artefato],
-      });
+      if (typeof bruto !== 'object' || bruto === null || Array.isArray(bruto)) throw new Error('Registro de pacote pronto inválido.');
+      const registro = bruto as Record<string, unknown>;
+      const manifestoAssinado = validarManifestoAssinado(registro.manifesto, registro.assinatura);
+      const { manifesto } = manifestoAssinado;
       const plataforma = plataformaAtual();
       const arquitetura = process.arch === 'arm64' ? 'arm64' : 'x64';
-      const artefato = manifesto.artefatos.find(item => item.plataforma === plataforma && item.arquitetura === arquitetura);
+      const artefato = manifesto.artefatos.find(item => item.plataforma === plataforma && item.arquitetura === arquitetura && item.canal === 'stable');
       if (!artefato || compararVersoes(manifesto.versao, app.getVersion()) <= 0) throw new Error('Pacote pronto incompatível com a versão instalada.');
       const caminhoDownload = path.join(this.diretorioAtualizacoes, artefato.nome);
       this.validarArquivoLocal(artefato, caminhoDownload);
       this.atualizacaoDisponivel = { versao: manifesto.versao, dataPublicacao: manifesto.dataPublicacao, notas: manifesto.notas, versaoSchema: manifesto.versaoSchema, requerBackupCompletoImagens: manifesto.requerBackupCompletoImagens, artefato };
+      this.manifestoAssinado = manifestoAssinado;
       this.caminhoDownload = caminhoDownload;
       this.estado = 'baixada';
       this.progresso = 100;
@@ -510,6 +489,11 @@ export class AtualizacaoService {
       log.warn('Pacote de atualização persistido foi descartado.', { mensagem: detalheTecnico(erro) });
       this.removerPacotePronto();
     }
+  }
+
+  private obterManifestoAssinado(): RegistroManifestoAssinado {
+    if (!this.manifestoAssinado) throw new Error('A autenticidade do manifesto da atualização não está disponível. Verifique a atualização novamente.');
+    return this.manifestoAssinado;
   }
 
   private definirEstado(estado: EstadoAtualizacao): void {

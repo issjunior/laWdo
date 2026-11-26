@@ -34,7 +34,7 @@ export type MotivoErroCarregamentoIa = 'falha_leitura' | 'valor_invalido';
 
 const grupos: GrupoConfiguracaoIa[] = ['provedor', 'perfil', 'privacidade', 'imagem'];
 const chavesPorGrupo: Record<GrupoConfiguracaoIa, string[]> = {
-  provedor: ['provedor_ia', 'api_key_groq', 'api_key_gemini', 'modelo_ia_padrao', 'modelo_gemini_padrao'],
+  provedor: ['provedor_ia', 'modelo_ia_padrao', 'modelo_gemini_padrao'],
   perfil: ['perfil_resposta_ia'],
   privacidade: ['privacidade_ia'],
   imagem: ['qualidade_imagem_ia'],
@@ -42,8 +42,6 @@ const chavesPorGrupo: Record<GrupoConfiguracaoIa, string[]> = {
 
 const camposPorChave = {
   provedor_ia: 'provedor',
-  api_key_groq: 'apiKeyGroq',
-  api_key_gemini: 'apiKeyGemini',
   modelo_ia_padrao: 'modeloGroq',
   modelo_gemini_padrao: 'modeloGemini',
 } as const;
@@ -83,6 +81,7 @@ export function useConfiguracoesIa(formulario: Pick<UseFormReturn<CamposProvedor
   const [perfil, definirPerfil] = useState<PerfilRespostaIa>(PERFIL_RESPOSTA_IA_PADRAO);
   const [privacidade, definirPrivacidade] = useState<ConfiguracaoPrivacidadeIa>(CONFIGURACAO_PRIVACIDADE_IA_PADRAO);
   const [configuracaoImagem, definirConfiguracaoImagem] = useState<ConfiguracaoImagemIa>(CONFIGURACAO_IMAGEM_IA_PADRAO);
+  const [chavesConfiguradas, definirChavesConfiguradas] = useState({ groq: false, gemini: false });
 
   const setPerfil: Dispatch<SetStateAction<PerfilRespostaIa>> = useCallback(valor => {
     editadoRef.current.perfil = true;
@@ -104,6 +103,18 @@ export function useConfiguracoesIa(formulario: Pick<UseFormReturn<CamposProvedor
     const chaves = chavesPorGrupo[grupo];
     const resultados = await Promise.allSettled(chaves.map(chave => window.ipcAPI.configuracao.obter(chave)));
     if (sequenciasRef.current[grupo] !== sequencia) return;
+
+    if (grupo === 'provedor') {
+      try {
+        const resposta = await window.ipcAPI.ia.obterEstadoCredenciais();
+        if (!resposta.success || !resposta.data) throw new Error('LEITURA_CONFIGURACAO_FALHOU');
+        definirChavesConfiguradas({ groq: resposta.data.groqConfigurada, gemini: resposta.data.geminiConfigurada });
+      } catch {
+        setMotivosErro(atuais => ({ ...atuais, provedor: 'falha_leitura' }));
+        setEstados(atuais => ({ ...atuais, provedor: 'erro' }));
+        return;
+      }
+    }
 
     let motivoErro: MotivoErroCarregamentoIa | null = null;
     resultados.forEach((resultado, indice) => {
@@ -152,5 +163,6 @@ export function useConfiguracoesIa(formulario: Pick<UseFormReturn<CamposProvedor
     setPrivacidade,
     configuracaoImagem,
     setConfiguracaoImagem,
+    chavesConfiguradas,
   };
 }

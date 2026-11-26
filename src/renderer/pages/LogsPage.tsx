@@ -353,7 +353,7 @@ export function LogsPage() {
 
     setVerificandoSenha(true);
     try {
-      const r = await window.ipcAPI.verifyPassword(userId, senha);
+      const r = await window.ipcAPI.verifyPassword(senha);
       if (r.valid) {
         setSenhaErro('');
         setPassoConfirmacao(1);

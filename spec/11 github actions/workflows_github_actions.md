@@ -5,13 +5,15 @@
 Este domínio documenta as automações de integração, atualização de dependências, preparação e promoção de releases. As fontes canônicas são:
 
 - `.github/workflows/ci.yml` para a CI;
+- `.github/workflows/e2e-smoke.yml` para o smoke E2E manual no Electron;
 - `.github/dependabot.yml` para a automação gerenciada **Dependabot Updates**;
 - `.github/workflows/release.yml` para **Preparar release**;
 - `.github/workflows/promover-release.yml` para **Promover release**;
 - `scripts/release/**` para validação, manifesto, assinatura e geração do feed;
 - `package.json` para os comandos executados, Node.js `>=24.21.0 <25`, npm `>=11.17.0 <12` e a lista de scripts de instalação autorizados;
 - `.nvmrc` para a versão local de referência, fixada em Node.js 24.21.0;
-- `electron-builder.yml` para os alvos e metadados de empacotamento.
+- `electron-builder.yml` para os alvos, metadados de empacotamento e recursos externos;
+- `scripts/google-drive/gerar-credencial-oauth.mjs`, `scripts/google-drive/empacotar-com-credencial-oauth.mjs` e `scripts/google-drive/iniciar-desenvolvimento.mjs` para a preparação da credencial OAuth do Google Drive.
 
 O arquivo `spec/01 planejamento/git_realease_plan.md` é planejamento e histórico operacional da implantação. Em caso de divergência, os YAMLs e scripts acima descrevem o comportamento atual.
 
@@ -36,7 +38,8 @@ Mudanças em versão do manifesto, serialização canônica, chave, canal, plata
 
 | Automação | Gatilho | Responsabilidade | Escrita externa |
 |---|---|---|---|
-| CI | `workflow_dispatch`, `pull_request` para `main` e `push` em `main` | validar tipos, lint, cobertura, scripts de release e build | nenhuma |
+| CI | `workflow_dispatch`, `pull_request` para `main` e `push` em `main` | validar tipos, lint, testes funcionais, scripts de release e build | nenhuma |
+| Smoke E2E Electron | `workflow_dispatch` | criar e salvar um laudo em Electron real, com perfil isolado | nenhuma |
 | Dependabot Updates | agenda de `.github/dependabot.yml` | abrir PRs mensais conjuntos de atualização para npm e GitHub Actions | PRs na `main`, gerenciados pelo GitHub |
 | Preparar release | `workflow_dispatch` | validar a solicitação, construir pacotes, assinar o manifesto e criar release em rascunho | tag e rascunho no GitHub Releases |
 | Promover release | `workflow_dispatch` | promover, reprocessar ou suspender uma release e implantar o feed assinado | release pública e GitHub Pages |
@@ -65,7 +68,7 @@ A CI aceita despacho manual por `workflow_dispatch`, além de `pull_request` par
 
 1. `npm run type-check`;
 2. `npm run lint`;
-3. `npm run test:coverage`;
+3. `npm test`;
 4. `npm run test:release`;
 5. `npm run test:carga:unitarios`;
 6. `node scripts/release/validar-schema-release.mjs`;
@@ -73,6 +76,8 @@ A CI aceita despacho manual por `workflow_dispatch`, além de `pull_request` par
 8. `npm run smoke:schema`.
 
 Os unitários da ferramenta de carga executam apenas testes Node de configuração, geração, entrada e relatório, sem iniciar Electron nem baixar navegadores. Carga gráfica, estresse e resistência são exclusivamente manuais via `npm run test:carga`; não fazem parte de dev, build, npm test ou da aprovação automática de releases. Ver `spec/13 diagnostico/testes_carga_editor.md`.
+
+O workflow manual **Smoke E2E Electron** executa em Windows e roda `npm run build` seguido de `npm run test:e2e:smoke`. A preparação de release repete esse smoke no job `smoke-e2e` e publica os diagnósticos de `tmp/teste-carga/e2e-smoke-*/` como artefato apenas se ele falhar.
 
 O grupo de concorrência combina workflow e PR ou referência. `cancel-in-progress: true` descarta a execução anterior da mesma origem quando chega uma revisão nova.
 
@@ -118,7 +123,9 @@ No modo `criar`, tag e release da versão devem estar ausentes. No modo `retomar
 
 Quando há incremento, o workflow cria uma branch efêmera `codex/release-v<versão>-<run-id>`, abre um PR para a `main` e o integra por merge. Em seguida, remove a branch remota, pois nenhum estágio posterior a utiliza: o commit resultante da `main` passa a ser o commit imutável usado por todos os builds e pela tag. Se essa limpeza remota falhar, o workflow registra um aviso e continua; a branch pode permanecer para remoção manual, mas a preparação não é invalidada por isso. Em `retomar`, a tag existente continua sendo a fonte do commit.
 
-O job inicial não repete instalação de dependências, tipos, lint, cobertura, testes de release nem build genérico. Depois de definir o commit imutável, ele despacha explicitamente `ci.yml` com `gh workflow run`: usa a referência `main` no modo `criar` e a tag `v<versão>` no modo `retomar`. Em seguida procura somente a execução `workflow_dispatch` associada ao SHA exato, aguardando por até 10 minutos que ela seja registrada, e usa `gh run watch --exit-status` até a conclusão. Somente uma CI bem-sucedida libera os builds nativos; ausência, cancelamento ou falha interrompem a preparação. O token desse job possui `actions: write` para disparar e acompanhar a CI e `checks: read`, além das permissões de conteúdo e PR necessárias à integração da versão.
+O job inicial não repete instalação de dependências, tipos, lint, cobertura, testes de release nem build genérico. Depois de definir o commit imutável, ele despacha explicitamente `ci.yml` com `gh workflow run`: usa a referência `main` no modo `criar` e a tag `v<versão>` no modo `retomar`. Em seguida procura somente a execução `workflow_dispatch` associada ao SHA exato, aguardando por até 10 minutos que ela seja registrada, e usa `gh run watch --exit-status` até a conclusão. Ausência, cancelamento ou falha interrompem a preparação. O token desse job possui `actions: write` para disparar e acompanhar a CI e `checks: read`, além das permissões de conteúdo e PR necessárias à integração da versão.
+
+Após a CI, os jobs `cobertura-release` (Ubuntu, `npm run test:coverage`) e `smoke-e2e` (Windows, build e `npm run test:e2e:smoke`) executam no mesmo commit imutável. Cada build nativo depende dos dois gates, além da validação inicial. Assim, a cobertura completa e a persistência básica de um laudo no Electron bloqueiam o empacotamento, mas não tornam a carga gráfica manual parte da aprovação da release.
 
 Esse estágio escreve na `main` antes da criação do rascunho e não é transacional com os demais jobs. Proteções ou indisponibilidade que impeçam a criação/integração do PR interrompem a preparação antes dos builds. Se a CI falhar depois da integração automática, a versão permanece na `main`, mas tag, instaladores e rascunho não são criados; uma nova execução reutiliza o próximo patch já registrado sem incrementá-lo novamente.
 
@@ -131,6 +138,12 @@ Os jobs selecionados fazem checkout do mesmo commit, usam Node.js 24.21.0, execu
 - macOS x64 e arm64: somente DMG experimental. ZIP continua aceito pelo consumidor como compatibilidade de leitura, mas não é gerado, manifestado nem publicado pelo produtor atual.
 
 O upload temporário falha se os padrões não encontrarem arquivos. O Windows possui uma barreira adicional: a versão dentro de `app.asar` e a versão de produto do executável devem coincidir com a versão solicitada. Não há verificação interna equivalente para Linux ou macOS.
+
+### Credencial OAuth do Google Drive
+
+Os jobs de empacotamento recebem o segredo do cliente OAuth somente pelo secret LAWDO_GOOGLE_CLIENT_SECRET do environment protegido release. O comando npm run preparar:oauth-google-drive combina esse segredo com o ID do cliente definido no código e gera temporariamente build/google-drive-oauth.dat, em formato ofuscado e sem o valor em texto puro. O electron-builder.yml copia esse arquivo para resources/config/google-drive-oauth.dat por meio de extraResources; o aplicativo empacotado lê esse recurso fora do app.asar. O script de empacotamento remove o arquivo temporário no bloco de finalização, e os jobs de release também o removem com always() após o empacotamento.
+
+`npm run dist` usa o mesmo preparador e exige a credencial antes do build. `npm run pack` é exclusivamente um pacote de verificação: cria recurso inválido sem segredo para satisfazer `extraResources`, remove qualquer recurso temporário prévio e o limpa ao terminar; o Drive fica bloqueado nesse artefato. A CI comum não recebe esse secret nem prepara a credencial. No desenvolvimento, npm run dev e npm run dev:diagnostico aceitam somente LAWDO_GOOGLE_CLIENT_SECRET na sessão local ou o arquivo ignorado build/google-drive-oauth.local; quando uma dessas fontes existe, geram a cópia local em build/google-drive-oauth.dat. Sem ela, o aplicativo inicia sem conexão ao Drive. Nenhum valor de credencial deve ser versionado, impresso ou incluído nesta spec. A ofuscação não transforma o valor incorporado ao instalador em segredo de alta confidencialidade; a proteção operacional depende também dos escopos OAuth e do armazenamento local protegido dos tokens.
 
 ### Agregação protegida
 

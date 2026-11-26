@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Cloud, Loader2, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Progress } from '@/components/ui/progress';
@@ -45,17 +45,34 @@ export function EnviarCopiaGoogleDriveDialog({ aberto, laudoId, possuiCopiaVigen
 
   const contaConectada = estado?.conectado === true;
   return <AlertDialog open={aberto} onOpenChange={valor => { if (!enviando) onAbertoChange(valor); }}>
-    <AlertDialogContent>
-      <AlertDialogHeader>
-        <AlertDialogTitle>Enviar cópia ao Google Drive?</AlertDialogTitle>
-        <AlertDialogDescription>
-          {consultandoEstado ? 'Verificando a conexão com o Google Drive.' : !contaConectada
-            ? 'Conecte uma conta institucional na página Backup e restauração antes de enviar uma cópia.'
-            : possuiCopiaVigente ? 'A cópia vigente será substituída depois da validação da nova cópia.' : 'O laWdo criará uma cópia cifrada na pasta exclusiva Meu Drive/laWdo.'}
-        </AlertDialogDescription>
+    <AlertDialogContent className="gap-0 overflow-hidden rounded-xl p-0">
+      <AlertDialogHeader className="space-y-3 border-b bg-muted/30 px-6 py-5">
+        <div className="flex items-center gap-3">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <Cloud className="size-5" aria-hidden="true" />
+          </div>
+          <div className="min-w-0 space-y-1">
+            <AlertDialogTitle>Enviar cópia ao Google Drive?</AlertDialogTitle>
+            <AlertDialogDescription>Uma cópia protegida será armazenada exclusivamente na sua área do laWdo.</AlertDialogDescription>
+          </div>
+        </div>
       </AlertDialogHeader>
-      {enviando && <div className="space-y-2" aria-live="polite"><Progress value={null} /><p className="text-sm text-muted-foreground">Preparando, cifrando, enviando e validando a cópia.</p></div>}
-      <AlertDialogFooter>
+      <div className="space-y-3 px-6 py-5">
+        <div className="flex gap-3 rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
+          {consultandoEstado || enviando ? <Loader2 className="mt-0.5 size-4 shrink-0 animate-spin text-primary" aria-hidden="true" /> : <ShieldCheck className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />}
+          <p>{consultandoEstado ? 'Verificando a conexão com o Google Drive.' : !contaConectada
+            ? 'Conecte uma conta institucional na página Backup e restauração antes de enviar uma cópia.'
+            : possuiCopiaVigente ? 'A cópia vigente será substituída depois da validação da nova cópia.' : 'A cópia será cifrada antes de ser enviada para Meu Drive/laWdo.'}</p>
+        </div>
+        {enviando && <div className="space-y-3 rounded-lg border border-primary/20 bg-primary/5 p-3" aria-live="polite">
+          <Progress value={null} />
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="size-4 animate-spin text-primary" aria-hidden="true" />
+            <span>Preparando, cifrando, enviando e validando a cópia.</span>
+          </div>
+        </div>}
+      </div>
+      <AlertDialogFooter className="border-t bg-muted/20 px-6 py-4">
         <AlertDialogCancel disabled={enviando}>Cancelar</AlertDialogCancel>
         <AlertDialogAction disabled={consultandoEstado || !contaConectada || enviando || !laudoId} onClick={evento => { evento.preventDefault(); void enviar(); }}>
           {enviando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{enviando ? 'Enviando...' : 'Enviar cópia'}

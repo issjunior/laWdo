@@ -5,8 +5,6 @@ import path from 'path'
 export default defineConfig({
   plugins: [react()],
   test: {
-    // Ambiente de testes
-    environment: 'jsdom',
     globals: true,
 
     // Configurações de cobertura
@@ -31,12 +29,6 @@ export default defineConfig({
       },
     },
 
-    // Incluir arquivos de teste
-    include: ['src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
-
-    // Excluir diretórios
-    exclude: ['node_modules', 'dist', 'out', '**/node_modules/**'],
-
     // Configurações de timeout
     testTimeout: 10000,
     hookTimeout: 10000,
@@ -50,8 +42,71 @@ export default defineConfig({
     // Configurações de UI
     reporters: ['default'],
 
-    // Setup para testes
-    setupFiles: ['./src/test-setup.ts'],
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: 'node',
+          environment: 'node',
+          include: [
+            'src/__tests__/main/**/*.{test,spec}.{ts,tsx}',
+            'src/__tests__/shared/**/*.{test,spec}.{ts,tsx}',
+            'src/__tests__/validators/**/*.{test,spec}.{ts,tsx}',
+          ],
+          exclude: [
+            'src/__tests__/main/exportacao-docx-canonica.test.ts',
+            'src/__tests__/main/exportacao-docx-proporcao.test.ts',
+            'src/__tests__/main/importacao-documentos.test.ts',
+            'src/__tests__/main/importacao-pdf.test.ts',
+            'src/__tests__/main/secao-builder.service.test.ts',
+            'src/__tests__/main/template-titulo-oculto.integration.test.ts',
+            'src/__tests__/main/templates-figuras-padrao.test.ts',
+            'src/__tests__/shared/b601-coleta.test.ts',
+          ],
+          setupFiles: ['./src/test-setup-node.ts'],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'dom-main',
+          environment: 'jsdom',
+          include: [
+            'src/__tests__/main/exportacao-docx-canonica.test.ts',
+            'src/__tests__/main/exportacao-docx-proporcao.test.ts',
+            'src/__tests__/main/importacao-documentos.test.ts',
+            'src/__tests__/main/importacao-pdf.test.ts',
+            'src/__tests__/main/secao-builder.service.test.ts',
+            'src/__tests__/main/template-titulo-oculto.integration.test.ts',
+            'src/__tests__/main/templates-figuras-padrao.test.ts',
+            'src/__tests__/shared/b601-coleta.test.ts',
+          ],
+          setupFiles: ['./src/test-setup.ts'],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'renderer',
+          environment: 'jsdom',
+          include: [
+            'src/__tests__/renderer/**/*.{test,spec}.{ts,tsx}',
+            'src/__tests__/pages/**/*.{test,spec}.{ts,tsx}',
+            'src/__tests__/components/**/*.{test,spec}.{ts,tsx}',
+          ],
+          setupFiles: ['./src/test-setup.ts'],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'preload',
+          environment: 'jsdom',
+          include: ['src/__tests__/preload/**/*.{test,spec}.{ts,tsx}'],
+          setupFiles: ['./src/test-setup.ts'],
+        },
+      },
+    ],
   },
   resolve: {
     alias: {

@@ -1,18 +1,22 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ipcMain } from 'electron';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { app, ipcMain } from 'electron';
 import { authSessaoService } from '../../main/services/auth-sessao.service';
 import { googleDriveService } from '../../main/services/google-drive.service';
 
 vi.mock('electron', () => ({ app: { getPath: vi.fn(() => process.cwd()) }, ipcMain: { handle: vi.fn() } }));
 vi.mock('../../main/services/auth-sessao.service', () => ({ authSessaoService: { exigir: vi.fn(() => 'usuario-1') } }));
 vi.mock('../../main/services/google-drive.service', () => ({ ErroGoogleDrive: class ErroGoogleDrive extends Error {}, googleDriveService: {
-  estadoRapido: vi.fn(), estado: vi.fn(), resumo: vi.fn(), conectar: vi.fn(), desconectar: vi.fn(), definirEnvioAutomatico: vi.fn(), listarCopias: vi.fn(), listarLaudosConcluidos: vi.fn(), enviarLaudo: vi.fn(), verificar: vi.fn(), conferirCopiaAtual: vi.fn(), lerPacoteCopia: vi.fn(), registrarVerificacaoConcluida: vi.fn(), moverParaLixeira: vi.fn(),
+  estadoRapido: vi.fn(), estado: vi.fn(), resumo: vi.fn(), conectar: vi.fn(), desconectar: vi.fn(), abrirPasta: vi.fn(), definirEnvioAutomatico: vi.fn(), listarCopias: vi.fn(), listarLaudosConcluidos: vi.fn(), enviarLaudo: vi.fn(), verificar: vi.fn(), conferirCopiaAtual: vi.fn(), lerPacoteCopia: vi.fn(), registrarVerificacaoConcluida: vi.fn(), moverParaLixeira: vi.fn(),
 } }));
 vi.mock('../../main/services/laudo-bkp.service', () => ({ analisarConflitosBkp: vi.fn(), importarBkpLaudo: vi.fn() }));
 
 type Remetente = { id: number; isDestroyed: () => boolean; once: ReturnType<typeof vi.fn>; send: ReturnType<typeof vi.fn> };
 type Tratador = (evento: { sender: Remetente }, ...argumentos: unknown[]) => Promise<unknown>;
 const pacote = { rep: { numero: '109.026-26' }, tipoExame: { codigo: 'T', nome: 'Teste' }, solicitante: null, placeholders: [], laudo: { conteudo: '<p>Laudo</p>', apresentacao_json: null } };
+const diretorioDadosTeste = mkdtempSync(path.join(tmpdir(), 'lawdo-google-drive-handlers-'));
 
 function obterTratador(canal: string): Tratador {
   const tratador = vi.mocked(ipcMain.handle).mock.calls.find(([registrado]) => registrado === canal)?.[1];
@@ -22,6 +26,7 @@ function obterTratador(canal: string): Tratador {
 
 beforeEach(async () => {
   vi.clearAllMocks();
+  vi.mocked(app.getPath).mockReturnValue(diretorioDadosTeste);
   vi.mocked(authSessaoService.exigir).mockReturnValue('usuario-1');
   vi.mocked(googleDriveService.lerPacoteCopia).mockResolvedValue({ pacote, hashCifrado: 'hash', revisao: 'r1' } as never);
   vi.mocked(googleDriveService.registrarVerificacaoConcluida).mockResolvedValue(undefined);
@@ -29,7 +34,20 @@ beforeEach(async () => {
   registrarGoogleDriveHandlers();
 });
 
+afterAll(() => {
+  rmSync(diretorioDadosTeste, { recursive: true, force: true });
+});
+
 describe('fronteira IPC do Google Drive', () => {
+  it('abre a pasta exclusiva do laWdo para o usuário autenticado', async () => {
+    const evento = { sender: { id: 0, isDestroyed: () => false, once: vi.fn(), send: vi.fn() } };
+
+    const resposta = await obterTratador('google-drive:abrir-pasta')(evento);
+
+    expect(resposta).toEqual({ success: true });
+    expect(googleDriveService.abrirPasta).toHaveBeenCalledWith('usuario-1');
+  });
+
   it('marca a cópia como íntegra depois de preparar uma visualização válida', async () => {
     const evento = { sender: { id: 1, isDestroyed: () => false, once: vi.fn(), send: vi.fn() } };
 

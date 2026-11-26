@@ -738,33 +738,30 @@
     },
     {
       "arquivo": "spec/problemas diversos/erros_eslint_typescript_testes_codigomorto/00_saude_do_sistema.md",
-      "tipo": "auditoria",
-      "autoAtualizavel": false,
-      "descricao": "Painel de saude e diagnostico do sistema."
+      "tipo": "estado_atual",
+      "autoAtualizavel": true,
+      "descricao": "Painel gerado pela execução completa de saúde do sistema.",
+      "globsCodigo": [
+        "scripts/saude/**",
+        "scripts/check-knip.mjs",
+        "knip.json",
+        "package.json",
+        "AGENTS.md"
+      ]
     },
     {
-      "arquivo": "spec/problemas diversos/erros_eslint_typescript_testes_codigomorto/01_abordagem_leve_pre_knip.md",
-      "tipo": "planejamento",
+      "arquivo": "spec/problemas diversos/erros_eslint_typescript_testes_codigomorto/DEAD_CODE_EXCEPTIONS.md",
+      "tipo": "estado_atual",
       "autoAtualizavel": false,
-      "descricao": "Plano de abordagem leve pre-Knip."
-    },
-    {
-      "arquivo": "spec/problemas diversos/erros_eslint_typescript_testes_codigomorto/02_plano_knip_futuro.md",
-      "tipo": "planejamento",
-      "autoAtualizavel": false,
-      "descricao": "Plano futuro de Knip."
-    },
-    {
-      "arquivo": "spec/problemas diversos/erros_eslint_typescript_testes_codigomorto/03_melhoria_graphify.md",
-      "tipo": "auditoria",
-      "autoAtualizavel": false,
-      "descricao": "Analise curada do grafo."
-    },
-    {
-      "arquivo": "spec/problemas diversos/erros_eslint_typescript_testes_codigomorto/04_auditoria_tsprune_2026-06-23.md",
-      "tipo": "auditoria",
-      "autoAtualizavel": false,
-      "descricao": "Auditoria pontual do ts-prune."
+      "descricao": "Falsos positivos de código morto confirmados na triagem atual.",
+      "globsCodigo": [
+        "src/main/types/database.ts",
+        "src/main/utils/logger.ts",
+        "src/main/services/dashboard.service.ts",
+        "scripts/saude/**",
+        "scripts/check-knip.mjs",
+        "knip.json"
+      ]
     },
     {
       "arquivo": "spec/09 automacao-spec/fluxo_spec.md",
@@ -888,6 +885,23 @@
         "src/main/services/config-backup.service.ts",
         "src/main/services/auth-sessao.service.ts",
         "src/__tests__/main/backup-arquivo.service.test.ts"
+      ]
+    },
+    {
+      "arquivo": "spec/14 backup/google_drive.md",
+      "tipo": "estado_atual",
+      "autoAtualizavel": true,
+      "descricao": "Cópias cifradas de laudos no Google Drive, OAuth, fila, verificação e restauração.",
+      "globsCodigo": [
+        "src/shared/types/google-drive.types.ts",
+        "src/main/services/google-drive.service.ts",
+        "src/main/services/google-drive-*.service.ts",
+        "src/main/ipc/handlers/google-drive.handlers.ts",
+        "src/preload/index.ts",
+        "src/renderer/index.tsx",
+        "src/renderer/pages/GoogleDrivePage.tsx",
+        "src/renderer/components/google-drive/**",
+        "src/__tests__/main/google-drive.*.test.ts"
       ]
     },
     {

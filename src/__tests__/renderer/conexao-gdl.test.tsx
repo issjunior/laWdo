@@ -143,7 +143,7 @@ describe('indicador compacto', () => {
     montar();
     await act(async () => undefined);
     const botao = screen.getByRole('button', { name: 'GDL: Acesso ao GDL confirmado' });
-    expect(botao).toHaveClass('w-16');
+    expect(botao).toHaveClass('w-[72px]');
     expect(botao.querySelector('svg')).toHaveClass('dark:text-emerald-400');
     fireEvent.click(botao);
     expect(screen.getByRole('dialog', { name: 'Conexão com o GDL' })).toBeInTheDocument();

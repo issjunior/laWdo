@@ -3,11 +3,11 @@ import { respostaPossuiUsuarios } from '@/pages/AuthPage'
 
 describe('verificação inicial de usuários', () => {
   it('abre o cadastro inicial somente após uma resposta válida e vazia', () => {
-    expect(respostaPossuiUsuarios({ success: true, data: [] })).toBe(false)
+    expect(respostaPossuiUsuarios({ success: true, data: false })).toBe(false)
   })
 
   it('direciona para o login quando existe usuário cadastrado', () => {
-    expect(respostaPossuiUsuarios({ success: true, data: [{ id: 'usuario-1' }] })).toBe(true)
+    expect(respostaPossuiUsuarios({ success: true, data: true })).toBe(true)
   })
 
   it('não interpreta falha de IPC como ausência de usuários', () => {

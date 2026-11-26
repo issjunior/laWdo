@@ -103,7 +103,7 @@ export const PerfilPage: React.FC = () => {
 
     if (user?.foto_url) {
       try {
-        const result = await window.ipcAPI.user.getAvatar(id);
+        const result = await window.ipcAPI.user.getAvatar();
         if (result.success && result.data?.foto_url) {
           setFotoUrl(result.data.foto_url);
           return;
@@ -147,7 +147,7 @@ export const PerfilPage: React.FC = () => {
       if (isChangingPassword && data.senha) {
         updatePayload.senha = data.senha;
       }
-      const result = await window.ipcAPI.user.updateProfile(userId, updatePayload);
+      const result = await window.ipcAPI.user.updateProfile(updatePayload);
 
       if (!result.success) {
         throw new Error(result.error || 'Erro ao atualizar perfil');
@@ -468,7 +468,6 @@ export const PerfilPage: React.FC = () => {
         <AvatarUploadDialog
           open={uploadDialogOpen}
           onOpenChange={setUploadDialogOpen}
-          userId={userId}
           currentFotoUrl={fotoUrl}
           userName={userName}
           onAvatarUpdated={handleAvatarUpdated}

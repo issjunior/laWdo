@@ -18,6 +18,9 @@ const mocks = vi.hoisted(() => ({
   salvarPerfil: vi.fn(),
   configuracaoObter: vi.fn(),
   configuracaoSalvar: vi.fn(),
+  exigirSessao: vi.fn(),
+  vincularJanelaFilha: vi.fn(),
+  encerrarSessao: vi.fn(),
 }));
 
 vi.mock('electron', () => {
@@ -50,6 +53,14 @@ vi.mock('../../main/services/configuracao.service.js', () => ({
   configuracaoService: { obter: mocks.configuracaoObter, salvar: mocks.configuracaoSalvar },
 }));
 
+vi.mock('../../main/services/auth-sessao.service.js', () => ({
+  authSessaoService: {
+    exigir: mocks.exigirSessao,
+    vincularJanelaFilha: mocks.vincularJanelaFilha,
+    encerrar: mocks.encerrarSessao,
+  },
+}));
+
 vi.mock('../../main/services/ia-execucao.service.js', () => ({
   ErroExecucaoIa: class ErroExecucaoIa extends Error {},
   iaExecucaoService: {
@@ -77,6 +88,7 @@ describe('handlers IPC do painel de IA', () => {
     vi.clearAllMocks();
     mocks.configuracaoObter.mockResolvedValue(null);
     mocks.configuracaoSalvar.mockResolvedValue(undefined);
+    mocks.exigirSessao.mockReturnValue('usuario-1');
   });
 
   it('autoriza a sessão, valida snapshots e restringe operações ao renderer proprietário', async () => {
@@ -94,7 +106,7 @@ describe('handlers IPC do painel de IA', () => {
       getBounds: vi.fn(() => ({ x: 0, y: 0, width: 1200, height: 800 })),
       once: vi.fn(),
     };
-    const webContentsPainel = { id: 202, send: vi.fn() };
+    const webContentsPainel = { id: 202, send: vi.fn(), once: vi.fn() };
     const janelaPainel = {
       webContents: webContentsPainel,
       loadURL: vi.fn(),

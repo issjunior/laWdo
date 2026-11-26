@@ -20,7 +20,15 @@ interface RelatorioAtividadeUsuario {
 
 class UserService extends BaseService<UserRow> {
   constructor() {
-    super('users', 'id')
+    super('users', 'id', {
+      campos: ['id', 'nome', 'email', 'matricula', 'cargo', 'lotacao', 'forma_tratamento', 'username', 'ativo', 'data_criacao', 'data_atualizacao'],
+      ordenacaoPadrao: 'data_criacao',
+    })
+  }
+
+  async temUsuarios(): Promise<boolean> {
+    const total = await this.count()
+    return total > 0
   }
 
   async create(

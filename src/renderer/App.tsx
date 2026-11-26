@@ -45,7 +45,7 @@ const Layout: React.FC<{ children: React.ReactNode; onLogout: () => void; curren
 }) => {
   return (
     <SidebarProvider className="h-screen min-h-0 flex-col overflow-hidden bg-sidebar">
-      <Header onLogout={onLogout} currentUser={currentUser} />
+      <Header currentUser={currentUser} />
       <div className="flex min-h-0 flex-1">
         <AppSidebar currentUser={currentUser} onLogout={onLogout} />
         <SidebarInset className="min-w-0">

@@ -32,7 +32,7 @@ describe('exclusão do laudo na listagem', () => {
     const dialogo = await screen.findByRole('dialog');
     fireEvent.click(within(dialogo).getByRole('button', { name: 'Excluir Laudo' }));
     await waitFor(() => expect(toast.success).toHaveBeenCalledExactlyOnceWith('Laudo removido'));
-    expect(excluir).toHaveBeenCalledExactlyOnceWith('laudo', undefined);
+    expect(excluir).toHaveBeenCalledExactlyOnceWith('laudo');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(listar).toHaveBeenCalledTimes(2);
   });

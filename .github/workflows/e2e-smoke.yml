@@ -1,0 +1,39 @@
+name: Smoke E2E Electron
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke-e2e:
+    name: Criar e salvar laudo
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Obter código
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6.0.2
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.21.0
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci --strict-allow-scripts
+
+      - name: Gerar build
+        run: npm run build
+
+      - name: Executar smoke E2E isolado
+        run: npm run test:e2e:smoke
+
+      - name: Enviar diagnóstico do smoke
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: smoke-e2e-diagnostico
+          path: tmp/teste-carga/e2e-smoke-*/
+          if-no-files-found: ignore

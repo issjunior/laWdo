@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { CircleHelp, CircleCheck, TriangleAlert, Unplug, RefreshCw, Settings2 } from 'lucide-react';
 import { useConexaoGdl } from '@/hooks/useConexaoGdl';
@@ -6,6 +6,13 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+
+declare global {
+  interface Window {
+    indicadorGdlAtivo?: string;
+    proximoIndicadorGdl?: number;
+  }
+}
 
 const apresentacao = {
   desconhecida: {
@@ -42,7 +49,30 @@ const apresentacao = {
 export function IndicadorConexaoGdl() {
   const { estado, resumo, verificando, verificarAgora } = useConexaoGdl();
   const [aberto, setAberto] = useState(false);
+  const instancia = useRef<string | undefined>(undefined);
   const navegar = useNavigate();
+  if (!instancia.current) {
+    window.proximoIndicadorGdl = (window.proximoIndicadorGdl ?? 0) + 1;
+    instancia.current = `gdl-${window.proximoIndicadorGdl}`;
+  }
+
+  useLayoutEffect(() => {
+    const identificador = instancia.current!;
+    window.indicadorGdlAtivo = identificador;
+    const removerDuplicatas = () => {
+      if (window.indicadorGdlAtivo !== identificador) return;
+      document.querySelectorAll<HTMLButtonElement>('[data-indicador-gdl]').forEach(botao => {
+        if (botao.dataset.indicadorGdl !== identificador) botao.remove();
+      });
+    };
+    removerDuplicatas();
+    const observador = new MutationObserver(removerDuplicatas);
+    observador.observe(document.body, { childList: true, subtree: true });
+    return () => {
+      observador.disconnect();
+      if (window.indicadorGdlAtivo === identificador) window.indicadorGdlAtivo = undefined;
+    };
+  }, []);
   const visual = apresentacao[resumo.aparencia];
   const { icone: Icone, classe } = visual;
 
@@ -52,7 +82,7 @@ export function IndicadorConexaoGdl() {
         <Tooltip>
           <TooltipTrigger asChild>
             <PopoverTrigger asChild>
-              <button type="button" aria-label={`GDL: ${resumo.mensagem}`} className="flex h-8 w-16 shrink-0 items-center justify-center gap-1.5 rounded-md text-xs font-medium text-sidebar-foreground hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <button type="button" data-indicador-gdl={instancia.current} aria-label={`GDL: ${resumo.mensagem}`} className="flex h-8 w-[72px] shrink-0 items-center justify-center gap-1.5 rounded-md text-xs font-medium text-sidebar-foreground hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                 <span>GDL</span><Icone className={`h-4 w-4 ${classe}`} aria-hidden="true" />
               </button>
             </PopoverTrigger>

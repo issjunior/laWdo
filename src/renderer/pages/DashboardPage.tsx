@@ -42,6 +42,7 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { GdlMinhasRepsDashboard } from '@/components/rep/GdlMinhasRepsDashboard';
+import logo from '@/assets/logo.png';
 import type {
   DashboardConsultaLaudosEntrada,
   DashboardConsultaLaudosResultado,
@@ -516,7 +517,14 @@ export function DashboardPage() {
           ? titulosModais[modalAberto]
           : '';
   return (
-    <div className="@container flex h-full min-h-[34rem] min-w-0 flex-col gap-3">
+    <div className="relative isolate h-full min-h-[34rem] overflow-hidden">
+      <img
+        src={logo}
+        alt=""
+        aria-hidden="true"
+        className="pointer-events-none absolute left-1/2 top-1/2 z-0 w-[min(42rem,72vw)] -translate-x-1/2 -translate-y-1/2 select-none opacity-[0.035] grayscale dark:opacity-[0.06]"
+      />
+      <div className="@container relative z-10 flex h-full min-h-[34rem] min-w-0 flex-col gap-3">
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-semibold tracking-tight">Dashboard</h1>
         <div className="flex flex-wrap gap-2">
@@ -995,6 +1003,7 @@ export function DashboardPage() {
           </div>
         </DialogContent>
       </Dialog>
+      </div>
     </div>
   );
 }

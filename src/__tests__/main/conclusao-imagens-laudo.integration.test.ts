@@ -14,6 +14,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { ipcMain } from 'electron';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { authSessaoService } from '../../main/services/auth-sessao.service';
 
 const ambiente = vi.hoisted(() => ({ diretorio: '', largura: 4000, altura: 2000, transparente: false,
   invalida: false, vazia: false, maior: false, falharEscrita: false, codificar: vi.fn(), redimensionar: vi.fn() }));
@@ -56,7 +57,8 @@ const registros = () => sqlite.executeQuery<{ id: string; caminho_relativo: stri
   sha256: string; imagem_origem_id: string | null; ajustes_json: string | null; disponivel_painel: number; temporaria_sessao: number }>(
   'SELECT * FROM imagens_laudo WHERE laudo_id = ? ORDER BY id', [laudoId]);
 const conteudo = async (html: string) => sqlite.executeNonQuery('UPDATE laudos SET conteudo = ? WHERE id = ?', [html, laudoId]);
-const concluir = () => atualizar({} as Electron.IpcMainInvokeEvent, laudoId, 'Concluído');
+const eventoAutenticado = { sender: { id: 812 } } as Electron.IpcMainInvokeEvent;
+const concluir = () => atualizar(eventoAutenticado, laudoId, 'Concluído');
 
 async function adicionar(id = 'foto', mime = 'image/jpeg', bytes = Buffer.alloc(2048, 1)) {
   const imagemId = `${laudoId}-${id}`;
@@ -77,6 +79,7 @@ beforeAll(async () => {
   imagens = await import('../../main/services/imagem-laudo.service');
   reps = (await import('../../main/services/rep.service')).repService;
   await sqlite.executeNonQuery("INSERT INTO users (id, nome, email, username, senha_hash) VALUES ('perito-regressao', 'Perito', 'teste@local.invalid', 'perito-regressao', 'hash')");
+  authSessaoService.iniciar(eventoAutenticado.sender.id, 'perito-regressao');
   await sqlite.executeNonQuery("INSERT INTO templates (id, nome) VALUES ('template-regressao', 'Teste')");
   (await import('../../main/ipc/handlers/laudo.handlers')).registerLaudoHandlers();
   const handler = vi.mocked(ipcMain.handle).mock.calls.find(([nome]) => nome === 'laudo:updateStatus')?.[1];
@@ -94,7 +97,7 @@ beforeEach(async () => {
 });
 
 afterEach(() => { vi.restoreAllMocks(); });
-afterAll(async () => { await sqlite?.closeDatabase(); if (ambiente.diretorio) await rm(ambiente.diretorio, { recursive: true, force: true }); });
+afterAll(async () => { authSessaoService.encerrar(eventoAutenticado.sender.id); await sqlite?.closeDatabase(); if (ambiente.diretorio) await rm(ambiente.diretorio, { recursive: true, force: true }); });
 
 describe('compressão, integridade e conclusão das figuras', () => {
   it.each([

@@ -13,6 +13,8 @@ vi.mock('@/components/ui/sidebar', () => ({ SidebarTrigger: () => <button type="
 describe('Header - atualizações', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.removeItem('theme');
+    document.body.classList.remove('dark');
     Object.assign(window.ipcAPI, {
       getAppInfo: vi.fn().mockResolvedValue({ version: '0.1.12', name: 'laWdo', platform: 'win32', osVersion: 'Windows', arch: 'x64', memory: '8 GB', dbVersion: 1 }),
       gdl: {
@@ -52,7 +54,7 @@ describe('Header - atualizações', () => {
   });
 
   it('mostra um resumo amigável e preserva os detalhes técnicos recolhidos', async () => {
-    render(<MemoryRouter><Header currentUser={null} onLogout={vi.fn()} /></MemoryRouter>);
+    render(<MemoryRouter><Header currentUser={null} /></MemoryRouter>);
 
     fireEvent.click(screen.getByRole('button', { name: 'Atualizações' }));
 
@@ -82,7 +84,7 @@ describe('Header - atualizações', () => {
       },
     });
 
-    render(<MemoryRouter><Header currentUser={null} onLogout={vi.fn()} /></MemoryRouter>);
+    render(<MemoryRouter><Header currentUser={null} /></MemoryRouter>);
     fireEvent.click(screen.getByRole('button', { name: 'Atualizações' }));
 
     expect(await screen.findByText('Nova versão disponível')).toBeInTheDocument();
@@ -96,12 +98,50 @@ describe('Header - atualizações', () => {
       configurable: true,
       value: { writeText: vi.fn().mockRejectedValue(new DOMException('Write permission denied.', 'NotAllowedError')) },
     });
-    render(<MemoryRouter><Header currentUser={null} onLogout={vi.fn()} /></MemoryRouter>);
+    render(<MemoryRouter><Header currentUser={null} /></MemoryRouter>);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Informações' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Informações do aplicativo' }));
     fireEvent.click(await screen.findByRole('button', { name: /dúvidas e sugestões/i }));
 
     await vi.waitFor(() => expect(toast.error).toHaveBeenCalledWith('Não foi possível copiar o e-mail.'));
+  });
+
+  it('inclui os canais de suporte no diagnóstico copiável da atualização', async () => {
+    const escrever = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: escrever } });
+    render(<MemoryRouter><Header currentUser={null} /></MemoryRouter>);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Atualizações' }));
+    fireEvent.click(await screen.findByText('Ver detalhes técnicos'));
+    fireEvent.click(screen.getByRole('button', { name: /copiar detalhes/i }));
+
+    await vi.waitFor(() => expect(escrever).toHaveBeenCalledWith(expect.stringContaining('izaias.santos@policiacientifica.pr.gov.br')));
+    expect(escrever).toHaveBeenCalledWith(expect.stringContaining('https://github.com/issjunior/laWdo'));
+  });
+
+  it('oferece tema e informações como ações diretas sem repetir o nome da sessão', () => {
+    render(<MemoryRouter><Header currentUser={{ nome: 'Izaias Santos de Souza Júnior' }} /></MemoryRouter>);
+
+    expect(screen.getByText(/^(Bom dia|Boa tarde|Boa noite), Izaias - /)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Menu do usuário' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Mudar para modo escuro' }));
+    expect(document.body).toHaveClass('dark');
+    expect(localStorage.setItem).toHaveBeenCalledWith('theme', 'dark');
+    expect(screen.queryByRole('button', { name: 'Sair da conta' })).not.toBeInTheDocument();
+  });
+
+  it('permanece utilizável quando APIs opcionais e informações do aplicativo falham', async () => {
+    Object.assign(window.ipcAPI, {
+      atualizacao: undefined,
+      capturaLogs: undefined,
+      googleDrive: undefined,
+      getAppInfo: vi.fn().mockRejectedValue(new Error('IPC indisponível')),
+    });
+
+    render(<MemoryRouter><Header currentUser={{ nome: 'Perita Teste' }} /></MemoryRouter>);
+    expect(screen.getByText(/^(Bom dia|Boa tarde|Boa noite), Perita - /)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Informações do aplicativo' }));
+    expect(await screen.findByText(/não foi possível carregar as informações do aplicativo/i)).toBeInTheDocument();
   });
 });
 

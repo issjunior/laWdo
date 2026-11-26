@@ -195,7 +195,7 @@ export interface IpcAPI {
   // Autenticação
   login: (username: string, password: string) => Promise<{ success: boolean; user?: IpcPayload }>;
   logout: () => Promise<{ success: boolean }>;
-  verifyPassword: (userId: string, password: string) => Promise<{ success: boolean; valid: boolean; error?: string }>;
+  verifyPassword: (password: string) => Promise<{ success: boolean; valid: boolean; error?: string }>;
 
   // Usuários
   user: {
@@ -206,9 +206,10 @@ export interface IpcAPI {
     delete: (id: string) => Promise<UserResponse>;
     findByEmail: (email: string) => Promise<UserResponse>;
     findActivePeritos: () => Promise<UserResponse>;
-    updateProfile: (userId: string, profileData: UserProfileUpdateData) => Promise<UserResponse>;
-    uploadAvatar: (userId: string, base64Data: string) => Promise<UserAvatarResponse>;
-    getAvatar: (userId: string) => Promise<UserAvatarResponse>;
+    temUsuarios: () => Promise<UserResponse<boolean>>;
+    updateProfile: (profileData: UserProfileUpdateData) => Promise<UserResponse>;
+    uploadAvatar: (base64Data: string) => Promise<UserAvatarResponse>;
+    getAvatar: () => Promise<UserAvatarResponse>;
   };
 
   // Solicitantes
@@ -266,6 +267,8 @@ export interface IpcAPI {
 
   // GDL
   gdl: ApiCredenciaisGdl & {
+    obterEstadoCredenciais: (ambiente: 'producao' | 'homologacao') => Promise<RespostaGdl<{ configuradas: boolean; cpfValido: boolean }>>;
+    salvarCredenciais: (ambiente: 'producao' | 'homologacao', credenciais: { login: string; senha: string; cpfUsuario: string }) => Promise<RespostaGdl>;
     obterEstadoConexao: () => Promise<RespostaGdl<EstadoConexaoGdl>>;
     verificarConexao: () => Promise<RespostaGdl<EstadoConexaoGdl>>;
     onEstadoConexaoAlterado: (callback: (estado: EstadoConexaoGdl) => void) => () => void;
@@ -350,8 +353,8 @@ export interface IpcAPI {
     findById: (id: string) => Promise<UserResponse<LaudoConteudo | null>>;
     findByRepId: (repId: string) => Promise<UserResponse>;
     updateConteudo: (laudoId: string, conteudo: string) => Promise<UserResponse>;
-    create: (data: { rep_id: string; perito_id: string; template_id: string }) => Promise<UserResponse>;
-    delete: (laudoId: string, userId?: string) => Promise<UserResponse>;
+    create: (data: { rep_id: string; template_id: string }) => Promise<UserResponse>;
+    delete: (laudoId: string) => Promise<UserResponse>;
     updateStatus: (laudoId: string, status: string) => Promise<UserResponse>;
     gerarWizard: (params: IpcPayload) => Promise<UserResponse>;
     salvarProgressoWizard: (laudoId: string, respostas: IpcPayload) => Promise<UserResponse>;
@@ -361,7 +364,7 @@ export interface IpcAPI {
     sincronizarSecoes: (laudoId: string) => Promise<UserResponse>;
   };
 
-  googleDrive: Pick<ApiGoogleDrive, 'estadoRapido' | 'estado' | 'resumoCache' | 'resumo' | 'conectar' | 'desconectar' | 'definirEnvioAutomatico' | 'listarCopias' | 'listarLaudosConcluidos' | 'enviarLaudo' | 'verificar' | 'cancelarVerificacao' | 'onProgressoVerificacao' | 'prepararVisualizacao' | 'analisarRestauracao' | 'confirmarRestauracao' | 'cancelarRestauracao' | 'moverParaLixeira'>;
+  googleDrive: Pick<ApiGoogleDrive, 'estadoRapido' | 'estado' | 'resumoCache' | 'resumo' | 'conectar' | 'desconectar' | 'abrirPasta' | 'definirEnvioAutomatico' | 'listarCopias' | 'listarLaudosConcluidos' | 'enviarLaudo' | 'verificar' | 'cancelarVerificacao' | 'onProgressoVerificacao' | 'prepararVisualizacao' | 'analisarRestauracao' | 'confirmarRestauracao' | 'cancelarRestauracao' | 'moverParaLixeira'>;
 
   // Wizard
   wizard: {
@@ -404,6 +407,8 @@ export interface IpcAPI {
 
   // IA / Integração Groq
   ia: {
+    obterEstadoCredenciais: () => Promise<UserResponse<{ groqConfigurada: boolean; geminiConfigurada: boolean }>>;
+    salvarCredenciais: (credenciais: { groq?: string; gemini?: string }) => Promise<UserResponse>;
     revisarOrtografia: (textoHtml: string) => Promise<UserResponse>;
     adequarEscrita: (textoHtml: string) => Promise<UserResponse>;
     perguntar: (pergunta: string, contexto?: string) => Promise<UserResponse>;
@@ -431,6 +436,10 @@ export interface IpcAPI {
     onPainelComando: (callback: (comando: ComandoPainelIa) => void) => () => void;
     onPainelReencaixar: (callback: (sessionId: string) => void) => () => void;
     onPainelFechado: (callback: (sessionId: string) => void) => () => void;
+  };
+
+  notebooklm: {
+    abrir: () => Promise<{ success: boolean; reutilizada?: boolean; error?: string }>;
   };
 
   // Backup e Restauração
@@ -585,6 +594,7 @@ const ALLOWED_CHANNELS = new Set([
   'user:delete',
   'user:findByEmail',
   'user:findActivePeritos',
+  'user:temUsuarios',
   'user:updateProfile',
   'user:uploadAvatar',
   'user:getAvatar',
@@ -618,6 +628,8 @@ const ALLOWED_CHANNELS = new Set([
 
   // GDL
   'gdl:excluir-credenciais',
+  'gdl:obter-estado-credenciais',
+  'gdl:salvar-credenciais',
   'gdl:obter-preferencia-listagem',
   'gdl:obter-estado-conexao',
   'gdl:verificar-conexao',
@@ -710,6 +722,7 @@ const ALLOWED_CHANNELS = new Set([
   'google-drive:resumo',
   'google-drive:conectar',
   'google-drive:desconectar',
+  'google-drive:abrir-pasta',
   'google-drive:definir-envio-automatico',
   'google-drive:listar-copias',
     'google-drive:listar-laudos-concluidos',
@@ -767,6 +780,8 @@ const ALLOWED_CHANNELS = new Set([
   'regra-wizard:calcularPecas',
 
   // IA
+  'ia:obter-estado-credenciais',
+  'ia:salvar-credenciais',
   'ia:revisarOrtografia',
   'ia:adequarEscrita',
   'ia:descrever-imagem',
@@ -788,6 +803,9 @@ const ALLOWED_CHANNELS = new Set([
   'ia:painel-publicar',
   'ia:painel-comando',
   'ia:painel-reencaixar',
+
+  // NotebookLM
+  'notebooklm:abrir',
 
   // Backup
   'backup:criar',
@@ -1376,9 +1394,9 @@ contextBridge.exposeInMainWorld('ipcAPI', {
   },
   logout: () => invocarComDiagnostico('logout'),
 
-  verifyPassword: (userId: string, password: string) => {
-    if (typeof userId !== 'string' || typeof password !== 'string') return Promise.resolve({ success: false, valid: false, error: 'Dados inválidos' });
-    return invocarComDiagnostico('user:verifyPassword', userId, password);
+  verifyPassword: (password: string) => {
+    if (typeof password !== 'string') return Promise.resolve({ success: false, valid: false, error: 'Dados inválidos' });
+    return invocarComDiagnostico('user:verifyPassword', password);
   },
 
   // Usuários
@@ -1431,32 +1449,24 @@ contextBridge.exposeInMainWorld('ipcAPI', {
     findActivePeritos: () => {
       return invocarComDiagnostico('user:findActivePeritos');
     },
+    temUsuarios: () => invocarComDiagnostico('user:temUsuarios'),
 
-    updateProfile: (userId: string, profileData: UserProfileUpdateData) => {
-      if (typeof userId !== 'string' || !userId.trim()) {
-        throw new Error('ID do usuário inválido');
-      }
+    updateProfile: (profileData: UserProfileUpdateData) => {
       if (!profileData || typeof profileData !== 'object') {
         throw new Error('Dados do perfil inválidos');
       }
-      return invocarComDiagnostico('user:updateProfile', userId.trim(), profileData);
+      return invocarComDiagnostico('user:updateProfile', profileData);
     },
 
-    uploadAvatar: (userId: string, base64Data: string) => {
-      if (typeof userId !== 'string' || !userId.trim()) {
-        throw new Error('ID do usuário inválido');
-      }
+    uploadAvatar: (base64Data: string) => {
       if (typeof base64Data !== 'string' || !base64Data) {
         throw new Error('Dados da imagem inválidos');
       }
-      return invocarComDiagnostico('user:uploadAvatar', userId.trim(), base64Data);
+      return invocarComDiagnostico('user:uploadAvatar', base64Data);
     },
 
-    getAvatar: (userId: string) => {
-      if (typeof userId !== 'string' || !userId.trim()) {
-        throw new Error('ID do usuário inválido');
-      }
-      return invocarComDiagnostico('user:getAvatar', userId.trim());
+    getAvatar: () => {
+      return invocarComDiagnostico('user:getAvatar');
     },
   },
 
@@ -1626,6 +1636,8 @@ contextBridge.exposeInMainWorld('ipcAPI', {
   },
 
   gdl: {
+    obterEstadoCredenciais: (ambiente: 'producao' | 'homologacao') => invocarComDiagnostico('gdl:obter-estado-credenciais', ambiente),
+    salvarCredenciais: (ambiente: 'producao' | 'homologacao', credenciais: { login: string; senha: string; cpfUsuario: string }) => invocarComDiagnostico('gdl:salvar-credenciais', ambiente, credenciais),
     excluirCredenciais: (ambiente: 'producao' | 'homologacao'): Promise<UserResponse> => invocarComDiagnostico('gdl:excluir-credenciais', ambiente),
     obterEstadoConexao: (): Promise<UserResponse<EstadoConexaoGdl>> => invocarComDiagnostico('gdl:obter-estado-conexao'),
     verificarConexao: (): Promise<UserResponse<EstadoConexaoGdl>> => invocarComDiagnostico('gdl:verificar-conexao'),
@@ -1794,8 +1806,8 @@ contextBridge.exposeInMainWorld('ipcAPI', {
     findById: (id: string) => invocarComDiagnostico('laudo:findById', id),
     findByRepId: (repId: string) => invocarComDiagnostico('laudo:findByRepId', repId),
     updateConteudo: (laudoId: string, conteudo: string) => invocarComDiagnostico('laudo:updateConteudo', laudoId, conteudo),
-    create: (data: { rep_id: string; perito_id: string; template_id: string }) => invocarComDiagnostico('laudo:create', data),
-    delete: (laudoId: string, userId?: string) => invocarComDiagnostico('laudo:delete', laudoId, userId),
+    create: (data: { rep_id: string; template_id: string }) => invocarComDiagnostico('laudo:create', data),
+    delete: (laudoId: string) => invocarComDiagnostico('laudo:delete', laudoId),
     updateStatus: (laudoId: string, status: string) => invocarComDiagnostico('laudo:updateStatus', laudoId, status),
     gerarWizard: (params: IpcPayload) => invocarComDiagnostico('laudo:gerarWizard', params),
     salvarProgressoWizard: (laudoId: string, respostas: IpcPayload) => invocarComDiagnostico('laudo:salvarProgressoWizard', laudoId, respostas),
@@ -1812,6 +1824,7 @@ contextBridge.exposeInMainWorld('ipcAPI', {
     resumo: (forcarAtualizacao = false) => invocarComDiagnostico('google-drive:resumo', forcarAtualizacao),
     conectar: () => invocarComDiagnostico('google-drive:conectar'),
     desconectar: () => invocarComDiagnostico('google-drive:desconectar'),
+    abrirPasta: () => invocarComDiagnostico('google-drive:abrir-pasta'),
     definirEnvioAutomatico: (ativo: boolean) => invocarComDiagnostico('google-drive:definir-envio-automatico', ativo),
     listarCopias: () => invocarComDiagnostico('google-drive:listar-copias'),
       listarLaudosConcluidos: () => invocarComDiagnostico('google-drive:listar-laudos-concluidos'),
@@ -1872,6 +1885,8 @@ contextBridge.exposeInMainWorld('ipcAPI', {
   },
 
   ia: {
+    obterEstadoCredenciais: () => invocarComDiagnostico('ia:obter-estado-credenciais'),
+    salvarCredenciais: (credenciais: { groq?: string; gemini?: string }) => invocarComDiagnostico('ia:salvar-credenciais', credenciais),
     revisarOrtografia: (textoHtml: string) => {
       if (typeof textoHtml !== 'string') throw new Error('Texto inválido');
       return invocarComDiagnostico('ia:revisarOrtografia', textoHtml);
@@ -1940,6 +1955,10 @@ contextBridge.exposeInMainWorld('ipcAPI', {
       ipcRenderer.on('ia:painel-fechado', listener);
       return () => ipcRenderer.removeListener('ia:painel-fechado', listener);
     },
+  },
+
+  notebooklm: {
+    abrir: () => invocarComDiagnostico('notebooklm:abrir'),
   },
 
   backup: {

@@ -23,11 +23,11 @@ export function respostaPossuiUsuarios(valor: unknown): boolean {
         : 'Não foi possível verificar os usuários cadastrados.'
     )
   }
-  if (!Array.isArray(resposta.data)) {
+  if (typeof resposta.data !== 'boolean') {
     throw new Error('Resposta inválida ao verificar usuários cadastrados.')
   }
 
-  return resposta.data.length > 0
+  return resposta.data
 }
 
 export const AuthPage: React.FC<AuthPageProps> = ({ onAuthenticated }) => {
@@ -54,7 +54,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onAuthenticated }) => {
     setHasUsers(null)
     setVerificationError(null)
     try {
-      const result = await window.ipcAPI.user.findActivePeritos()
+      const result = await window.ipcAPI.user.temUsuarios()
       setHasUsers(respostaPossuiUsuarios(result))
     } catch (error: unknown) {
       setVerificationError(

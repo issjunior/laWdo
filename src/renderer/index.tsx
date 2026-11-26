@@ -2,7 +2,7 @@ import type { ApiCredenciaisGdl } from '../preload/types';
 import type { ApiBkpLaudo } from '../shared/types/laudo-bkp.types';
 import React from 'react';
 import type { EstadoConexaoGdl } from '@shared/gdl/conexao';
-import ReactDOM from 'react-dom/client';
+import ReactDOM, { type Root } from 'react-dom/client';
 import App from './App.js';
 import './styles/globals.css';
 import type {
@@ -132,14 +132,14 @@ interface IpcAPIRendererLegada {
   openDevTools?: () => void;
   login: (username: string, password: string) => Promise<IpcRespostaLegada>;
   logout: () => Promise<{ success: boolean }>;
-  verifyPassword: (userId: string, password: string) => Promise<IpcRespostaLegada>;
+  verifyPassword: (password: string) => Promise<IpcRespostaLegada>;
   user: IpcGrupoLegado;
   solicitante: IpcGrupoLegado;
   tipoExame: IpcGrupoLegado;
   rep: IpcGrupoLegado;
   dashboard: IpcGrupoLegado;
   configuracao: IpcGrupoLegado;
-    googleDrive: Pick<import('../shared/types/google-drive.types.js').ApiGoogleDrive, 'estadoRapido' | 'estado' | 'resumoCache' | 'resumo' | 'conectar' | 'desconectar' | 'definirEnvioAutomatico' | 'listarCopias' | 'listarLaudosConcluidos' | 'enviarLaudo' | 'verificar' | 'cancelarVerificacao' | 'onProgressoVerificacao' | 'prepararVisualizacao' | 'analisarRestauracao' | 'confirmarRestauracao' | 'cancelarRestauracao' | 'moverParaLixeira'>;
+    googleDrive: Pick<import('../shared/types/google-drive.types.js').ApiGoogleDrive, 'estadoRapido' | 'estado' | 'resumoCache' | 'resumo' | 'conectar' | 'desconectar' | 'abrirPasta' | 'definirEnvioAutomatico' | 'listarCopias' | 'listarLaudosConcluidos' | 'enviarLaudo' | 'verificar' | 'cancelarVerificacao' | 'onProgressoVerificacao' | 'prepararVisualizacao' | 'analisarRestauracao' | 'confirmarRestauracao' | 'cancelarRestauracao' | 'moverParaLixeira'>;
   gdl: IpcGrupoLegado & ApiCredenciaisGdl & {
     consultarRepsMesmoCaso: (laudoId: string) => Promise<{ success: boolean; data?: import('@shared/gdl/reps-mesmo-caso').RepsMesmoCasoGdl; error?: string }>;
     obterMiniaturasImagensLaudo: (laudoId: string, sessaoId: string, idsSelecao: string[]) => Promise<{ success: boolean; data?: MiniaturaArquivoRepGdl[]; error?: string }>;
@@ -179,6 +179,9 @@ interface IpcAPIRendererLegada {
     onPainelReencaixar: (callback: (sessionId: string) => void) => () => void;
     onPainelFechado: (callback: (sessionId: string) => void) => () => void;
   };
+  notebooklm: {
+    abrir: () => Promise<{ success: boolean; reutilizada?: boolean; error?: string }>;
+  };
   backup: {
     criar: (tipo: 'completo' | 'configuracao', senha: string) => Promise<{ success: boolean; path?: string; error?: string; canceled?: boolean }>;
     selecionar: (tipo: 'completo' | 'configuracao') => Promise<{ success: boolean; selecaoId?: string; nomeArquivo?: string; error?: string; canceled?: boolean }>;
@@ -210,6 +213,10 @@ interface IpcAPIRendererLegada {
 }
 
 // Tipos globais para TypeScript
+interface ElementoRaizLaWdo extends HTMLElement {
+  raizReactLaWdo?: Root;
+}
+
 declare global {
   interface Window {
     ipcAPI: IpcAPIRendererLegada;
@@ -262,14 +269,17 @@ const LoadingScreen = () => (
 
 // Funcao para inicializar a aplicacao
 const initApp = async () => {
-  const rootElement = document.getElementById('root');
+  const rootElement = document.getElementById('root') as ElementoRaizLaWdo | null;
 
   if (!rootElement) {
     console.error('Elemento root nao encontrado');
     return;
   }
 
+  rootElement.raizReactLaWdo?.unmount();
+  rootElement.replaceChildren();
   const root = ReactDOM.createRoot(rootElement);
+  rootElement.raizReactLaWdo = root;
 
   // Mostrar tela de carregamento inicial
   root.render(<LoadingScreen />);
@@ -321,6 +331,7 @@ const initApp = async () => {
             success: false,
             error: 'A ponte segura com o aplicativo não está disponível.',
           }),
+          temUsuarios: async () => ({ success: true, data: false }),
           updateProfile: async () => ({ success: false, error: 'Mock mode' }),
           uploadAvatar: async () => ({ success: true, data: { foto_url: '' } }),
           getAvatar: async () => ({ success: false, error: 'Mock mode' }),
@@ -395,12 +406,14 @@ const initApp = async () => {
     }
 
     // Renderizar aplicacao principal
+    if (rootElement.raizReactLaWdo !== root) return;
     root.render(
       <React.StrictMode>
         <App />
       </React.StrictMode>
     );
   } catch (error) {
+    if (rootElement.raizReactLaWdo !== root) return;
     console.error('Erro ao inicializar aplicacao:', error);
 
     // Mostrar tela de erro
@@ -457,8 +470,9 @@ const initApp = async () => {
   }
 };
 
-// Inicializar aplicacao
-initApp();
+// A instrumentação de diagnóstico pode reavaliar o bundle do renderer.
+// initApp desmonta qualquer raiz anterior antes de criar a próxima.
+void initApp();
 
 // Hot Module Replacement (HMR)
 if (import.meta.hot) {

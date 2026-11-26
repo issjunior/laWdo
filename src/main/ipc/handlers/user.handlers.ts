@@ -2,12 +2,21 @@
 import { logDebug, logError } from '../../utils/logger.js'
 import { userService } from '../../services/user.service.js'
 import { sanitizeInput } from '../../security/index.js'
+import { authSessaoService } from '../../services/auth-sessao.service.js'
+import { withTransaction } from '../../database/sqlite.js'
 import bcrypt from 'bcrypt'
 import fs from 'fs'
 import path from 'path'
 import type { UserRow } from '../../types/database.js'
 
 type UserUpdatePayload = Partial<Omit<UserRow, 'id' | 'data_criacao'>>
+type UsuarioPublico = Omit<UserRow, 'senha_hash'>
+
+function removerSenhaHash(usuario: UserRow): UsuarioPublico {
+  const { senha_hash: senhaHashRemovida, ...usuarioPublico } = usuario
+  void senhaHashRemovida
+  return usuarioPublico
+}
 
 /**
  * Registra handlers IPC para operações de usuário
@@ -20,11 +29,12 @@ export const registerUserHandlers = (): void => {
    */
   ipcMain.handle('user:findAll', async (event, filters = {}, options = {}) => {
     try {
+      authSessaoService.exigir(event.sender.id)
       logDebug('Buscando todos os usuários', { filters, options })
       const users = await userService.findAll(filters, options)
       return {
         success: true,
-        data: users,
+        data: users.map(removerSenhaHash),
         total: users.length
       }
     } catch (error) {
@@ -41,12 +51,14 @@ export const registerUserHandlers = (): void => {
    */
   ipcMain.handle('user:findById', async (event, id: string) => {
     try {
+      const usuarioId = authSessaoService.exigir(event.sender.id)
       if (!id || typeof id !== 'string') {
         return {
           success: false,
           error: 'ID inválido'
         }
       }
+      if (id !== usuarioId) return { success: false, error: 'Usuário não pertence à sessão atual' }
 
       logDebug('Buscando usuário por ID', { id })
       const user = await userService.findById(id)
@@ -60,7 +72,7 @@ export const registerUserHandlers = (): void => {
 
       return {
         success: true,
-        data: user
+        data: removerSenhaHash(user)
       }
     } catch (error) {
       logError('Erro ao buscar usuário por ID', { id, error })
@@ -105,12 +117,15 @@ export const registerUserHandlers = (): void => {
         ativo: 1
       }
 
-      logDebug('Criando novo usuário', { email: sanitizedData.email })
-      const user = await userService.create(sanitizedData)
+      logDebug('Criando o primeiro usuário', { email: sanitizedData.email })
+      const user = await withTransaction(async () => {
+        if (await userService.temUsuarios()) throw new Error('O cadastro inicial já foi concluído. Faça login para continuar.')
+        return userService.create(sanitizedData)
+      })
 
       return {
         success: true,
-        data: user,
+        data: removerSenhaHash(user),
         message: 'Usuário criado com sucesso'
       }
     } catch (error) {
@@ -127,12 +142,14 @@ export const registerUserHandlers = (): void => {
    */
   ipcMain.handle('user:update', async (event, id: string, updateData) => {
     try {
+      const usuarioId = authSessaoService.exigir(event.sender.id)
       if (!id || typeof id !== 'string') {
         return {
           success: false,
           error: 'ID inválido'
         }
       }
+      if (id !== usuarioId) return { success: false, error: 'Usuário não pertence à sessão atual' }
 
       // Sanitizar dados de entrada
       const sanitizedData: UserUpdatePayload = {}
@@ -158,7 +175,7 @@ export const registerUserHandlers = (): void => {
 
       return {
         success: true,
-        data: updatedUser,
+        data: removerSenhaHash(updatedUser),
         message: 'Usuário atualizado com sucesso'
       }
     } catch (error) {
@@ -175,27 +192,15 @@ export const registerUserHandlers = (): void => {
    */
   ipcMain.handle('user:delete', async (event, id: string) => {
     try {
+      const usuarioId = authSessaoService.exigir(event.sender.id)
       if (!id || typeof id !== 'string') {
         return {
           success: false,
           error: 'ID inválido'
         }
       }
-
-      logDebug('Excluindo usuário', { id })
-      const deleted = await userService.delete(id)
-
-      if (!deleted) {
-        return {
-          success: false,
-          error: 'Usuário não encontrado'
-        }
-      }
-
-      return {
-        success: true,
-        message: 'Usuário excluído com sucesso'
-      }
+      if (id !== usuarioId) return { success: false, error: 'Usuário não pertence à sessão atual' }
+      return { success: false, error: 'O usuário local não pode ser excluído.' }
     } catch (error) {
       logError('Erro ao excluir usuário', { id, error })
       return {
@@ -210,6 +215,7 @@ export const registerUserHandlers = (): void => {
    */
   ipcMain.handle('user:findByEmail', async (event, email: string) => {
     try {
+      const usuarioId = authSessaoService.exigir(event.sender.id)
       if (!email || typeof email !== 'string') {
         return {
           success: false,
@@ -227,10 +233,11 @@ export const registerUserHandlers = (): void => {
           error: 'Usuário não encontrado'
         }
       }
+      if (user.id !== usuarioId) return { success: false, error: 'Usuário não pertence à sessão atual' }
 
       return {
         success: true,
-        data: user
+        data: removerSenhaHash(user)
       }
     } catch (error) {
       logError('Erro ao buscar usuário por email', { email, error })
@@ -244,18 +251,12 @@ export const registerUserHandlers = (): void => {
   /**
    * Buscar peritos ativos
    */
-  ipcMain.handle('user:findActivePeritos', async () => {
+  ipcMain.handle('user:findActivePeritos', async event => {
     try {
-      logDebug('Buscando peritos ativos')
+      authSessaoService.exigir(event.sender.id)
       const peritos = await userService.findActivePeritos()
-
-      return {
-        success: true,
-        data: peritos,
-        total: peritos.length
-      }
+      return { success: true, data: peritos.map(removerSenhaHash), total: peritos.length }
     } catch (error) {
-      logError('Erro ao buscar peritos ativos', error)
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Erro desconhecido'
@@ -263,17 +264,19 @@ export const registerUserHandlers = (): void => {
     }
   })
 
-  /**
-   * Atualizar perfil de usuário
-   */
-  ipcMain.handle('user:updateProfile', async (event, userId: string, profileData) => {
+  ipcMain.handle('user:temUsuarios', async () => {
     try {
-      if (!userId || typeof userId !== 'string') {
-        return {
-          success: false,
-          error: 'ID de usuário inválido'
-        }
-      }
+      const possuiUsuarios = await userService.temUsuarios()
+      return { success: true, data: possuiUsuarios }
+    } catch (error) {
+      logError('Erro ao verificar usuários cadastrados', error)
+      return { success: false, error: error instanceof Error ? error.message : 'Erro desconhecido' }
+    }
+  })
+
+  ipcMain.handle('user:updateProfile', async (event, profileData) => {
+    try {
+      const usuarioId = authSessaoService.exigir(event.sender.id)
 
       // Sanitizar dados
       const sanitizedData: UserUpdatePayload = {}
@@ -291,8 +294,8 @@ export const registerUserHandlers = (): void => {
         sanitizedData.senha_hash = await bcrypt.hash(profileData.senha, 10)
       }
 
-      logDebug('Atualizando perfil de usuário', { userId })
-      const updatedProfile = await userService.updateProfile(userId, sanitizedData)
+      logDebug('Atualizando perfil de usuário', { usuarioId })
+      const updatedProfile = await userService.updateProfile(usuarioId, sanitizedData)
 
       if (!updatedProfile) {
         return {
@@ -303,11 +306,11 @@ export const registerUserHandlers = (): void => {
 
       return {
         success: true,
-        data: updatedProfile,
+        data: removerSenhaHash(updatedProfile),
         message: 'Perfil atualizado com sucesso'
       }
     } catch (error) {
-      logError('Erro ao atualizar perfil', { userId, error })
+      logError('Erro ao atualizar perfil', { error })
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Erro desconhecido'
@@ -318,11 +321,9 @@ export const registerUserHandlers = (): void => {
   /**
    * Upload de avatar do usuário
    */
-  ipcMain.handle('user:uploadAvatar', async (event, userId: string, base64Data: string) => {
+  ipcMain.handle('user:uploadAvatar', async (event, base64Data: string) => {
     try {
-      if (!userId || typeof userId !== 'string') {
-        return { success: false, error: 'ID de usuário inválido' }
-      }
+      const userId = authSessaoService.exigir(event.sender.id)
       if (!base64Data || typeof base64Data !== 'string') {
         return { success: false, error: 'Dados da imagem inválidos' }
       }
@@ -345,7 +346,7 @@ export const registerUserHandlers = (): void => {
       logDebug('Avatar salvo com sucesso', { userId })
       return { success: true, data: { foto_url: filePath }, message: 'Avatar atualizado com sucesso' }
     } catch (error) {
-      logError('Erro ao fazer upload de avatar', { userId, error })
+      logError('Erro ao fazer upload de avatar', { error })
       return { success: false, error: error instanceof Error ? error.message : 'Erro desconhecido' }
     }
   })
@@ -353,11 +354,9 @@ export const registerUserHandlers = (): void => {
   /**
    * Obter avatar do usuário
    */
-  ipcMain.handle('user:getAvatar', async (event, userId: string) => {
+  ipcMain.handle('user:getAvatar', async event => {
     try {
-      if (!userId || typeof userId !== 'string') {
-        return { success: false, error: 'ID de usuário inválido' }
-      }
+      const userId = authSessaoService.exigir(event.sender.id)
 
       const user = await userService.findById(userId)
       if (!user || !user.foto_url) {
@@ -375,7 +374,7 @@ export const registerUserHandlers = (): void => {
 
       return { success: true, data: { foto_url: base64 } }
     } catch (error) {
-      logError('Erro ao obter avatar', { userId, error })
+      logError('Erro ao obter avatar', { error })
       return { success: false, error: error instanceof Error ? error.message : 'Erro desconhecido' }
     }
   })
@@ -386,9 +385,10 @@ export const registerUserHandlers = (): void => {
 const verifyAttempts = new Map<string, { count: number; lastAttempt: number }>();
 
 export const registerVerifyPasswordHandler = (): void => {
-  ipcMain.handle('user:verifyPassword', async (_event, userId: string, senha: string) => {
+  ipcMain.handle('user:verifyPassword', async (event, senha: string) => {
     try {
-      if (!userId || !senha) return { success: false, valid: false, error: 'Dados inválidos' };
+      const userId = authSessaoService.exigir(event.sender.id)
+      if (!senha) return { success: false, valid: false, error: 'Dados inválidos' };
 
       const now = Date.now();
       const attempts = verifyAttempts.get(userId) || { count: 0, lastAttempt: 0 };
@@ -418,7 +418,7 @@ export const registerVerifyPasswordHandler = (): void => {
 
       return { success: true, valid: validPassword };
     } catch (error) {
-      logError('Erro ao verificar senha', { userId, error });
+      logError('Erro ao verificar senha', { error });
       return { success: false, valid: false, error: 'Erro interno' };
     }
   });

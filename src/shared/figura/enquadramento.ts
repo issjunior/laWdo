@@ -7,8 +7,8 @@ export const ALTURA_MAXIMA_PAR_FIGURAS = 150;
 export const AJUSTE_VISUAL_MINIMO_ALTURA_PAR = 0;
 export const AJUSTE_VISUAL_MAXIMO_ALTURA_PAR = 100;
 export const PASSO_AJUSTE_VISUAL_ALTURA_PAR = 5;
-export const AJUSTE_VISUAL_PADRAO_ALTURA_PAR = 50;
-export const ALTURA_PADRAO_PAR_FIGURAS = 109;
+export const AJUSTE_VISUAL_PADRAO_ALTURA_PAR = 0;
+export const ALTURA_PADRAO_PAR_FIGURAS = 67;
 
 export const ENQUADRAMENTO_PADRAO_PAR_FIGURAS: EnquadramentoParFiguras = 'conter-3x2';
 
@@ -75,16 +75,4 @@ export function ajusteVisualPorAlturaPar(alturaPercentual: number): number {
   const ajuste = ((altura - ALTURA_MINIMA_PAR_FIGURAS) * AJUSTE_VISUAL_MAXIMO_ALTURA_PAR)
     / (ALTURA_MAXIMA_PAR_FIGURAS - ALTURA_MINIMA_PAR_FIGURAS);
   return Math.round(ajuste / PASSO_AJUSTE_VISUAL_ALTURA_PAR) * PASSO_AJUSTE_VISUAL_ALTURA_PAR;
-}
-
-export function ajustarNivelEnquadramentoPar(
-  atual: EnquadramentoParFiguras,
-  direcao: 'aumentar' | 'reduzir',
-): EnquadramentoParFiguras {
-  const indice = ENQUADRAMENTOS_PARES_FIGURAS.indexOf(atual);
-  const deslocamento = direcao === 'aumentar' ? 1 : -1;
-  return ENQUADRAMENTOS_PARES_FIGURAS[Math.min(
-    ENQUADRAMENTOS_PARES_FIGURAS.length - 1,
-    Math.max(0, indice + deslocamento),
-  )];
 }

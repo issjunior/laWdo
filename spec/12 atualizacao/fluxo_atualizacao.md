@@ -1,101 +1,41 @@
 # Fluxo de atualização do aplicativo
 
-## Escopo e relação com GitHub Actions
+## Escopo e fontes de verdade
 
-Esta spec descreve o consumo de atualizações dentro do laWdo: consulta do feed, validação, download, atualização offline, autorização de reinício e instalação. A produção e publicação dos mesmos contratos está documentada em `spec/11 github actions/workflows_github_actions.md`.
+O laWdo consulta o feed assinado, valida o artefato, baixa-o e aciona a instalação quando o formato permite. O produtor do feed está em `spec/11 github actions/workflows_github_actions.md`; o consumidor é `src/main/services/atualizacao.service.ts`. O contrato remoto continua sendo normalizado e verificado com a chave Ed25519 de `src/shared/atualizacao/chave-publica-release.ts` antes de qualquer download ou execução.
 
-```text
-spec/11 github actions
-  release pública -> manifesto + assinatura -> feed por plataforma
-                                            |
-                                            v
-spec/12 atualizacao
-  consulta -> validação Ed25519 -> download -> backup -> instalação
-```
+A atualização persistida usa `userData/atualizacoes` para pacote e pendência, e `userData/backups-atualizacao` para a transação de recuperação. O renderer não mantém esse estado em localStorage. `Header.tsx` apenas consulta e apresenta o contrato tipado via preload e handlers.
 
-Mudanças em manifesto, assinatura, canais, nomes de plataforma, arquitetura, formato, URL ou seleção de assets exigem revisão coordenada das duas specs e dos dois lados do contrato. GitHub Actions é a fonte do artefato publicado; `AtualizacaoService` é a fronteira que volta a tratar todo conteúdo remoto como não confiável.
+## Consulta, download e instalação
 
-## Fontes de verdade e contratos
+O serviço consulta o feed estável por plataforma e arquitetura, com timeout, valida SemVer, formato, nome, URL HTTPS, tamanho, SHA-256 e assinatura. Somente versão superior e artefato compatível tornam a atualização disponível. O download usa arquivo parcial e só promove o pacote após validar tamanho e hash.
 
-| Responsabilidade | Fonte atual |
-|---|---|
-| estado, consulta, download, agendamento e instalação | `src/main/services/atualizacao.service.ts` |
-| contrato de manifesto, estado e falha | `src/shared/atualizacao/atualizacao.types.ts` |
-| chave pública Ed25519 | `src/shared/atualizacao/chave-publica-release.ts` |
-| handlers e autorização de reinício | `src/main/ipc/handlers/atualizacao.handlers.ts` |
-| canais permitidos e API exposta | `src/preload/index.ts` |
-| interface, polling e detalhamento da falha | `src/renderer/components/layout/Header.tsx` |
-| alterações pendentes | `src/renderer/contexts/AlteracoesPendentesContext.tsx` |
-| processamento de pendência | `src/main/index.ts` |
-| backups obrigatórios | `src/main/services/backup-atualizacao.service.ts` |
+Antes da instalação imediata, o processo principal recebe a autorização de reinício do mesmo webContents; alterações pendentes impedem o avanço. Durante uma pendência agendada, a validação do pacote local é repetida. NSIS instala silenciosamente; AppImage substitui e reabre quando aplicável; DEB, DMG e ZIP permanecem instalação manual.
 
-O singleton `atualizacaoService` mantém o estado canônico em memória. Em `userData` persistem a pendência de instalação, a data da última verificação e os pacotes em `atualizacoes`; o renderer não usa `localStorage` para esses dados.
+## Transação de recuperação de dados
 
-`EstadoAtualizacaoResposta` expõe `falha` opcional em vez da antiga string `erro`. A estrutura contém código estável, etapa, mensagem amigável, detalhe técnico sanitizado, horário ISO e ação de nova tentativa quando segura. `RespostaAtualizacao` pode repetir a mesma `falha` quando uma pré-condição falha no handler. Assim, `success: false` representa falha da ação solicitada, enquanto `atualizacao:estado` permanece uma leitura bem-sucedida do estado atual.
+`RecuperacaoAtualizacaoService`, em `src/main/services/recuperacao-atualizacao.service.ts`, substitui o backup pré-atualização usado pelo fluxo automático. Antes de executar o instalador, ele cria uma transação com identificador aleatório e marcador atômico `recuperacao-atualizacao-pendente.json`. O marcador inclui versões de origem e destino, schema de origem, diretório do snapshot e o estado `preparada` ou `iniciada`.
 
-Os códigos atuais cobrem rede, timeout, serviço ou recurso indisponível, resposta inválida, assinatura, incompatibilidade, download, integridade, armazenamento, backup, alterações pendentes, confirmação, instalador, operação indisponível e erro inesperado. Stack traces, conteúdo remoto, caminhos pessoais e URLs completas não entram no contrato do renderer.
+O snapshot inclui uma cópia consistente e validada do SQLite e, quando existirem, as árvores `imagens`, `avatars` e `gdl`. Cópias de arquivos são conferidas por SHA-256. Caches, logs e temporários fora dessas árvores não pertencem ao conjunto protegido. A ausência do banco, falha de cópia, hash divergente ou `PRAGMA integrity_check` diferente de `ok` impede a instalação.
 
-## Estado, concorrência e falhas
+Na abertura da versão destino, o marcador passa para `iniciada` antes do banco ser preparado. A atualização é confirmada somente após o banco migrar, os serviços essenciais serem inicializados e a janela principal ser criada. A confirmação remove apenas o marcador; o snapshot permanece para inspeção e não há retenção automática implementada para essas transações.
 
-Os estados públicos são:
+Se a abertura falhar antes dessa confirmação, o processo fecha a conexão SQLite e tenta restaurar. Na abertura seguinte da mesma versão destino, o serviço valida novamente o snapshot, move banco e árvores ativos para `recuperacao-atualizacao-falha-<id>` e repõe o conjunto protegido. O marcador só é removido depois da reposição. Snapshot inválido, ausente ou falha de I/O não sobrescrevem os dados ativos e preservam os artefatos para investigação.
 
-```text
-ociosa -> verificando -> disponivel -> baixando -> baixada
-                                         |            |
-                                         |            +-> instalando -> concluida | falhou
-                                         +-> falhou
-baixada -> aguardando_reinicio
-```
+A recuperação automática cobre dados locais, não o binário. Após restaurar os dados, o usuário pode abrir a versão atual conscientemente ou fechar o aplicativo e reinstalar manualmente a versão anterior. Não há download nem reinstalação automática de instalador histórico neste estado.
 
-`verificar` recusa nova operação durante verificação, download ou instalação. `baixar` exige atualização disponível; após uma falha de download com pacote remoto ainda selecionado, permite a repetição indicada por `falha.acaoSugerida`. A instalação também pode ser repetida depois de falha recuperável enquanto o pacote validado permanecer disponível.
+## Diagnóstico e interface
 
-Falhas capturadas pelo serviço definem `estado: falhou` e armazenam a falha estruturada. Os handlers convertem a conclusão com `falha` em `success: false`; falhas lançadas antes do bloco interno são normalizadas no handler sem expor a mensagem crua. O Header deve observar `success`, `data.estado` e `data.falha`. Uma nova operação ou transição de sucesso limpa a falha anterior.
+Em uma recuperação, o processo principal gera um relato sanitizado e o copia para a área de transferência antes de mostrar o diálogo. O relato contém código estável, horário, versões e schema de origem/destino quando disponível, resultado e a orientação de anexar logs pelo canal autorizado. Ele termina com `izaias.santos@policiacientifica.pr.gov.br` e `https://github.com/issjunior/laWdo`.
 
-O serviço publica progresso para janelas não destruídas. O preload valida percentual, etapa e descrição antes de repassar o evento; ele não é log persistente nem mecanismo de retomada.
-
-## Verificação online, validação e download
-
-Após o Electron ficar pronto, uma atualização agendada é processada antes da abertura do banco. Sem pendência, a aplicação agenda verificação automática com atraso aleatório entre 5 e 30 segundos. A verificação automática é limitada a uma vez a cada 24 horas usando `verificadoEm`; a manual ignora o limite.
-
-A URL-base é `https://issjunior.github.io/laWdo/stable`. Para a plataforma e arquitetura atuais, o serviço obtém em paralelo `<plataforma>-<arquitetura>.json` e `.sig`, ambos com timeout de 20 segundos. Falha de DNS, conexão recusada, rede inacessível, `fetch failed` ou timeout é classificada sem assumir se a causa é ausência de internet ou bloqueio de rede. HTTP 404 identifica recurso indisponível; os demais status HTTP identificam indisponibilidade do serviço.
-
-O manifesto remoto é uma fronteira insegura: tipos, SemVer, data, canais, formatos, tamanho, SHA-256, nome simples de arquivo e URL HTTPS são normalizados antes de a serialização canônica ser verificada pela chave Ed25519 embutida. Somente uma versão superior à instalada e com artefato compatível produz `disponivel`. `verificadoEm` só é gravado após todas essas validações.
-
-No download online, o pacote é escrito como `.parcial`, com tamanho e SHA-256 calculados durante o streaming. Apenas um arquivo compatível com o manifesto é renomeado para o nome final e muda o estado para `baixada`. Divergência remove o parcial; outras falhas podem deixá-lo para inspeção ou limpeza posterior. Falha de escrita é classificada como armazenamento indisponível antes da categoria genérica de download.
-
-A atualização offline mantém o mesmo contrato de assinatura, versão, plataforma, arquitetura, tamanho e hash, e converge para `baixada`; o comportamento de falhas estruturadas também se aplica às etapas posteriores de backup e instalação.
-
-## IPC, backup e instalação
-
-Antes da instalação imediata, o main solicita autorização ao mesmo `webContents` por UUID e expira após 15 segundos. Alterações pendentes e expiração possuem mensagens próprias; a autorização não salva nem descarta conteúdo. O provider consulta os verificadores atuais do editor e do wizard, incluindo salvamento em andamento; não depende apenas de um booleano atrasado em relação ao DOM. Depois da autorização, o backup obrigatório precisa terminar antes de o instalador ser iniciado. O diálogo de salvar/descartar da navegação e do fechamento normal não é acionado por essa autorização de atualização; seu protocolo está em `spec/04 layout/janelas_desktop.md`.
-
-O backup permanece responsabilidade de `BackupAtualizacaoService`. A falha é classificada e apresentada pelo fluxo de atualização, mas não altera sua política de snapshot, backup completo, retenção ou persistência, documentadas em `backup_pre_atualizacao.md`.
-
-Windows/NSIS inicia instalador silencioso e encerra o app; Linux/AppImage substitui e reabre quando executado como AppImage; DEB, DMG e ZIP usam abertura manual pelo sistema. Pacotes locais continuam sendo validados dentro de `userData/atualizacoes` antes de execução ou agendamento.
-
-## Interface e suporte
-
-O Header consulta o estado ao montar e a cada 30 segundos. Falhas automáticas permanecem silenciosas fora do modal; não geram toast nem destaque adicional no ícone. Falhas originadas por ação manual mostram toast com a mensagem amigável.
-
-No modal **Atualizações**, uma `falha` substitui o status de ausência de atualização por **Falha na atualização** e exibe alerta com orientação em português. O usuário pode expandir **Ver detalhes técnicos** para consultar código, etapa e detalhe sanitizado, e usar **Copiar detalhes** para copiar essas informações, o horário e a versão do laWdo. O modal oferece repetição contextual de download ou instalação quando `acaoSugerida` permitir, além da verificação manual sempre disponível.
-
-O processo principal continua responsável por rede, arquivos, assinatura, backup e execução; o renderer apenas apresenta o estado tipado.
+O relato não inclui conteúdo de REP ou laudo, nomes, credenciais, chaves, URLs recebidas do feed, caminhos pessoais nem stack traces. O modal de Atualizações mantém a cópia dos detalhes de falhas usuais, com a mesma orientação e contatos.
 
 ## Invariantes e verificação
 
-- Nenhum pacote é instalado sem manifesto assinado e validação local de nome, tamanho e SHA-256.
-- Apenas arquivos dentro de `userData/atualizacoes` podem ser executados ou agendados.
-- Versão igual ou inferior à instalada não é aceita.
-- Backup pré-atualização é obrigatório antes de instalar.
-- Detalhes apresentados ao usuário não podem expor stack trace, conteúdo remoto, caminhos pessoais ou URLs completas.
-- Alterações em canais, manifesto, chave ou formatos exigem revisão coordenada com `spec/11 github actions/workflows_github_actions.md`.
+- Nenhum pacote é instalado sem manifesto assinado, nome, tamanho e hash validados.
+- O snapshot consistente e seu marcador precisam existir antes de iniciar o instalador.
+- Dados ativos só são substituídos depois de validar novamente o SQLite de recuperação.
+- Falha de recuperação nunca é apresentada como sucesso e conserva marcador ou artefatos para diagnóstico.
+- A restauração automática não deve ser confundida com rollback de binário.
 
-`src/__tests__/main/atualizacao.service.test.ts` cobre estado inicial, HTTP ausente, falha de rede amigável, download válido, persistência da última verificação e agendamento validado. `src/__tests__/renderer/header-atualizacao.component.test.tsx` cobre o resumo amigável, detalhes inicialmente recolhidos e disponibilidade da cópia. Permanecem sem cobertura ponta a ponta timeout real, autorização IPC, instalação por processo, AppImage real e ciclo entre release publicada e aplicativo.
-
-## Acesso manual ao instalador
-
-O modal de Atualizações no Header também aponta para `https://issjunior.github.io/laWdo/`, a página pública de downloads gerada pelo feed. O link abre o navegador externo para instalação manual quando o usuário escolher esse caminho; não altera a validação, o estado nem o fluxo de instalação automática do `AtualizacaoService`. A apresentação da página pública fica no produtor descrito em `spec/11 github actions/workflows_github_actions.md`.
-
-## Nome do pacote DEB e publicação
-
-O produtor define o nome temporário do DEB como ${productName}-${version}-${arch}.${ext} em electron-builder.yml; a agregação normaliza espaços e inclui nome público e URL no manifesto assinado. O consumidor usa esses dados validados, sem montar o nome por convenção. DEB continua exigindo abertura manual pelo sistema. Mudanças no nome devem conservar o reconhecimento de plataforma/arquitetura no produtor e a validação de nome/URL no consumidor, conforme spec/11 github actions/workflows_github_actions.md.
+`src/__tests__/main/atualizacao.service.test.ts` cobre as etapas de atualização já existentes. `src/__tests__/main/recuperacao-atualizacao.service.test.ts` cobre snapshot, interrupção da primeira abertura, restauração de banco/imagens/avatares/GDL, confirmação de saúde, snapshot corrompido e relato sanitizado. `src/__tests__/renderer/header-atualizacao.component.test.tsx` cobre a cópia dos contatos no diagnóstico de atualização. A validação de instalador NSIS ou AppImage real permanece manual e é necessária quando Electron, electron-builder, NSIS, permissões ou o mecanismo de atualização forem alterados.

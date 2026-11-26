@@ -70,3 +70,4 @@ worktrees/
 # --- TEMPORÁRIOS ---
 tmp/
 temp/
+google-drive-cache-*

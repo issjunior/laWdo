@@ -29,6 +29,7 @@ interface SecaoConfiguracaoTemplateProps {
   diagnosticos: DiagnosticoSecaoTemplate[];
   podeSubir: boolean;
   podeDescer: boolean;
+  bloqueado?: boolean;
   dragHandleProps: {
     attributes: React.ButtonHTMLAttributes<HTMLButtonElement>;
     listeners: React.ButtonHTMLAttributes<HTMLButtonElement>;
@@ -54,6 +55,7 @@ export const SecaoConfiguracaoTemplate: React.FC<SecaoConfiguracaoTemplateProps>
   onUpdateSecao,
   onMoveSecao,
   onRemoveSecao,
+  bloqueado = false,
 }) => {
   const resumo = getResumoConfiguracaoSecao(secao, opcoesSecaoPai, exameToggles);
   const ajuda = getAjudaConfiguracaoSecao(secao, tipoExameCodigo);
@@ -75,6 +77,7 @@ export const SecaoConfiguracaoTemplate: React.FC<SecaoConfiguracaoTemplateProps>
             {...dragHandleProps.listeners}
             className="mt-1 p-1 text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing"
             aria-label="Reordenar seção"
+            disabled={bloqueado}
           >
             <GripVertical size={16} />
           </button>
@@ -88,6 +91,7 @@ export const SecaoConfiguracaoTemplate: React.FC<SecaoConfiguracaoTemplateProps>
                 onChange={e => onUpdateSecao('nome', e.target.value)}
                 placeholder="Nome da seção"
                 className="h-9 flex-1"
+                disabled={bloqueado}
               />
             </div>
             <p className="text-xs text-muted-foreground">{resumo}</p>
@@ -95,13 +99,13 @@ export const SecaoConfiguracaoTemplate: React.FC<SecaoConfiguracaoTemplateProps>
           </div>
         </div>
         <div className="flex items-center justify-end gap-1">
-          <Button variant="ghost" size="sm" onClick={() => onMoveSecao('up')} disabled={!podeSubir} aria-label="Mover para cima">
+          <Button variant="ghost" size="sm" onClick={() => onMoveSecao('up')} disabled={bloqueado || !podeSubir} aria-label="Mover para cima">
             <ArrowUp size={14} />
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => onMoveSecao('down')} disabled={!podeDescer} aria-label="Mover para baixo">
+          <Button variant="ghost" size="sm" onClick={() => onMoveSecao('down')} disabled={bloqueado || !podeDescer} aria-label="Mover para baixo">
             <ArrowDown size={14} />
           </Button>
-          <Button variant="ghost" size="sm" className="text-red-600" onClick={onRemoveSecao} aria-label="Remover seção">
+          <Button variant="ghost" size="sm" className="text-red-600" onClick={onRemoveSecao} disabled={bloqueado} aria-label="Remover seção">
             <X size={14} />
           </Button>
         </div>
@@ -109,7 +113,7 @@ export const SecaoConfiguracaoTemplate: React.FC<SecaoConfiguracaoTemplateProps>
 
       <div className="space-y-1.5">
         <Label className="flex items-center gap-2">
-          <Checkbox checked={secao.ocultar_titulo === true} onCheckedChange={valor => onUpdateSecao('ocultar_titulo', valor === true)} />
+          <Checkbox checked={secao.ocultar_titulo === true} onCheckedChange={valor => onUpdateSecao('ocultar_titulo', valor === true)} disabled={bloqueado} />
           Ocultar título no laudo
         </Label>
         <p className="text-xs text-muted-foreground">Oculta nome, número e linha do título na visualização e exportação. A seção permanece identificada no editor.</p>
@@ -118,7 +122,7 @@ export const SecaoConfiguracaoTemplate: React.FC<SecaoConfiguracaoTemplateProps>
       {secao.ocultar_titulo && (
         <div className="space-y-1.5">
           <Label className="flex items-center gap-2">
-            <Checkbox checked={secao.contar_na_numeracao !== false} onCheckedChange={valor => onUpdateSecao('contar_na_numeracao', valor === true)} />
+            <Checkbox checked={secao.contar_na_numeracao !== false} onCheckedChange={valor => onUpdateSecao('contar_na_numeracao', valor === true)} disabled={bloqueado} />
             Contar esta seção na numeração
           </Label>
           <p className="text-xs text-muted-foreground">Desmarque para continuar a sequência sem contar esta seção. Se ela for principal, suas subseções serão exibidas sem número.</p>
@@ -133,7 +137,7 @@ export const SecaoConfiguracaoTemplate: React.FC<SecaoConfiguracaoTemplateProps>
               value={secao.condicao || '__always__'}
               onValueChange={valor => onUpdateSecao('condicao', valor === '__always__' ? '' : valor)}
             >
-              <SelectTrigger className="h-9 text-xs">
+              <SelectTrigger className="h-9 text-xs" disabled={bloqueado}>
                 <SelectValue placeholder="Escolha quando mostrar" />
               </SelectTrigger>
               <SelectContent>
@@ -155,7 +159,7 @@ export const SecaoConfiguracaoTemplate: React.FC<SecaoConfiguracaoTemplateProps>
             value={secao.parent_id || '__root__'}
             onValueChange={valor => onUpdateSecao('parent_id', valor === '__root__' ? '' : valor)}
           >
-            <SelectTrigger className="h-9 text-xs">
+            <SelectTrigger className="h-9 text-xs" disabled={bloqueado}>
               <SelectValue placeholder="Escolha a posição da seção" />
             </SelectTrigger>
             <SelectContent>
@@ -178,7 +182,7 @@ export const SecaoConfiguracaoTemplate: React.FC<SecaoConfiguracaoTemplateProps>
             value={secao.repetir_para || '__none__'}
             onValueChange={valor => onUpdateSecao('repetir_para', valor === '__none__' ? '' : valor)}
           >
-            <SelectTrigger className="h-9 text-xs">
+            <SelectTrigger className="h-9 text-xs" disabled={bloqueado}>
               <SelectValue placeholder="Escolha a estratégia" />
             </SelectTrigger>
             <SelectContent>
@@ -204,6 +208,7 @@ export const SecaoConfiguracaoTemplate: React.FC<SecaoConfiguracaoTemplateProps>
             onChange={e => onUpdateSecao('repetir_titulo', e.target.value)}
             placeholder={tipoExameCodigo === 'B-601' ? 'PEÇA {{b601_peca_1_letra}} — {{b601_peca_1_tipo}}' : 'Ex: ARMA {{b602_arma_1_letra}} - {{b602_arma_1_tipo}}'}
             className="h-9 font-mono text-xs"
+            disabled={bloqueado}
           />
           {(secao.repetir_titulo || '').trim() && (
             <div className="rounded-md border border-amber-200/80 bg-white/80 px-3 py-2 dark:border-amber-800/70 dark:bg-amber-950/10">

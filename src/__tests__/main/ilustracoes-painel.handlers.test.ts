@@ -9,6 +9,9 @@ const mocks = vi.hoisted(() => ({
   fromId: vi.fn(),
   configuracaoObter: vi.fn(),
   configuracaoSalvar: vi.fn(),
+  exigirSessao: vi.fn(),
+  vincularJanelaFilha: vi.fn(),
+  encerrarSessao: vi.fn(),
 }))
 
 vi.mock('electron', () => {
@@ -33,6 +36,14 @@ vi.mock('electron', () => {
 
 vi.mock('../../main/services/configuracao.service.js', () => ({
   configuracaoService: { obter: mocks.configuracaoObter, salvar: mocks.configuracaoSalvar },
+}))
+
+vi.mock('../../main/services/auth-sessao.service.js', () => ({
+  authSessaoService: {
+    exigir: mocks.exigirSessao,
+    vincularJanelaFilha: mocks.vincularJanelaFilha,
+    encerrar: mocks.encerrarSessao,
+  },
 }))
 
 vi.mock('../../main/services/imagem-laudo.service.js', () => ({
@@ -64,6 +75,7 @@ describe('janela destacada do painel de Ilustrações', () => {
       altura: 1000,
     }))
     mocks.configuracaoSalvar.mockResolvedValue(undefined)
+    mocks.exigirSessao.mockReturnValue('usuario-1')
   })
 
   it('carrega e limita as dimensões persistidas antes de criar a janela', async () => {

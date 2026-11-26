@@ -82,7 +82,7 @@ O contrato de apresentação permanece na versão 1. A leitura aceita o cabeçal
 
 ## Carregamento, filtros e feedback
 
-findAllComRep() retorna somente LaudoResumoLista, em src/shared/types/laudo.types.ts, sem HTML nem apresentacao_json. Abrir edição ou prévia pela lista consulta findById e valida identidade, conteúdo e apresentação recebidos. Uma abertura mais recente invalida a resposta de abertura anterior. No modo por seções, a entrada e a troca de modo deixam as seções recolhidas; cada editor é montado na primeira expansão e pode permanecer montado depois de recolhido.
+findAllComRep() retorna somente LaudoResumoLista, em src/shared/types/laudo.types.ts, sem HTML nem apresentacao_json. Abrir edição ou prévia pela lista consulta findById e valida identidade, conteúdo e apresentação recebidos. A restauração de uma única cópia no Google Drive navega para /laudos com location.state.abrirLaudoId; depois de a listagem terminar, a página consome esse estado, remove-o com navegação de substituição e abre o mesmo fluxo de edição. ID ausente na lista não produz abertura parcial. Uma abertura mais recente invalida a resposta de abertura anterior. No modo por seções, a entrada e a troca de modo deixam as seções recolhidas; cada editor é montado na primeira expansão e pode permanecer montado depois de recolhido.
 
 A lista abre em **Em andamento**; status Concluído ou prioridade aguardando-entrega selecionam **Concluídos**, e status Entregue seleciona **Entregues**. A aba Todos mantém todos os estados. As abas filtram o resultado dos filtros vindos do Dashboard, com regras em filtros-listas-laudos-reps.ts, compartilhado com REPs. A aba é estado da página e é recalculada quando a busca da URL muda.
 

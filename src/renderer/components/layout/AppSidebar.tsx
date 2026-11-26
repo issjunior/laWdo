@@ -74,7 +74,7 @@ export function AppSidebar({ currentUser, onLogout }: AppSidebarProps) {
 
     if (user?.foto_url) {
       try {
-        const result = await window.ipcAPI.user.getAvatar(userId);
+        const result = await window.ipcAPI.user.getAvatar();
         if (result.success && result.data?.foto_url) {
           setFotoUrl(result.data.foto_url);
           return;
@@ -266,7 +266,6 @@ export function AppSidebar({ currentUser, onLogout }: AppSidebarProps) {
         <AvatarUploadDialog
           open={uploadDialogOpen}
           onOpenChange={setUploadDialogOpen}
-          userId={userId}
           currentFotoUrl={fotoUrl}
           userName={userName}
           onAvatarUpdated={handleAvatarUpdated}

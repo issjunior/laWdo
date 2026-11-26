@@ -90,6 +90,35 @@ describe('SeletorFiguraDialog', () => {
     expect(onConfirmar).toHaveBeenCalledWith('Vista frontal do objeto', undefined);
   });
 
+  it('exclui a figura original pelo mesmo diálogo de substituição', async () => {
+    const onExcluirFigura = vi.fn().mockResolvedValue(true);
+    const onAbertoChange = vi.fn();
+    vi.stubGlobal('confirm', vi.fn(() => true));
+    try {
+      render(
+        <SeletorFiguraDialog
+          laudoId="laudo-teste"
+          aberto
+          figuraAlvo={figuraOriginal}
+          imagens={[imagemDisponivel]}
+          imagemSelecionadaId="imagem-nova"
+          onAbertoChange={onAbertoChange}
+          onSelecionar={vi.fn()}
+          onConfirmar={vi.fn()}
+          onBuscarGdl={vi.fn()}
+          onExcluirFigura={onExcluirFigura}
+        />,
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: 'Excluir figura' }));
+
+      await waitFor(() => expect(onExcluirFigura).toHaveBeenCalledOnce());
+      expect(onAbertoChange).toHaveBeenCalledWith(false);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('gera uma legenda da nova figura por IA', async () => {
     const onGerarLegenda = vi.fn().mockResolvedValue('Vista lateral da arma apreendida');
     render(

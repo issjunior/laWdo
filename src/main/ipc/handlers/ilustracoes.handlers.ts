@@ -27,6 +27,7 @@ import { ehAcaoPainelFiguras, ehEstadoPainelFiguras } from '../../../shared/figu
 import { carregarDimensoesJanela, observarDimensoesJanela } from '../../utils/dimensoes-janela.js';
 import { desempenhoService } from '../../services/desempenho.service.js';
 import { comContextoImagens, cancelarProcessamentoImagens } from '../../services/processador-imagens.service.js';
+import { authSessaoService } from '../../services/auth-sessao.service.js';
 
 const contextosRemetentes = new Map<number, Set<string>>();
 function registrar(canal: string, executar: Parameters<typeof ipcMain.handle>[1]): void {
@@ -261,7 +262,13 @@ export function registerIlustracoesHandlers(options: IlustracoesHandlerOptions):
     }
 
     const senderWin = BrowserWindow.fromWebContents(event.sender);
-    if (senderWin) mainWindowId = senderWin.id;
+    if (!senderWin) return;
+    mainWindowId = senderWin.id;
+    try {
+      authSessaoService.exigir(event.sender.id);
+    } catch {
+      return;
+    }
     if (typeof laudoId !== 'string' || !laudoId.trim()) {
       logError('Painel de ilustrações não aberto: laudo inválido', new Error('Laudo inválido'));
       return;
@@ -280,6 +287,7 @@ export function registerIlustracoesHandlers(options: IlustracoesHandlerOptions):
         janelaReferencia: senderWin,
       });
       panelWindow = new BrowserWindow({
+        parent: senderWin,
         width: dimensoes.largura,
         height: dimensoes.altura,
         minWidth: 320,
@@ -293,6 +301,9 @@ export function registerIlustracoesHandlers(options: IlustracoesHandlerOptions):
         title: 'Painel de Ilustrações',
         show: false,
       });
+      const conteudoPainelId = panelWindow.webContents.id;
+      authSessaoService.vincularJanelaFilha(event.sender.id, conteudoPainelId);
+      panelWindow.webContents.once('destroyed', () => authSessaoService.encerrar(conteudoPainelId));
       observarDimensoesJanela(panelWindow, {
         chave: 'janela_painel_ilustracoes_dimensoes',
         descricao: 'Dimensões da janela destacada do painel de Ilustrações',

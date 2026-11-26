@@ -64,6 +64,7 @@ import {
 import { getMargens } from '@/lib/margens';
 import { buildPdfHeaderConfig, montarCabecalhoPrimeiraPagina } from '@/lib/pdf-header';
 import { limparIndicadoresCondicionais } from '@/lib/exportacao-placeholders';
+import { lerConteudoAtualEditorLaudo } from '@/lib/sincronizacao-editor-laudo';
 
 interface TemplateItem {
   id: string;
@@ -443,6 +444,7 @@ interface SortableSecaoTemplateItemProps {
   handleRemoveSecao: (index: number) => void;
   podeSubir: boolean;
   podeDescer: boolean;
+  bloqueado: boolean;
 }
 
 const SortableSecaoTemplateItem: React.FC<SortableSecaoTemplateItemProps> = ({
@@ -465,6 +467,7 @@ const SortableSecaoTemplateItem: React.FC<SortableSecaoTemplateItemProps> = ({
   handleRemoveSecao,
   podeSubir,
   podeDescer,
+  bloqueado,
 }) => {
   const {
     attributes,
@@ -502,6 +505,7 @@ const SortableSecaoTemplateItem: React.FC<SortableSecaoTemplateItemProps> = ({
         diagnosticos={diagnosticos}
         podeSubir={podeSubir}
         podeDescer={podeDescer}
+        bloqueado={bloqueado}
         dragHandleProps={{
           attributes: attributes as React.ButtonHTMLAttributes<HTMLButtonElement>,
           listeners: (listeners || {}) as React.ButtonHTMLAttributes<HTMLButtonElement>,
@@ -521,9 +525,9 @@ const SortableSecaoTemplateItem: React.FC<SortableSecaoTemplateItemProps> = ({
             <div className="overflow-x-auto text-xs [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:border-border [&_td]:p-2 [&_th]:border [&_th]:border-border [&_th]:bg-muted [&_th]:p-2 [&_p]:my-2" dangerouslySetInnerHTML={{ __html: prepararHtmlPreviaSeguro(bloco.descricao) }} />
             <Label>Fotografias — {bloco.origem}</Label>
             <p className="text-xs text-muted-foreground">Edite as figuras e legendas neste quadro. Use o botão de inserir figura para adicionar espaços para imagens.</p>
-            <TinyMceEditor editorId={`template-secao-${getSecaoRef(secao)}-fotos-${indiceBloco}`} value={bloco.fotos}
+            <TinyMceEditor key={`template-secao-${getSecaoRef(secao)}-fotos-${secao.repetir_para || 'unico'}-${indiceBloco}`} editorId={`template-secao-${getSecaoRef(secao)}-fotos-${indiceBloco}`} initialValue={bloco.fotos}
               onChange={html => updateSecao(index, 'conteudo', conteudoAtual => atualizarFotosColetaTemplateB601(conteudoAtual, bloco.origem, html))}
-              height={300} placeholder="Figuras e legendas..." placeholderChaves={placeholderChaves} autoConverterReservados={true} condToggles={exameToggles} />
+              agruparAlteracoes somenteLeitura={bloqueado} height={300} placeholder="Figuras e legendas..." placeholderChaves={placeholderChaves} autoConverterReservados={true} condToggles={exameToggles} />
           </div>
         )) : <div className="overflow-x-auto text-xs [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:border-border [&_td]:p-2 [&_th]:border [&_th]:border-border [&_th]:bg-muted [&_th]:p-2 [&_p]:my-2" dangerouslySetInnerHTML={{ __html: prepararHtmlPreviaSeguro(gerarPreviaColetaTemplateB601(secao.conteudo, secao.repetir_para || '')) }} />}
         </div>
@@ -537,9 +541,12 @@ const SortableSecaoTemplateItem: React.FC<SortableSecaoTemplateItemProps> = ({
         categoriaExameId={categoriaExameId}
       >
         <TinyMceEditor
+          key={`template-secao-${getSecaoRef(secao)}-conteudo-${secao.repetir_para || 'unico'}`}
           editorId={`template-secao-${getSecaoRef(secao)}`}
-          value={partes.descricao}
+          initialValue={partes.descricao}
           onChange={html => updateSecao(index, 'conteudo', conteudoAtual => temComplemento ? juntarComplementoB601(html, separarComplementoB601(conteudoAtual).complemento) : html)}
+          agruparAlteracoes
+          somenteLeitura={bloqueado}
           height={250}
           placeholder={`Conteúdo da seção "${secao.nome || '...'}"`}
           placeholderChaves={placeholderChaves}
@@ -554,9 +561,9 @@ const SortableSecaoTemplateItem: React.FC<SortableSecaoTemplateItemProps> = ({
           </div>
           <p className="text-xs text-muted-foreground">Este conteúdo aparece uma vez, ao final da subseção. Use o botão de inserir figura para adicionar espaços para imagens.</p>
           <PlaceholderContextMenu editorId={`template-secao-${getSecaoRef(secao)}-complemento`} categorias={categorias} placeholders={placeholders} onInsertPlaceholder={inserirPlaceholder} exameMenuStructure={exameMenuStructure} categoriaExameId={categoriaExameId}>
-            <TinyMceEditor editorId={`template-secao-${getSecaoRef(secao)}-complemento`} value={partes.complemento}
+            <TinyMceEditor key={`template-secao-${getSecaoRef(secao)}-complemento-${secao.repetir_para || 'unico'}`} editorId={`template-secao-${getSecaoRef(secao)}-complemento`} initialValue={partes.complemento}
               onChange={html => updateSecao(index, 'conteudo', conteudoAtual => juntarComplementoB601(separarComplementoB601(conteudoAtual).descricao, html))}
-              height={300} placeholder="Figuras, legendas e observações após a descrição..." placeholderChaves={placeholderChaves} autoConverterReservados={true} condToggles={exameToggles} />
+              agruparAlteracoes somenteLeitura={bloqueado} height={300} placeholder="Figuras, legendas e observações após a descrição..." placeholderChaves={placeholderChaves} autoConverterReservados={true} condToggles={exameToggles} />
           </PlaceholderContextMenu>
         </div>
       )}
@@ -585,6 +592,10 @@ export const TemplatesPage: React.FC = () => {
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [templateParaExportarId, setTemplateParaExportarId] = useState('');
   const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
+  const [sincronizacaoSecoesPendente, setSincronizacaoSecoesPendente] = useState<{
+    templateId: string;
+    secoes: SecaoForm[];
+  } | null>(null);
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const [placeholders, setPlaceholders] = useState<Placeholder[]>([]);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
@@ -720,7 +731,7 @@ export const TemplatesPage: React.FC = () => {
         const conteudo = possuiComplementoB601(sec.repetir_para)
           ? montarEdicaoComplementoB601(sec.conteudo, sec.repetir_para || '')
           : sec.conteudo?.trim() || '<p>&nbsp;</p>';
-        const secId = sec.id || `tmp-${index}`;
+        const secId = getSecaoRef(sec);
 
         return `
           <section data-template-secao="true" data-secao-index="${index}" data-secao-id="${secId}" style="margin-bottom:16px;border:1px solid #d9d9d9;border-radius:8px;overflow:hidden;">
@@ -744,39 +755,95 @@ export const TemplatesPage: React.FC = () => {
       const sectionNodes = Array.from(doc.querySelectorAll('section[data-template-secao="true"]'));
       if (sectionNodes.length === 0) return secoesBase;
 
-      const contentByIndex = new Map<number, string>();
+      const contentBySecao = new Map<string, string>();
       sectionNodes.forEach(node => {
-        const idxRaw = node.getAttribute('data-secao-index');
-        const idx = idxRaw != null ? Number(idxRaw) : NaN;
+        const secaoId = node.getAttribute('data-secao-id');
         const contentNode = node.querySelector('[data-template-secao-content="true"]') as HTMLElement | null;
-        if (!Number.isNaN(idx) && contentNode) {
-          const secao = secoesBase[idx];
-          contentByIndex.set(idx, secao && possuiComplementoB601(secao.repetir_para)
+        const secao = secoesBase.find(item => getSecaoRef(item) === secaoId);
+        if (secao && contentNode) {
+          contentBySecao.set(getSecaoRef(secao), possuiComplementoB601(secao.repetir_para)
             ? lerEdicaoComplementoB601(contentNode, secao.conteudo, secao.repetir_para || '')
             : (contentNode.innerHTML || '').trim() || '<p>&nbsp;</p>');
         }
       });
 
-      return secoesBase.map((s, idx) => ({
+      return secoesBase.map(s => ({
         ...s,
-        conteudo: contentByIndex.get(idx) ?? s.conteudo,
+        conteudo: contentBySecao.get(getSecaoRef(s)) ?? s.conteudo,
       }));
     } catch {
       return secoesBase;
     }
   }, []);
 
+  const sincronizarSecoesPersistidas = useCallback(async (templateId: string, secoesBase: SecaoForm[]): Promise<boolean> => {
+    const resposta = await window.ipcAPI.template.findSecoes(templateId);
+    if (!resposta.success || !Array.isArray(resposta.data)) return false;
+
+    setSecoesDb(resposta.data);
+    const secoesSincronizadas = normalizarSecoesHierarquicas(resposta.data.map((secao: SecaoItem, indice: number) => ({
+      ...hydrateSecaoForm(secao, placeholderChaves),
+      chave_local: secoesBase[indice]?.chave_local || secao.id,
+    })));
+    setSecoes(secoesSincronizadas);
+    setSingleEditorHtml(buildSingleHtmlFromSecoes(secoesSincronizadas));
+    setSincronizacaoSecoesPendente(null);
+    return true;
+  }, [buildSingleHtmlFromSecoes, placeholderChaves]);
+
+  const obterConteudoEditor = useCallback((editorId: string, alternativa: string): string => {
+    const editor = obterEditorTinyMce(editorId);
+    return editor ? lerConteudoAtualEditorLaudo(editor) : alternativa;
+  }, []);
+
+  const obterSecoesAtuais = useCallback((): SecaoForm[] => {
+    if (editorMode === 'single') {
+      const html = obterConteudoEditor('template-single-editor', singleEditorHtml);
+      return normalizarSecoesHierarquicas(parseSingleHtmlToSecoes(html, secoes));
+    }
+
+    return normalizarSecoesHierarquicas(secoes.map(secao => {
+      const referencia = getSecaoRef(secao);
+      let conteudo = secao.conteudo;
+      const blocos = obterBlocosColetaTemplateB601(conteudo, secao.repetir_para || '');
+      for (const [indiceBloco, bloco] of blocos.entries()) {
+        const fotos = obterConteudoEditor(`template-secao-${referencia}-fotos-${indiceBloco}`, bloco.fotos);
+        conteudo = atualizarFotosColetaTemplateB601(conteudo, bloco.origem, fotos);
+      }
+
+      if (!ehAgrupamentoB601(secao.repetir_para)) {
+        const partes = separarComplementoB601(conteudo);
+        const descricao = obterConteudoEditor(`template-secao-${referencia}`, partes.descricao);
+        conteudo = possuiComplementoB601(secao.repetir_para)
+          ? juntarComplementoB601(descricao, partes.complemento)
+          : descricao;
+      }
+
+      if (possuiComplementoB601(secao.repetir_para)) {
+        const partes = separarComplementoB601(conteudo);
+        const complemento = obterConteudoEditor(`template-secao-${referencia}-complemento`, partes.complemento);
+        conteudo = juntarComplementoB601(partes.descricao, complemento);
+      }
+
+      return conteudo === secao.conteudo ? secao : { ...secao, conteudo };
+    }));
+  }, [editorMode, obterConteudoEditor, parseSingleHtmlToSecoes, secoes, singleEditorHtml]);
+
   const handleEditorModeChange = useCallback((nextMode: 'multi' | 'single') => {
+    if (submitting) return;
     if (nextMode === editorMode) return;
+    const secoesAtuais = obterSecoesAtuais();
     if (nextMode === 'single') {
-      setSingleEditorHtml(buildSingleHtmlFromSecoes(secoes));
+      setSecoes(secoesAtuais);
+      setSingleEditorHtml(buildSingleHtmlFromSecoes(secoesAtuais));
       setEditorMode('single');
       return;
     }
 
-    setSecoes(prev => normalizarSecoesHierarquicas(parseSingleHtmlToSecoes(singleEditorHtml, prev)));
+    setSecoes(secoesAtuais);
+    setSingleEditorHtml(buildSingleHtmlFromSecoes(secoesAtuais));
     setEditorMode('multi');
-  }, [buildSingleHtmlFromSecoes, editorMode, parseSingleHtmlToSecoes, secoes, singleEditorHtml]);
+  }, [buildSingleHtmlFromSecoes, editorMode, obterSecoesAtuais, submitting]);
 
   const inserirPlaceholder = (editorId: string, chave: string) => {
     const editor = obterEditorTinyMce(editorId);
@@ -786,6 +853,7 @@ export const TemplatesPage: React.FC = () => {
   };
 
   const inserirDummyNoEditor = () => {
+    if (submitting) return;
     const activeEditor = obterEditorAtivoTinyMce();
     if (!activeEditor) {
       toast.error('Selecione o editor primeiro');
@@ -809,6 +877,7 @@ export const TemplatesPage: React.FC = () => {
   };
 
   const inserirReservadoNoEditor = () => {
+    if (submitting) return;
     const activeEditor = obterEditorAtivoTinyMce();
     if (!activeEditor) {
       toast.error('Selecione o editor primeiro');
@@ -834,6 +903,7 @@ export const TemplatesPage: React.FC = () => {
   // ─── Modo Lista ──────────────────────────────────────
 
   const handleNovo = () => {
+    setSincronizacaoSecoesPendente(null);
     setEditingTemplateId(null);
     setTemplateForm(emptyTemplateForm());
     setSecoes([emptySecaoForm()]);
@@ -849,6 +919,7 @@ export const TemplatesPage: React.FC = () => {
       toast.error('Este template é integrado ao laWdo. Crie uma cópia personalizada para editar.');
       return;
     }
+    setSincronizacaoSecoesPendente(null);
     setEditingTemplateId(template.id);
     setTemplateForm({
       nome: template.nome,
@@ -895,6 +966,7 @@ export const TemplatesPage: React.FC = () => {
       const novoId: string = createR.data.id;
       const copia = createR.data as TemplateItem;
       await carregarTemplates();
+      setSincronizacaoSecoesPendente(null);
       setEditingTemplateId(novoId);
       setTemplateForm({
         nome: copia.nome,
@@ -924,6 +996,7 @@ export const TemplatesPage: React.FC = () => {
   }, [carregarTemplates, placeholderChaves, buildSingleHtmlFromSecoes]);
 
   const handleVoltar = () => {
+    setSincronizacaoSecoesPendente(null);
     setEditMode(false);
     carregarTemplates();
   };
@@ -931,15 +1004,18 @@ export const TemplatesPage: React.FC = () => {
   // ─── Formulário ──────────────────────────────────────
 
   const updateTemplateField = (field: keyof TemplateForm, value: string) => {
+    if (submitting) return;
     setTemplateForm(prev => ({ ...prev, [field]: value }));
     setErrors(prev => { const n = { ...prev }; delete n[field]; return n; });
   };
 
   const handleAddSecao = () => {
+    if (submitting) return;
     setSecoes(prev => normalizarSecoesHierarquicas([...prev, emptySecaoForm()]));
   };
 
   const handleRemoveSecao = (index: number) => {
+    if (submitting) return;
     setSecoes(prev => {
       const secoesNormalizadas = normalizarSecoesHierarquicas(prev);
       const removida = secoesNormalizadas[index];
@@ -958,23 +1034,27 @@ export const TemplatesPage: React.FC = () => {
   };
 
   const handleMoveSecao = (index: number, direction: 'up' | 'down') => {
+    if (submitting) return;
     setSecoes(prev => moverSecaoHierarquica(prev, index, direction));
   };
 
   const updateSecao = (index: number, field: keyof SecaoForm, valor: string | boolean | ((valorAtual: string) => string)) => {
+    if (submitting) return;
+    const secoesAtuais = field === 'conteudo' ? null : obterSecoesAtuais();
     setSecoes(prev => {
-      const secaoAtual = prev[index];
-      if (!secaoAtual) return prev;
+      const fonte = secoesAtuais ?? prev;
+      const secaoAtual = fonte[index];
+      if (!secaoAtual) return fonte;
       const valorAtual = secaoAtual[field];
       const value = typeof valor === 'function'
         ? typeof valorAtual === 'string' ? valor(valorAtual) : valorAtual
         : valor;
-      if (value === valorAtual) return prev;
+      if (value === valorAtual) return fonte;
       if (field === 'ocultar_titulo' || field === 'contar_na_numeracao') {
-        return prev.map((secao, i) => i === index ? { ...secao, [field]: value === true } : secao);
+        return fonte.map((secao, i) => i === index ? { ...secao, [field]: value === true } : secao);
       }
-      if (typeof value !== 'string') return prev;
-      const secoesNormalizadas = normalizarSecoesHierarquicas(prev);
+      if (typeof value !== 'string') return fonte;
+      const secoesNormalizadas = normalizarSecoesHierarquicas(fonte);
       if (field === 'parent_id') {
         return reposicionarSecaoPorPai(secoesNormalizadas, index, value || '');
       }
@@ -994,6 +1074,7 @@ export const TemplatesPage: React.FC = () => {
   };
 
   const handleDragEnd = ({ active, over }: DragEndEvent) => {
+    if (submitting) return;
     if (!over || active.id === over.id) return;
 
     setSecoes((prev) => {
@@ -1046,9 +1127,17 @@ export const TemplatesPage: React.FC = () => {
     try {
       setSubmitting(true);
       setErrors({});
-      const secoesParaSalvar = normalizarSecoesHierarquicas(editorMode === 'single'
-        ? parseSingleHtmlToSecoes(singleEditorHtml, secoes)
-        : secoes);
+      if (sincronizacaoSecoesPendente) {
+        const sincronizou = await sincronizarSecoesPersistidas(
+          sincronizacaoSecoesPendente.templateId,
+          sincronizacaoSecoesPendente.secoes,
+        );
+        if (!sincronizou) {
+          toast.error('O template já foi salvo. Não foi possível sincronizar as seções ainda.');
+        }
+        return;
+      }
+      const secoesParaSalvar = obterSecoesAtuais();
 
       // Validar template
       const result = templateFormSchema.safeParse(templateForm);
@@ -1104,16 +1193,11 @@ export const TemplatesPage: React.FC = () => {
       }
 
       // Recarregar seções do BD
-      if (templateId) {
-        const r = await window.ipcAPI.template.findSecoes(templateId);
-        if (r.success) {
-          setSecoesDb(r.data);
-          const nextSecoes = normalizarSecoesHierarquicas(
-            r.data.map((s: SecaoItem) => hydrateSecaoForm(s, placeholderChaves)),
-          );
-          setSecoes(nextSecoes);
-          setSingleEditorHtml(buildSingleHtmlFromSecoes(nextSecoes));
-        }
+      if (templateId && !await sincronizarSecoesPersistidas(templateId, secoesParaSalvar)) {
+          setSincronizacaoSecoesPendente({ templateId, secoes: secoesParaSalvar });
+          setSecoes(secoesParaSalvar);
+          setSingleEditorHtml(buildSingleHtmlFromSecoes(secoesParaSalvar));
+          toast.error('Template salvo, mas não foi possível sincronizar as seções. Tente salvar novamente.');
       }
     } catch (e: unknown) {
       toast.error(obterMensagemErro(e, 'Erro ao salvar template'));
@@ -1234,9 +1318,7 @@ export const TemplatesPage: React.FC = () => {
     try {
       setGeneratingPdf(true);
       setShowPreview(true);
-      const secoesParaPreview = normalizarSecoesHierarquicas(editorMode === 'single'
-        ? parseSingleHtmlToSecoes(singleEditorHtml, secoes)
-        : secoes);
+      const secoesParaPreview = obterSecoesAtuais();
 
       const tipoExameNome = tiposExame.find(t => t.id === templateForm.tipo_exame_id)?.nome || '';
       const { fullHtml, headerTemplate } = await montarHtmlPreview(secoesParaPreview, templateForm.nome, tipoExameNome);
@@ -1647,7 +1729,7 @@ export const TemplatesPage: React.FC = () => {
             <p className="text-muted-foreground mt-1">Configure o modelo e suas seções</p>
           </div>
         </div>
-        <Button variant="outline" size="sm" onClick={handlePreview} disabled={generatingPdf} className="flex items-center gap-2">
+        <Button variant="outline" size="sm" onClick={handlePreview} disabled={generatingPdf || submitting} className="flex items-center gap-2">
           <Eye size={16} /> {generatingPdf ? 'Gerando PDF...' : 'Pré-visualizar'}
         </Button>
       </div>
@@ -1698,6 +1780,7 @@ export const TemplatesPage: React.FC = () => {
                 id="nome"
                 value={templateForm.nome}
                 onChange={e => updateTemplateField('nome', e.target.value)}
+                disabled={submitting}
                 className={errors.nome ? 'border-red-500 focus-visible:ring-red-500' : ''}
                 placeholder="Ex: Laudo de Local de Crime"
               />
@@ -1706,7 +1789,7 @@ export const TemplatesPage: React.FC = () => {
             <div className="space-y-2">
               <Label htmlFor="tipo_exame_id">Tipo de Exame *</Label>
               <Select value={templateForm.tipo_exame_id} onValueChange={v => updateTemplateField('tipo_exame_id', v)}>
-                <SelectTrigger id="tipo_exame_id" className={errors.tipo_exame_id ? 'border-red-500 focus-visible:ring-red-500' : ''}>
+                <SelectTrigger id="tipo_exame_id" disabled={submitting} className={errors.tipo_exame_id ? 'border-red-500 focus-visible:ring-red-500' : ''}>
                   <SelectValue placeholder="Selecione o tipo..." />
                 </SelectTrigger>
                 <SelectContent>
@@ -1724,6 +1807,7 @@ export const TemplatesPage: React.FC = () => {
               id="descricao"
               value={templateForm.descricao}
               onChange={e => updateTemplateField('descricao', e.target.value)}
+              disabled={submitting}
               placeholder="Descrição breve do template..."
               rows={2}
             />
@@ -1747,6 +1831,7 @@ export const TemplatesPage: React.FC = () => {
                       variant={editorMode === 'multi' ? 'default' : 'ghost'}
                       size="sm"
                       onClick={() => handleEditorModeChange('multi')}
+                      disabled={submitting}
                       className="h-8 px-2.5"
                     >
                       <Layers size={14} />
@@ -1760,6 +1845,7 @@ export const TemplatesPage: React.FC = () => {
                       variant={editorMode === 'single' ? 'default' : 'ghost'}
                       size="sm"
                       onClick={() => handleEditorModeChange('single')}
+                      disabled={submitting}
                       className="h-8 px-2.5"
                     >
                       <FileText size={14} />
@@ -1775,6 +1861,7 @@ export const TemplatesPage: React.FC = () => {
                     variant="ghost"
                     size="sm"
                     onClick={inserirDummyNoEditor}
+                    disabled={submitting}
                     className="h-8 px-2.5"
                   >
                     <ImageIcon size={14} />
@@ -1788,6 +1875,7 @@ export const TemplatesPage: React.FC = () => {
                     variant="ghost"
                     size="sm"
                     onClick={inserirReservadoNoEditor}
+                    disabled={submitting}
                     className="h-8 px-2.5"
                   >
                     <Baseline size={14} />
@@ -1797,7 +1885,7 @@ export const TemplatesPage: React.FC = () => {
               </Tooltip>
               </div>
               {editorMode === 'multi' && (
-                <Button variant="outline" size="sm" onClick={handleAddSecao} className="flex items-center gap-1">
+                <Button variant="outline" size="sm" onClick={handleAddSecao} disabled={submitting} className="flex items-center gap-1">
                   <Plus size={14} /> Adicionar Seção
                 </Button>
               )}
@@ -1817,8 +1905,10 @@ export const TemplatesPage: React.FC = () => {
               >
                   <TinyMceEditor
                     editorId="template-single-editor"
-                    value={singleEditorHtml}
+                    initialValue={singleEditorHtml}
                     onChange={(html: string) => setSingleEditorHtml(html)}
+                    agruparAlteracoes
+                    somenteLeitura={submitting}
                     height={520}
                     placeholder="Edite o laudo completo..."
                     placeholderChaves={placeholderChaves}
@@ -1859,6 +1949,7 @@ export const TemplatesPage: React.FC = () => {
                       handleRemoveSecao={handleRemoveSecao}
                       podeSubir={podeMoverSecao(secoesOrdenadas, index, 'up')}
                       podeDescer={podeMoverSecao(secoesOrdenadas, index, 'down')}
+                      bloqueado={submitting}
                     />
                   ))}
                 </div>
@@ -1870,7 +1961,7 @@ export const TemplatesPage: React.FC = () => {
 
       {/* Botões */}
       <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
-        <Button variant="outline" onClick={handleVoltar}>Cancelar</Button>
+        <Button variant="outline" onClick={handleVoltar} disabled={submitting}>Cancelar</Button>
         <Button onClick={handleSalvar} disabled={submitting} className="flex items-center gap-2">
           <Plus size={16} /> {submitting ? 'Salvando...' : editingTemplateId ? 'Atualizar' : 'Criar'} Template
         </Button>

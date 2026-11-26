@@ -44,9 +44,9 @@ describe('ocorrências de figuras', () => {
     const texto = '<table><tr><td><figure class="laudo-figure"><img></figure></td><td><p>Descrição</p></td></tr></table>';
     const normalizado = centralizarFigurasSozinhasHtml(duas);
     const documento = new DOMParser().parseFromString(normalizado, 'text/html');
-    expect(documento.querySelector('tr')?.getAttribute('data-altura-par-figuras')).toBe('109');
+    expect(documento.querySelector('tr')?.getAttribute('data-altura-par-figuras')).toBe('67');
     expect(Array.from(documento.querySelectorAll('figure')).map(figura => figura.getAttribute('data-altura-par-figuras')))
-      .toEqual(['109', '109']);
+      .toEqual(['67', '67']);
     expect(Array.from(documento.querySelectorAll<HTMLElement>('figure')).map(figura => figura.style.width))
       .toEqual(['100%', '100%']);
     expect(Array.from(documento.querySelectorAll<HTMLImageElement>('img')).map(imagem => ({
@@ -56,7 +56,7 @@ describe('ocorrências de figuras', () => {
       { largura: '100%', altura: '100%', ajuste: 'contain', margem: '0px' },
     ]);
     expect(Array.from(documento.querySelectorAll<HTMLElement>('[data-conteiner-quadro-figura]'))
-      .map(conteiner => conteiner.style.paddingBottom)).toEqual(['109%', '109%']);
+      .map(conteiner => conteiner.style.paddingBottom)).toEqual(['67%', '67%']);
     expect(documento.querySelector('table')?.style.tableLayout).toBe('fixed');
     expect(Array.from(documento.querySelectorAll<HTMLTableCellElement>('td')).map(celula => celula.style.width))
       .toEqual(['50%', '50%']);
@@ -107,6 +107,22 @@ describe('ocorrências de figuras', () => {
     expect(documento.querySelector('td')?.colSpan).toBe(2);
   });
 
+  it('mantém sem bordas o quadro do I-801 quando uma figura do par é excluída', () => {
+    const documento = new DOMParser().parseFromString(
+      '<table border="0" data-layout-pares-figuras="true" style="border-collapse:collapse;width:100%;table-layout:fixed;border-width:0px">'
+      + '<tbody><tr><td style="text-align:center;vertical-align:top;padding:2px;border-width:0px"><figure class="laudo-figure"><img></figure></td>'
+      + '<td style="text-align:center;vertical-align:top;padding:2px;border-width:0px"><figure class="laudo-figure"><img></figure></td></tr></tbody></table>',
+      'text/html',
+    );
+    documento.querySelector('figure')?.remove();
+
+    expect(centralizarFigurasSozinhas(documento.body)).toBe(true);
+    expect(documento.querySelector('table')?.hasAttribute('data-layout-pares-figuras')).toBe(false);
+    expect(documento.querySelector('table')?.getAttribute('data-tabela-sem-borda')).toBe('true');
+    expect(documento.querySelector('table')?.style.border).toBe('0px');
+    expect(documento.querySelector('td')?.style.border).toBe('0px');
+  });
+
   it('previsualiza continuamente e persiste o percentual nas duas figuras apenas no commit', () => {
     const documento = new DOMParser().parseFromString(
       '<table><tr><td><figure class="laudo-figure"><img></figure></td>'
@@ -120,10 +136,10 @@ describe('ocorrências de figuras', () => {
     expect(previsualizarAlturaParFiguras(figura, 87)).toHaveLength(2);
     expect(Array.from(documento.querySelectorAll<HTMLElement>('[data-conteiner-quadro-figura]')).map(conteiner => conteiner.style.paddingBottom))
       .toEqual(['87%', '87%']);
-    expect(linha.getAttribute('data-altura-par-figuras')).toBe('109');
+    expect(linha.getAttribute('data-altura-par-figuras')).toBe('67');
     expect(cancelarPrevisualizacaoAlturaParFiguras(figura)).toBe(true);
     expect(Array.from(documento.querySelectorAll<HTMLElement>('[data-conteiner-quadro-figura]')).map(conteiner => conteiner.style.paddingBottom))
-      .toEqual(['109%', '109%']);
+      .toEqual(['67%', '67%']);
 
     expect(definirAlturaParFiguras(figura, 125)).toMatchObject({ alterou: true, alturaPercentual: 125 });
     expect(linha.getAttribute('data-altura-par-figuras')).toBe('125');
@@ -132,7 +148,7 @@ describe('ocorrências de figuras', () => {
     expect(Array.from(documento.querySelectorAll<HTMLElement>('[data-conteiner-quadro-figura]')).map(conteiner => conteiner.style.paddingBottom))
       .toEqual(['125%', '125%']);
     expect(definirAlturaParFiguras(figura, 150).alturaPercentual).toBe(150);
-    expect(definirAlturaParFiguras(figura, 66).alturaPercentual).toBe(109);
+    expect(definirAlturaParFiguras(figura, 66).alturaPercentual).toBe(67);
   });
 
   it('mantém a foto inteira por padrão e preenche ambas as figuras sob comando', () => {

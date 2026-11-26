@@ -10,6 +10,17 @@ const log = getLogger('configuracao');
 
 const TIPOS_CRIPTOGRAFADOS = new Set(['senha', 'api_key']);
 
+function validarCpf(valor: string): boolean {
+  if (!/^\d{11}$/.test(valor) || /^(\d)\1{10}$/.test(valor)) return false;
+  for (let posicao = 9; posicao <= 10; posicao += 1) {
+    let soma = 0;
+    for (let indice = 0; indice < posicao; indice += 1) soma += Number(valor[indice]) * (posicao + 1 - indice);
+    const resto = soma % 11;
+    if (Number(valor[posicao]) !== (resto < 2 ? 0 : 11 - resto)) return false;
+  }
+  return true;
+}
+
 interface ConfiguracaoRow {
   chave: string
   valor: string | null
@@ -20,6 +31,23 @@ interface ConfiguracaoRow {
 }
 
 class ConfiguracaoService {
+  async obterEstadoCredenciaisGdl(ambiente: AmbienteGdl): Promise<{ configuradas: boolean; cpfValido: boolean }> {
+    const [login, senha, cpfUsuario] = await Promise.all([
+      this.obter(`gdl_login_${ambiente}`),
+      this.obter(`gdl_senha_${ambiente}`),
+      this.obter(`gdl_cpf_usuario_${ambiente}`),
+    ]);
+    return { configuradas: Boolean(login && senha), cpfValido: Boolean(cpfUsuario && validarCpf(cpfUsuario)) };
+  }
+
+  async salvarCredenciaisGdl(ambiente: AmbienteGdl, credenciais: { login: string; senha: string; cpfUsuario: string }): Promise<void> {
+    await Promise.all([
+      this.salvar(`gdl_login_${ambiente}`, credenciais.login, 'senha', `Login GDL (${ambiente})`),
+      this.salvar(`gdl_senha_${ambiente}`, credenciais.senha, 'senha', `Senha GDL (${ambiente})`),
+      this.salvar(`gdl_cpf_usuario_${ambiente}`, credenciais.cpfUsuario, 'senha', `CPF usuário GDL (${ambiente})`),
+    ]);
+  }
+
   async excluirCredenciaisGdl(ambiente: AmbienteGdl): Promise<void> {
     await executeNonQuery('DELETE FROM configuracoes WHERE chave IN (?, ?, ?)', [
       `gdl_login_${ambiente}`, `gdl_senha_${ambiente}`, `gdl_cpf_usuario_${ambiente}`,

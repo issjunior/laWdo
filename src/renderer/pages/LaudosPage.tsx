@@ -2678,6 +2678,18 @@ export const LaudosPage: React.FC = () => {
     setEditando({ ...laudo, apresentacao_json: laudoCompleto.apresentacao_json });
   }, [navigate, placeholderChaves, buildSingleHtmlFromSecoes, iniciarSessao, montarHtmlEstruturalAtual, placeholders]);
 
+  useEffect(() => {
+    const estadoNavegacao = location.state;
+    const laudoId = isRecord(estadoNavegacao) && isString(estadoNavegacao.abrirLaudoId)
+      ? estadoNavegacao.abrirLaudoId
+      : null;
+    if (!laudoId || loading) return;
+
+    navigate(`${location.pathname}${location.search}`, { replace: true, state: null });
+    const laudo = laudos.find(item => item.id === laudoId);
+    if (laudo) void handleEditar(laudo);
+  }, [handleEditar, laudos, loading, location.pathname, location.search, location.state, navigate]);
+
   const aplicarModoNoEditor = useCallback((editor: TinyMceEditorInstance) => {
     agendarVisualizacaoPlaceholders(editor, {
       modo: modoVisualizacaoPlaceholders,
@@ -3297,6 +3309,14 @@ export const LaudosPage: React.FC = () => {
     setIaSheetOpen(false);
     setPainelIaDestacado(true);
     window.ipcAPI.ia.painelAbrir(sessionId);
+  };
+
+  const handleAbrirNotebookLm = () => {
+    void window.ipcAPI.notebooklm.abrir().then(resultado => {
+      if (!resultado.success) toast.error(resultado.error || 'Não foi possível abrir o NotebookLM.');
+    }).catch(error => {
+      toast.error(obterMensagemErro(error, 'Não foi possível abrir o NotebookLM.'));
+    });
   };
 
   useEffect(() => {
@@ -4078,7 +4098,7 @@ export const LaudosPage: React.FC = () => {
         setSenhaExclusaoErro('Sessão não encontrada. Faça login novamente.');
         return;
       }
-      const r = await window.ipcAPI.verifyPassword(userId, senhaExclusao);
+      const r = await window.ipcAPI.verifyPassword(senhaExclusao);
       if (r.valid) {
         setSenhaExclusaoErro('');
         await handleExcluir();
@@ -4096,8 +4116,7 @@ export const LaudosPage: React.FC = () => {
     if (!laudoParaExcluir) return;
     try {
       setError(null);
-      const userId = precisaSenhaParaExcluir(laudoParaExcluir.status) ? getCurrentUserId() : undefined;
-      const r = await window.ipcAPI.laudo.delete(laudoParaExcluir.id, userId);
+      const r = await window.ipcAPI.laudo.delete(laudoParaExcluir.id);
       if (r.success) {
         toast.success(r.message || 'Laudo excluído com sucesso!');
         setDeleteDialogOpen(false);
@@ -4596,6 +4615,7 @@ export const LaudosPage: React.FC = () => {
                 handleToggleIlustracoes()
               }}
               onReindexarSecoes={handleReindexarSecoes}
+              onAbrirNotebookLm={handleAbrirNotebookLm}
               onAbrirProjeteis={permiteConsultarProjeteis ? () => {
                 botaoProjeteisRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
                 restaurarFocoProjeteisRef.current = null;

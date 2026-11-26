@@ -229,7 +229,7 @@ export const ModelosIAPage: React.FC = () => {
     defaultValues: CONFIGURACAO_PROVEDOR_IA_PADRAO,
     mode: 'onBlur',
   });
-  const { estados, motivosErro, recarregarGrupo, perfil, setPerfil, privacidade, setPrivacidade } = useConfiguracoesIa(form);
+  const { estados, motivosErro, recarregarGrupo, perfil, setPerfil, privacidade, setPrivacidade, chavesConfiguradas } = useConfiguracoesIa(form);
 
   const provedor = form.watch('provedor');
 
@@ -247,10 +247,13 @@ export const ModelosIAPage: React.FC = () => {
       setError(null);
       setSuccess(null);
 
+      const credenciais = {
+        ...(form.getFieldState('apiKeyGroq').isDirty ? { groq: data.apiKeyGroq || '' } : {}),
+        ...(form.getFieldState('apiKeyGemini').isDirty ? { gemini: data.apiKeyGemini || '' } : {}),
+      };
       const resultados = await Promise.all([
         window.ipcAPI.configuracao.salvar('provedor_ia', data.provedor, 'texto', 'Provedor de IA selecionado'),
-        window.ipcAPI.configuracao.salvar('api_key_groq', data.apiKeyGroq || '', 'api_key', 'Chave de API Groq'),
-        window.ipcAPI.configuracao.salvar('api_key_gemini', data.apiKeyGemini || '', 'api_key', 'Chave de API Gemini'),
+        window.ipcAPI.ia.salvarCredenciais(credenciais),
         window.ipcAPI.configuracao.salvar('modelo_ia_padrao', data.modeloGroq, 'texto', 'Modelo padrão Groq'),
         window.ipcAPI.configuracao.salvar('modelo_gemini_padrao', data.modeloGemini, 'texto', 'Modelo padrão Gemini'),
       ]);
@@ -271,6 +274,7 @@ export const ModelosIAPage: React.FC = () => {
 
   const chaveAtual = provedor === 'gemini' ? form.watch('apiKeyGemini') : form.watch('apiKeyGroq');
   const provedorNome = provedor === 'gemini' ? 'Gemini' : 'Groq';
+  const chaveConfigurada = provedor === 'gemini' ? chavesConfiguradas.gemini : chavesConfiguradas.groq;
 
   const handleTestarConexao = async () => {
     if (estados.provedor !== 'pronto') return;
@@ -637,6 +641,7 @@ export const ModelosIAPage: React.FC = () => {
                         <Input
                           type={mostrarChave ? 'text' : 'password'}
                           placeholder={apiKeyPlaceholder}
+                          className="pr-10"
                           {...field}
                           value={field.value || ''}
                         />
@@ -651,6 +656,7 @@ export const ModelosIAPage: React.FC = () => {
                         </Button>
                       </div>
                     </FormControl>
+                    {chaveConfigurada && <p className="text-xs text-muted-foreground">Há uma chave salva. Preencha este campo somente para substituí-la ou limpe-o para removê-la.</p>}
                     <FormMessage />
                   </FormItem>
                 )}

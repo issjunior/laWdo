@@ -117,6 +117,7 @@ async function prepararBancoCompleto(diretorio: string): Promise<{ banco: string
     await executarBackup(conexao, 'UPDATE users SET username = ?, email = ?, senha_hash = ? WHERE id = ?',
       [`backup-${usuario.id}`, `backup-${usuario.id}@invalid.local`, randomUUID(), usuario.id]);
     for (const chave of CHAVES_SECRETAS) await executarBackup(conexao, 'UPDATE configuracoes SET valor = NULL WHERE chave = ?', [chave]);
+    await executarBackup(conexao, "DELETE FROM configuracoes WHERE chave LIKE 'google_drive_%'");
   } finally {
     await encerrarBancoBackup(conexao);
   }

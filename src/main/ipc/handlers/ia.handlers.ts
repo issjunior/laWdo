@@ -1,6 +1,7 @@
 import { BrowserWindow, ClipboardItem, clipboard, ipcMain } from 'electron';
 import { logDebug, logError } from '../../utils/logger.js';
 import { configuracaoService } from '../../services/configuracao.service.js';
+import { authSessaoService } from '../../services/auth-sessao.service.js';
 import { ErroExecucaoIa, iaExecucaoService } from '../../services/ia-execucao.service.js';
 import { carregarDimensoesJanela, observarDimensoesJanela } from '../../utils/dimensoes-janela.js';
 import { obterModeloIa } from '../../../shared/catalogos/modelos-ia.catalogo.js';
@@ -165,6 +166,38 @@ let sessaoPainelIa: { id: string; proprietarioId: number } | null = null;
 let criandoJanelaPainelIa = false;
 
 export const registerIAHandlers = (opcoes: IaHandlerOptions): void => {
+  ipcMain.handle('ia:obter-estado-credenciais', async event => {
+    try {
+      authSessaoService.exigir(event.sender.id);
+      const [groq, gemini] = await Promise.all([
+        configuracaoService.obter('api_key_groq'),
+        configuracaoService.obter('api_key_gemini'),
+      ]);
+      return { success: true, data: { groqConfigurada: Boolean(groq), geminiConfigurada: Boolean(gemini) } };
+    } catch (erro: unknown) {
+      return { success: false, error: erro instanceof Error ? erro.message : 'Não foi possível consultar o estado das chaves de IA.' };
+    }
+  });
+
+  ipcMain.handle('ia:salvar-credenciais', async (event, entrada: unknown) => {
+    try {
+      authSessaoService.exigir(event.sender.id);
+      if (!entrada || typeof entrada !== 'object' || Array.isArray(entrada)) throw new Error('Credenciais de IA inválidas.');
+      const credenciais = entrada as Record<string, unknown>;
+      if ((credenciais.groq !== undefined && typeof credenciais.groq !== 'string') || (credenciais.gemini !== undefined && typeof credenciais.gemini !== 'string')) {
+        throw new Error('Credenciais de IA inválidas.');
+      }
+      const alteracoes = [
+        ...(typeof credenciais.groq === 'string' ? [configuracaoService.salvar('api_key_groq', credenciais.groq.trim(), 'api_key', 'Chave de API Groq')] : []),
+        ...(typeof credenciais.gemini === 'string' ? [configuracaoService.salvar('api_key_gemini', credenciais.gemini.trim(), 'api_key', 'Chave de API Gemini')] : []),
+      ];
+      await Promise.all(alteracoes);
+      return { success: true };
+    } catch (erro: unknown) {
+      return { success: false, error: erro instanceof Error ? erro.message : 'Não foi possível salvar as chaves de IA.' };
+    }
+  });
+
   const operacoesPorRenderer = new Map<number, Set<string>>();
   const retomadasPorRenderer = new Map<number, Set<string>>();
   const renderersMonitorados = new Set<number>();
@@ -210,6 +243,11 @@ export const registerIAHandlers = (opcoes: IaHandlerOptions): void => {
     if (typeof sessionId !== 'string' || !sessionId.trim()) return;
     const proprietario = BrowserWindow.fromWebContents(event.sender);
     if (!proprietario) return;
+    try {
+      authSessaoService.exigir(event.sender.id);
+    } catch {
+      return;
+    }
     if (janelaPainelIa && !janelaPainelIa.isDestroyed()) {
       if (sessaoPainelIa?.proprietarioId === proprietario.id && sessaoPainelIa.id === sessionId) janelaPainelIa.focus();
       return;
@@ -231,6 +269,7 @@ export const registerIAHandlers = (opcoes: IaHandlerOptions): void => {
 
       sessaoPainelIa = { id: sessionId, proprietarioId: proprietario.id };
       janelaPainelIa = new BrowserWindow({
+        parent: proprietario,
         width: dimensoes.largura,
         height: dimensoes.altura,
         minWidth: 360,
@@ -239,6 +278,9 @@ export const registerIAHandlers = (opcoes: IaHandlerOptions): void => {
         show: false,
         webPreferences: { preload: opcoes.preloadPath, nodeIntegration: false, contextIsolation: true, sandbox: true },
       });
+      const conteudoPainelId = janelaPainelIa.webContents.id;
+      authSessaoService.vincularJanelaFilha(proprietario.webContents.id, conteudoPainelId);
+      janelaPainelIa.webContents.once('destroyed', () => authSessaoService.encerrar(conteudoPainelId));
       observarDimensoesJanela(janelaPainelIa, {
         chave: 'janela_painel_ia_dimensoes',
         descricao: 'Dimensões da janela destacada do Assistente IA',

@@ -1,14 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Bot, Crosshair, Images, Keyboard, ListRestart, SpellCheck, Wrench, type LucideIcon } from 'lucide-react'
+import { Bot, Crosshair, Images, Keyboard, ListRestart, NotebookTabs, SpellCheck, type LucideIcon } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import {
   ResizableHandle,
   ResizablePanel,
@@ -32,6 +26,7 @@ interface PainelLateralRedimensionavelProps {
   onAlternarPainelIa: () => void
   onAlternarPainelIlustracoes: () => void
   onReindexarSecoes: () => void
+  onAbrirNotebookLm?: () => void
   onAbrirProjeteis?: () => void
   onAbrirAtalhos: () => void
   onAbrirCorretor?: () => void
@@ -42,7 +37,9 @@ interface PainelLateralRedimensionavelProps {
 
 interface BotaoTrilhoProps {
   titulo: string
+  dica: string
   ativo: boolean
+  desabilitado?: boolean
   icone: LucideIcon
   onClick: () => void
 }
@@ -51,51 +48,27 @@ export function obterLarguraMinimaNecessaria(larguraMinimaPainel: number): numbe
   return 560 + larguraMinimaPainel + 56
 }
 
-function BotaoTrilho({ titulo, ativo, icone: Icone, onClick }: BotaoTrilhoProps) {
+function BotaoTrilho({ titulo, dica, ativo, desabilitado, icone: Icone, onClick }: BotaoTrilhoProps) {
   return (
-    <Button
-      type="button"
-      variant="ghost"
-      size="icon"
-      className={cn(
-        'size-8 rounded-lg border border-transparent transition-[background-color,border-color,color,box-shadow] duration-200',
-        ativo && 'border-border bg-accent text-accent-foreground',
-      )}
-      aria-label={titulo}
-      aria-pressed={ativo}
-      onClick={onClick}
-    >
-      <Icone className="size-4" />
-      <span className="sr-only">{titulo}</span>
-    </Button>
-  )
-}
-
-function BotaoFerramentasTrilho({
-  operacaoEmAndamento,
-  onReindexarSecoes,
-}: Pick<PainelLateralRedimensionavelProps, 'operacaoEmAndamento' | 'onReindexarSecoes'>) {
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="size-8 rounded-lg border border-transparent transition-[background-color,border-color,color,box-shadow] duration-200"
-          aria-label="Ferramentas"
-        >
-          <Wrench className="size-4" />
-          <span className="sr-only">Ferramentas</span>
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent side="left" align="start" className="w-52">
-        <DropdownMenuItem onClick={onReindexarSecoes} disabled={operacaoEmAndamento}>
-          <ListRestart className="mr-2 size-4" />
-          Reindexar seções
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <TooltipProvider delayDuration={200}><Tooltip>
+      <TooltipTrigger asChild><Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className={cn(
+          'size-8 rounded-lg border border-transparent transition-[background-color,border-color,color,box-shadow] duration-200',
+          ativo && 'border-border bg-accent text-accent-foreground',
+        )}
+        aria-label={titulo}
+        aria-pressed={ativo}
+        disabled={desabilitado}
+        onClick={onClick}
+      >
+        <Icone className="size-4" />
+        <span className="sr-only">{titulo}</span>
+      </Button></TooltipTrigger>
+      <TooltipContent side="left">{dica}</TooltipContent>
+    </Tooltip></TooltipProvider>
   )
 }
 
@@ -112,6 +85,7 @@ export function PainelLateralRedimensionavel({
   onAlternarPainelIa,
   onAlternarPainelIlustracoes,
   onReindexarSecoes,
+  onAbrirNotebookLm,
   onRecolherAutomaticamente,
   onAbrirAtalhos,
   onAbrirProjeteis,
@@ -225,12 +199,14 @@ export function PainelLateralRedimensionavel({
       >
         <BotaoTrilho
           titulo="Painel de IA"
+          dica="IA"
           ativo={tipo === 'ia' || iaDestacada}
           icone={Bot}
           onClick={onAlternarPainelIa}
         />
         <BotaoTrilho
           titulo="Painel de Ilustrações"
+          dica="Ilustrações"
           ativo={tipo === 'ilustracoes' || ilustracoesEmJanela}
           icone={Images}
           onClick={onAlternarPainelIlustracoes}
@@ -241,7 +217,7 @@ export function PainelLateralRedimensionavel({
             aria-label="Identificação de projéteis" aria-haspopup="dialog" onClick={onAbrirProjeteis}>
             <Crosshair className="size-4" />
           </Button></TooltipTrigger>
-          <TooltipContent side="left">Identificação de projéteis</TooltipContent>
+          <TooltipContent side="left">Projéteis</TooltipContent>
         </Tooltip></TooltipProvider>}
         {onAbrirCorretor && <TooltipProvider delayDuration={200}><Tooltip>
           <TooltipTrigger asChild><Button type="button" variant="ghost" size="icon"
@@ -249,11 +225,22 @@ export function PainelLateralRedimensionavel({
             aria-label="Corretor ortográfico" aria-haspopup="dialog" onClick={onAbrirCorretor}>
             <SpellCheck className="size-4" />
           </Button></TooltipTrigger>
-          <TooltipContent side="left">Corretor ortográfico</TooltipContent>
+          <TooltipContent side="left">Corretor</TooltipContent>
         </Tooltip></TooltipProvider>}
-        <BotaoFerramentasTrilho
-          operacaoEmAndamento={operacaoEmAndamento}
-          onReindexarSecoes={onReindexarSecoes}
+        {onAbrirNotebookLm && <BotaoTrilho
+          titulo="Abrir NotebookLM"
+          dica="NotebookLM"
+          ativo={false}
+          icone={NotebookTabs}
+          onClick={onAbrirNotebookLm}
+        />}
+        <BotaoTrilho
+          titulo="Reindexar seções"
+          dica="Reindexar"
+          ativo={false}
+          desabilitado={operacaoEmAndamento}
+          icone={ListRestart}
+          onClick={onReindexarSecoes}
         />
         <TooltipProvider delayDuration={200}><Tooltip>
           <TooltipTrigger asChild><Button type="button" variant="ghost" size="icon"
@@ -261,7 +248,7 @@ export function PainelLateralRedimensionavel({
             aria-label="Atalhos do laudo" aria-haspopup="dialog" onClick={onAbrirAtalhos}>
             <Keyboard className="size-4" />
           </Button></TooltipTrigger>
-          <TooltipContent side="left">Atalhos do laudo</TooltipContent>
+          <TooltipContent side="left">Atalhos</TooltipContent>
         </Tooltip></TooltipProvider>
       </aside>
     </div>

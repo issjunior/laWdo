@@ -19,6 +19,7 @@ Aplicação Electron desktop para elaboração de laudos periciais.
 | `npm test` | Vitest (single run) |
 | `npm run test:watch` | Vitest em watch mode |
 | `npm run test:coverage` | Vitest com coverage (gate progressivo em `vitest.config.ts`) |
+| `npm run saude:completa` | Varredura serial completa; grava resumo e logs em `tmp/saude/<timestamp>/` (`--instalacao-limpa` inclui `npm ci`; `--sem-pacote` omite pacote e smoke) |
 | `npm run pack` | Empacotar diretório com electron-builder (`--dir`) |
 | `npm run dist` | Gerar pacote final com electron-builder |
 | `npm run prune` | ts-prune (renderer) — exports não usados |
@@ -26,11 +27,12 @@ Aplicação Electron desktop para elaboração de laudos periciais.
 | `npm run dead-code:check` | Aliás de `prune:all` |
 | `npm run knip` | Auditoria observacional de dependências, exports e tipos órfãos |
 | `/graphify` | Consultar o knowledge graph do projeto (skill) |
-| `/check-dead-code` | Skill de auditoria de código morto (`.claude/skills/check-dead-code/SKILL.md`) |
 
 O ambiente de desenvolvimento requer Node.js 24.15 ou superior, conforme `package.json`.
 
-Após alterações, execute `npm run type-check` e `npm run lint`. Se houver alterações no banco ou IPC, execute também `npm test`. Periodicamente, rode `npm run dead-code:check` e consulte a skill `/check-dead-code` para auditar código morto.
+Após alterações, execute `npm run type-check` e `npm run lint`. Se houver alterações no banco ou IPC, execute também `npm test`. Periodicamente, rode `npm run knip -- --no-exit-code --reporter json` e `npm run dead-code:check` para triar código morto; nunca remova candidatos sem confirmar os consumidores no código e consultar `DEAD_CODE_EXCEPTIONS.md`.
+
+Para uma medição consolidada, use `npm run saude:completa` em vez de encadear manualmente as verificações. O orquestrador executa as fases em série, interrompe na primeira falha bloqueante e preserva `resumo.json`, `resumo.md` e um log por fase em `tmp/saude/<timestamp>/`. Quando concluída sem `--sem-pacote`, a execução atualiza automaticamente o painel de saúde; Knip, ts-prune e alertas moderados transitivos permanecem observacionais, enquanto falhas de execução, auditoria de produção e alertas altos/críticos bloqueiam a medição.
 
 ### Criação e manutenção de testes
 
@@ -43,6 +45,12 @@ Após alterações, execute `npm run type-check` e `npm run lint`. Se houver alt
 
 No desenvolvimento local, `npm run dev:diagnostico` habilita o modo de diagnóstico assistido com source maps. Ele nunca é habilitado pelo `npm run dev`, pelo `npm start` nem no aplicativo empacotado. Depois de `npm run build`, execute `npm run diagnostico:configurar-codex` e reinicie o Codex para registrar o servidor MCP local.
 
+### Credencial OAuth do Google Drive no desenvolvimento
+
+`npm run dev` e `npm run dev:diagnostico` procuram o segredo OAuth somente no arquivo local ignorado `build/google-drive-oauth.local` ou na variável local `LAWDO_GOOGLE_CLIENT_SECRET`, gerando `build/google-drive-oauth.dat` quando encontram uma dessas fontes. Sem credencial, o laWdo abre sem conexão ao Drive e o terminal aponta `scripts/google-drive/README.md`. `npm run dist` exige a credencial; `npm run pack` gera somente um pacote de verificação sem ela.
+
+Quando um usuário ou agente relatar o aviso de que a integração Google Drive precisa ser configurada, explique essa configuração local e encaminhe para o responsável autorizado. Nunca solicite, aceite, registre, imprima ou sugira colar o segredo OAuth, tokens OAuth, códigos de autorização, estados PKCE ou chaves de recuperação em conversas, código, issue, commit ou pull request. A autorização da conta institucional é feita depois, no navegador.
+
 Quando as ferramentas estiverem disponíveis, recomende o diagnóstico assistido para falhas recorrentes, intermitentes ou difíceis de localizar e para verificações de saúde/desempenho antes e depois de otimizações. Para falhas reproduzíveis siga `diagnostico_status` → `iniciar_captura(finalidade=problema)` → usuário reproduz → `finalizar_captura`; não peça cursores, filtros, caminhos ou comandos MCP ao usuário. Para saúde e desempenho, use `diagnostico_status` → `iniciar_captura(finalidade=desempenho)` → `consultar_captura` após a conclusão automática. Compare somente capturas de desempenho do mesmo cenário e protocolo; trate degradação da coleta como limitação explícita, não como evidência de regressão. As ferramentas pontuais `capturar_tela`, `inspecionar_interface`, `executar_acao`, `obter_eventos` e `criar_snapshot` ficam para aprofundamento. A v1.1 expõe: `diagnostico_status`, `capturar_tela`, `inspecionar_interface`, `executar_acao`, `obter_eventos`, `criar_snapshot`, `iniciar_captura`, `status_captura`, `finalizar_captura` e `consultar_captura`. Nunca tente usar avaliação livre de JavaScript, consultas SQLite arbitrárias ou rede de diagnóstico: não fazem parte do contrato.
 
 **Exceção para alterações exclusivamente documentais em `spec/`:** quando todos os arquivos alterados, inclusive os não rastreados, estiverem sob `spec/**`, não execute `type-check`, `lint`, `test`, `test:coverage` ou `build`, pois esses comandos não validam o conteúdo Markdown e não acrescentam sinal relevante. Nesse caso, limite a validação ao fluxo `/spec`: registro pela automação, releitura das seções alteradas, `git diff --check` e conferência de títulos, cercas Markdown, caminhos e consistência entre specs relacionadas. Se houver qualquer arquivo alterado fora de `spec/**`, a exceção não se aplica e as validações normais devem ser executadas conforme o escopo.
@@ -51,7 +59,7 @@ Quando as ferramentas estiverem disponíveis, recomende o diagnóstico assistido
 
 Para documentação de estado atual, use o fluxo `/spec` ou os scripts `npm run spec`, `npm run spec:auditar` e `npm run spec:registrar`. A classificação e cobertura dos specs ficam em `spec/09 automacao-spec/manifesto.json`.
 
-O comando `/graphify` usa o knowledge graph em `graphify-out/` para consultas semânticas. Prefira `graphify query "<pergunta>"` a grep para entender relações entre arquivos/funções. Análises curadas (LLM) do grafo ficam em `spec/problemas diversos/erros_eslint_typescript_testes_codigomorto/03_melhoria_graphify.md`.
+O comando `/graphify` usa o knowledge graph em `graphify-out/` para consultas semânticas. Prefira `graphify query "<pergunta>"` a grep para entender relações entre arquivos/funções; confirme no código os consumidores antes de decidir sobre remoção de símbolos.
 
 No GitHub, `Dependency graph` e `Dependabot` estão ativos para `npm` e `github-actions`.
 
@@ -397,6 +405,5 @@ Se nenhuma alteração for necessária, informar em uma linha.
 - `spec/problemas diversos/erros_eslint_typescript_testes_codigomorto/DEAD_CODE_EXCEPTIONS.md` — exceções de código morto (não remover).
 - `spec/problemas diversos/erros_eslint_typescript_testes_codigomorto/00_saude_do_sistema.md` — painel de saúde do sistema (métricas de TS, lint, testes, código morto).
 - `graphify-out/GRAPH_REPORT.md` — relações entre arquivos e funções (auto-gerado).
-- `spec/problemas diversos/erros_eslint_typescript_testes_codigomorto/03_melhoria_graphify.md` — análise curada do grafo com recomendações de melhoria (gerado por LLM).
 
 Consulte sob demanda, apenas quando necessário para entender requisitos.

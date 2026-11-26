@@ -79,11 +79,12 @@ describe('PainelLateralRedimensionavel', () => {
     expect(montagensEditor).toBe(1)
   })
 
-  it('mantém os quatro ícones acessíveis no trilho e abre as ferramentas', async () => {
+  it('mantém os ícones acessíveis no trilho e reindexa as seções', async () => {
     vi.mocked(window.localStorage.getItem).mockReturnValue(null)
     const onAlternarPainelIa = vi.fn()
     const onAlternarPainelIlustracoes = vi.fn()
     const onReindexarSecoes = vi.fn()
+    const onAbrirNotebookLm = vi.fn()
     const onAbrirAtalhos = vi.fn()
 
     render(
@@ -100,6 +101,7 @@ describe('PainelLateralRedimensionavel', () => {
         onAlternarPainelIa={onAlternarPainelIa}
         onAlternarPainelIlustracoes={onAlternarPainelIlustracoes}
         onReindexarSecoes={onReindexarSecoes}
+        onAbrirNotebookLm={onAbrirNotebookLm}
         onAbrirAtalhos={onAbrirAtalhos}
         conteudoPainel={null}
       >
@@ -109,19 +111,20 @@ describe('PainelLateralRedimensionavel', () => {
 
     const botaoIa = screen.getByRole('button', { name: 'Painel de IA' })
     const botaoIlustracoes = screen.getByRole('button', { name: 'Painel de Ilustrações' })
-    const botaoFerramentas = screen.getByRole('button', { name: 'Ferramentas' })
+    const botaoNotebookLm = screen.getByRole('button', { name: 'Abrir NotebookLM' })
+    const botaoReindexar = screen.getByRole('button', { name: 'Reindexar seções' })
     const botaoAtalhos = screen.getByRole('button', { name: 'Atalhos do laudo' })
-    expect(botaoAtalhos.previousElementSibling).toBe(botaoFerramentas)
+    expect(botaoAtalhos.previousElementSibling).toBe(botaoReindexar)
     fireEvent.click(botaoAtalhos)
     expect(onAbrirAtalhos).toHaveBeenCalledTimes(1)
     fireEvent.click(botaoIa)
     fireEvent.click(botaoIlustracoes)
+    fireEvent.click(botaoNotebookLm)
     expect(onAlternarPainelIa).toHaveBeenCalledTimes(1)
     expect(onAlternarPainelIlustracoes).toHaveBeenCalledTimes(1)
+    expect(onAbrirNotebookLm).toHaveBeenCalledTimes(1)
 
-    fireEvent.pointerDown(botaoFerramentas, { button: 0, ctrlKey: false })
-    const reindexarSecoes = await screen.findByRole('menuitem', { name: 'Reindexar seções' })
-    fireEvent.click(reindexarSecoes)
+    fireEvent.click(botaoReindexar)
     expect(onReindexarSecoes).toHaveBeenCalledTimes(1)
   })
 

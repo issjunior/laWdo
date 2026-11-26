@@ -10,8 +10,11 @@ const arquivoSaida = path.join(diretorioBuild, 'google-drive-oauth.dat');
 async function obterSegredo() {
   const peloAmbiente = process.env.LAWDO_GOOGLE_CLIENT_SECRET?.trim();
   if (peloAmbiente) return peloAmbiente;
-  try { return (await readFile(arquivoLocal, 'utf8')).trim(); }
-  catch { throw new Error('A credencial OAuth do Google Drive não foi provisionada para este empacotamento.'); }
+  try {
+    return (await readFile(arquivoLocal, 'utf8')).trim();
+  } catch {
+    throw new Error('A credencial OAuth do Google Drive não foi provisionada para este empacotamento.');
+  }
 }
 
 function transformar(dados, nonce) {

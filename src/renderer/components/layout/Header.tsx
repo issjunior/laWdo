@@ -8,9 +8,9 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { IndicadorConexaoGdl } from './IndicadorConexaoGdl';
+import { IndicadorGoogleDrive } from './IndicadorGoogleDrive';
 import {
   Info,
-  LogOut,
   Code2,
   Mail,
   Moon,
@@ -26,7 +26,6 @@ import type { EstadoAtualizacaoResposta } from '@shared/atualizacao/atualizacao.
 import type { EstadoCapturaLogs } from '@shared/captura-logs/contratos';
 
 interface HeaderProps {
-  onLogout: () => void;
   currentUser: Record<string, unknown> | null;
 }
 
@@ -56,14 +55,15 @@ const extrairNomeUsuario = (usuario: Record<string, unknown> | null): string => 
   return typeof name === 'string' ? name : '';
 };
 
+const obterPrimeiroNome = (nome: string): string => nome.trim().split(/\s+/)[0] || 'Perito';
+
 const formatarSaudacao = (nome: string, data = new Date()): string => {
   const hora = data.getHours();
   const saudacao = hora < 12 ? 'Bom dia' : hora < 18 ? 'Boa tarde' : 'Boa noite';
-  const nomeLimpo = nome.trim() || 'Perito';
-  return `${saudacao}, ${nomeLimpo} - ${formatadorDataCompleta.format(data)}`;
+  return `${saudacao}, ${obterPrimeiroNome(nome)} - ${formatadorDataCompleta.format(data)}`;
 };
 
-export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
+export const Header: React.FC<HeaderProps> = ({ currentUser }) => {
   const [appInfo, setAppInfo] = useState<{
     version: string;
     name: string;
@@ -74,6 +74,8 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
     dbVersion: number;
   } | null>(null);
   const [atualizacao, setAtualizacao] = useState<EstadoAtualizacaoResposta | null>(null);
+  const [falhaAppInfo, setFalhaAppInfo] = useState(false);
+  const [informacoesAbertas, setInformacoesAbertas] = useState(false);
   const [acaoAtualizacao, setAcaoAtualizacao] = useState<'verificar' | 'baixar' | 'adiar' | 'instalar' | 'agendar' | 'mostrar' | null>(null);
   const [confirmacaoInstalacaoAberta, setConfirmacaoInstalacaoAberta] = useState(false);
   const [capturaLogs, setCapturaLogs] = useState<EstadoCapturaLogs>({ ativa: null });
@@ -97,19 +99,31 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
       try {
         const info = await window.ipcAPI.getAppInfo();
         setAppInfo(info);
+        setFalhaAppInfo(false);
       } catch {
-        // opcional
+        setFalhaAppInfo(true);
       }
     };
     fetchAppInfo();
   }, []);
 
   useEffect(() => {
+    if (!informacoesAbertas || appInfo || !falhaAppInfo) return;
+    let ativo = true;
+    void window.ipcAPI.getAppInfo().then(info => {
+      if (!ativo) return;
+      setAppInfo(info);
+      setFalhaAppInfo(false);
+    }).catch(() => undefined);
+    return () => { ativo = false; };
+  }, [appInfo, falhaAppInfo, informacoesAbertas]);
+
+  useEffect(() => {
     const api = window.ipcAPI.capturaLogs;
     if (!api) return;
     void api.estado().then(resposta => {
       if (resposta.success && resposta.data) setCapturaLogs(resposta.data);
-    });
+    }).catch(() => undefined);
     return api.onEstadoAlterado(setCapturaLogs);
   }, []);
 
@@ -122,9 +136,13 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
   const atualizarEstadoAtualizacao = async (manual = false) => {
     const api = window.ipcAPI.atualizacao;
     if (!api) return;
-    const resposta = manual ? await api.verificar() : await api.estado();
-    setAtualizacao({ ...resposta.data, falha: resposta.falha ?? resposta.data.falha });
-    if (manual && !resposta.success && resposta.falha) toast.error(resposta.falha.mensagem);
+    try {
+      const resposta = manual ? await api.verificar() : await api.estado();
+      setAtualizacao({ ...resposta.data, falha: resposta.falha ?? resposta.data.falha });
+      if (manual && !resposta.success && resposta.falha) toast.error(resposta.falha.mensagem);
+    } catch (erro) {
+      if (manual) toast.error(erro instanceof Error ? erro.message : 'Não foi possível verificar atualizações.');
+    }
   };
 
   useEffect(() => {
@@ -147,7 +165,8 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
     localStorage.setItem('theme', newMode ? 'dark' : 'light');
   };
 
-  const saudacao = formatarSaudacao(extrairNomeUsuario(currentUser));
+  const nomeUsuario = extrairNomeUsuario(currentUser).trim() || 'Perito';
+  const saudacao = formatarSaudacao(nomeUsuario);
   const atualizacaoDisponivel = atualizacao?.estado === 'disponivel' || atualizacao?.estado === 'baixando' || atualizacao?.estado === 'baixada' || atualizacao?.estado === 'aguardando_reinicio';
   const dadosAtualizacao = atualizacao?.atualizacaoDisponivel;
   const progressoAtualizacao = atualizacao?.progressoDetalhado;
@@ -210,6 +229,9 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
       `Ocorrido em: ${new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'medium' }).format(new Date(falhaAtualizacao.ocorridoEm))}`,
       `Versão do laWdo: v${appInfo?.version ?? atualizacao?.versaoInstalada ?? 'não identificada'}`,
       `Detalhe técnico: ${falhaAtualizacao.detalheTecnico}`,
+      'Anexe os logs locais pelo canal autorizado, sem incluir dados de REPs, laudos, credenciais ou chaves.',
+      'Desenvolvedor: izaias.santos@policiacientifica.pr.gov.br',
+      'Projeto: https://github.com/issjunior/laWdo',
     ].join('\n');
     try {
       await navigator.clipboard.writeText(detalhes);
@@ -229,43 +251,29 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
           </p>
         </div>
         
-        <div className="ml-auto flex items-center gap-2">
-          {capturaLogs.ativa && <div className="flex max-w-[430px] items-center gap-2 rounded-md bg-amber-500/15 px-2 py-1 text-xs">
-            <Clock3 className="h-4 w-4 text-amber-600" />
-            <span className="truncate">Captura: {capturaLogs.ativa.sondas.map(sonda => nomesSondasCaptura[sonda] ?? sonda).join(', ')} · {Math.floor((restanteCaptura ?? 0) / 60)}m {(restanteCaptura ?? 0) % 60}s</span>
+        <div className="ml-auto flex min-w-0 items-center gap-1">
+          {capturaLogs.ativa && <div className="mr-1 flex min-w-0 items-center gap-1.5 rounded-md bg-amber-500/15 px-2 py-0.5 text-xs">
+            <Clock3 className="h-4 w-4 shrink-0 text-amber-500" aria-hidden="true" />
+            <span className="hidden max-w-[330px] truncate xl:inline">Captura: {capturaLogs.ativa.sondas.map(sonda => nomesSondasCaptura[sonda] ?? sonda).join(', ')} · {Math.floor((restanteCaptura ?? 0) / 60)}m {(restanteCaptura ?? 0) % 60}s</span>
+            <span className="whitespace-nowrap xl:hidden">Captura ativa</span>
             <Button variant="ghost" size="sm" className="h-7 px-2" onClick={async () => {
-              const resposta = await window.ipcAPI.capturaLogs.parar();
-              if (!resposta.success) toast.error(resposta.error || 'Não foi possível encerrar a captura.');
-              else toast.success('Captura encerrada e preservada.');
+              try {
+                const resposta = await window.ipcAPI.capturaLogs.parar();
+                if (!resposta.success) toast.error(resposta.error || 'Não foi possível encerrar a captura.');
+                else toast.success('Captura encerrada e preservada.');
+              } catch {
+                toast.error('Não foi possível encerrar a captura.');
+              }
             }}>Parar</Button>
           </div>}
-          {/* Escolha de Tema */}
-          <IndicadorConexaoGdl key={typeof currentUser?.id === 'string' ? currentUser.id : 'sessao'} />
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={toggleDarkMode}
-            className="text-sidebar-foreground transition-transform duration-300 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-            title={isDarkMode ? 'Mudar para modo claro' : 'Mudar para modo escuro'}
-          >
-            {isDarkMode ? (
-              <Sun className="h-5 w-5" />
-            ) : (
-              <Moon className="h-5 w-5" />
-            )}
-          </Button>
+          <div className="flex shrink-0 items-center gap-0.5" aria-label="Estado dos serviços">
+            <IndicadorConexaoGdl key={typeof currentUser?.id === 'string' ? currentUser.id : 'sessao'} />
+            <IndicadorGoogleDrive key={typeof currentUser?.id === 'string' ? currentUser.id : 'sessao'} />
+          </div>
+          <div className="mx-1 h-5 w-px shrink-0 bg-sidebar-border" aria-hidden="true" />
 
           {/* Informações do aplicativo */}
-          <Dialog>
-            <DialogTrigger asChild>
-              <button
-                className="flex items-center gap-2 rounded-md p-2 text-sm text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                title="Informações"
-                aria-label="Informações"
-              >
-                <Info size={18} />
-              </button>
-            </DialogTrigger>
+          <Dialog open={informacoesAbertas} onOpenChange={setInformacoesAbertas}>
             <DialogContent className="sm:max-w-[480px]">
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
@@ -302,6 +310,10 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
                       <span className="text-xs text-muted-foreground">Memória RAM</span>
                       <span className="text-xs font-semibold">{appInfo.memory}</span>
                     </div>
+                  </div>
+                ) : falhaAppInfo ? (
+                  <div role="status" className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-4 text-sm text-muted-foreground">
+                    Não foi possível carregar as informações do aplicativo. Feche esta janela e tente novamente mais tarde.
                   </div>
                 ) : (
                   <div className="flex items-center justify-center py-8 text-muted-foreground">
@@ -361,13 +373,13 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
           <Dialog>
             <DialogTrigger asChild>
               <button
-                className="flex items-center gap-2 rounded-md p-2 text-sm text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                className="flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2 text-sm text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 title={dadosAtualizacao ? `Nova versão disponível: v${dadosAtualizacao.versao}` : 'Atualizações'}
                 aria-label={dadosAtualizacao ? `Atualizações. Nova versão disponível: ${dadosAtualizacao.versao}` : 'Atualizações'}
               >
                 <Download size={18} className={atualizacaoDisponivel ? 'text-emerald-300' : undefined} />
-                {atualizacaoDisponivel && <span className="font-medium">Atualização</span>}
-                {atualizacaoDisponivel && <Badge className="bg-emerald-600 hover:bg-emerald-600">Nova versão</Badge>}
+                {atualizacaoDisponivel && <span className="hidden font-medium xl:inline">Atualização</span>}
+                {atualizacaoDisponivel && <Badge className="hidden bg-emerald-600 hover:bg-emerald-600 2xl:inline-flex">Nova versão</Badge>}
               </button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[480px]">
@@ -532,14 +544,27 @@ export const Header: React.FC<HeaderProps> = ({ onLogout, currentUser }) => {
             </AlertDialogContent>
           </AlertDialog>
 
-          <button 
-            onClick={onLogout} 
-            className="flex items-center gap-2 rounded-md p-2 text-sm transition-colors hover:bg-destructive/20 hover:text-destructive-foreground"
-            title="Logout"
-            aria-label="Logout"
+          <div className="mx-1 h-5 w-px shrink-0 bg-sidebar-border" aria-hidden="true" />
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={toggleDarkMode}
+            className="h-8 w-8 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            title={isDarkMode ? 'Mudar para modo claro' : 'Mudar para modo escuro'}
+            aria-label={isDarkMode ? 'Mudar para modo claro' : 'Mudar para modo escuro'}
           >
-            <LogOut size={18} />
-          </button>
+            {isDarkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setInformacoesAbertas(true)}
+            className="h-8 w-8 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            title="Informações do aplicativo"
+            aria-label="Informações do aplicativo"
+          >
+            <Info className="h-4 w-4" />
+          </Button>
         </div>
       </div>
     </header>

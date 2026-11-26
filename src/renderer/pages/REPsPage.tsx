@@ -1283,15 +1283,13 @@ export const REPsPage: React.FC = () => {
       setCriarLaudoSubmitting(true);
       setError(null);
       setSuccess(null);
-      const peritoId = getLoggedUserId();
-      if (!peritoId) {
+      if (!getLoggedUserId()) {
         setError('Usuário não autenticado. Faça login novamente.');
         return;
       }
 
       const r = await window.ipcAPI.laudo.create({
         rep_id: criarLaudoRep.id,
-        perito_id: peritoId,
         template_id: criarLaudoTemplateId,
       });
 

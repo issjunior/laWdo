@@ -23,6 +23,10 @@ Esta spec descreve as barreiras entre renderer, preload e main, além da recuper
 
 O handler global `web-contents-created` protege também conteúdos criados depois da janela principal. A janela principal adiciona uma barreira própria em `will-navigate`, porque abrir externamente uma URL e permitir que o conteúdo atual navegue são decisões diferentes.
 
+## Integridade do pacote
+
+`electron-builder.yml` ativa Electron Fuses no artefato empacotado: `runAsNode`, `enableNodeOptionsEnvironmentVariable` e `enableNodeCliInspectArguments` ficam desativados; o aplicativo carrega somente do ASAR e valida a integridade do ASAR incorporado. Essas opções pertencem ao pacote de distribuição, não mudam o processo de desenvolvimento. Alterações exigem `pack` e smoke do executável no Windows, além da validação normal das fronteiras Electron.
+
 ## CSP e headers
 
 Headers de segurança são aplicados somente ao `mainFrame` do laWdo. Subframes do visualizador PDF interno e blobs de PDF preservam seus headers, evitando quebrar o preview.
@@ -35,7 +39,7 @@ O preload expõe somente wrappers específicos incluídos em `ALLOWED_CHANNELS`.
 
 Ao adicionar um canal, atualizar em conjunto handler, allowlist, `IpcAPI`, validação de entrada e consumidor. Dados de IPC são fronteira insegura e não devem ser convertidos por cast direto.
 
-O fechamento normal usa wrappers específicos e valida que proteção, confirmação e cancelamento venham do `webContents` principal; confirmar exige solicitação pendente. Logout passa pelo controle de alterações do editor/wizard antes de limpar a sessão. Os limites estão em `spec/04 layout/janelas_desktop.md` e `spec/03 laudo/laudo_ciclo_vida.md`.
+O fechamento normal usa wrappers específicos e valida que proteção, confirmação e cancelamento venham do `webContents` principal; confirmar exige solicitação pendente. Logout passa pelo controle de alterações do editor/wizard, tenta revogar a autorização do Google Drive e então limpa a sessão mesmo quando a revogação remota falha. Os limites estão em `spec/04 layout/janelas_desktop.md` e `spec/03 laudo/laudo_ciclo_vida.md`.
 
 ## Autenticação
 
