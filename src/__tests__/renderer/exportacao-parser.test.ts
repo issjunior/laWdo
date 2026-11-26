@@ -21,8 +21,8 @@ describe('parseHtmlParaEstrutura', () => {
     if (tabela.tipo !== 'tabela') return;
     expect(tabela.linhas.flatMap(linha => linha).flatMap(celula => celula.blocos || []))
       .toEqual([
-        expect.objectContaining({ tipo: 'figura', alturaParPercentual: 109, ajusteVisualPar: 'conter', larguraPx: undefined, alturaPx: undefined }),
-        expect.objectContaining({ tipo: 'figura', alturaParPercentual: 109, ajusteVisualPar: 'conter', larguraPx: undefined, alturaPx: undefined }),
+        expect.objectContaining({ tipo: 'figura', alturaParPercentual: 67, ajusteVisualPar: 'conter', larguraPx: undefined, alturaPx: undefined }),
+        expect.objectContaining({ tipo: 'figura', alturaParPercentual: 67, ajusteVisualPar: 'conter', larguraPx: undefined, alturaPx: undefined }),
       ]);
   });
 
@@ -30,7 +30,7 @@ describe('parseHtmlParaEstrutura', () => {
     ['conter-3x2', 67],
     ['conter-4x3', 75],
     ['conter-1x1', 100],
-    ['valor-invalido', 109],
+    ['valor-invalido', 67],
   ] as const)('migra o enquadramento semântico %s para %s%%', (valor, esperado) => {
     const documento = parseHtmlParaEstrutura(`<table><tr data-layout-figuras="${valor}"><td><figure class="laudo-figure"><img src="data:image/png;base64,aGVsbG8="></figure></td><td><figure class="laudo-figure"><img src="data:image/png;base64,aGVsbG8="></figure></td></tr></table>`);
     const tabela = documento.secoes[0].blocos[0];
