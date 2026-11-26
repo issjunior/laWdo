@@ -3,6 +3,7 @@ import type { ResultadoImportacaoGdl } from '../../shared/types/gdl-importacao.t
 import type { GdlRepValidada } from './gdl.schema.js'
 import { converterRepB601 } from './gdl-b601-normalizador.service.js'
 import { converterRepB602 } from './gdl-b602-normalizador.service.js'
+import { converterRepI801 } from './gdl-i801-normalizador.service.js'
 
 type AdaptadorImportacaoGdl = (
   rep: GdlRepValidada,
@@ -12,6 +13,7 @@ type AdaptadorImportacaoGdl = (
 const adaptadoresPorExame = new Map<string, AdaptadorImportacaoGdl>([
   ['B-601', converterRepB601],
   ['B-602', converterRepB602],
+  ['I-801', converterRepI801],
 ])
 
 export function listarCodigosImportacaoGdl(): string[] {

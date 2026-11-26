@@ -51,15 +51,8 @@ const EXAM_PLACEHOLDER_CATEGORIES = [
 
 const CAMPOS_ESPECIFICOS_PLACEHOLDERS: PlaceholderCreateData[] = [
   ...PLACEHOLDERS_B601.map(campo => ({ chave: campo.chave, valor: '', descricao: campo.descricao, categoria_id: 'cat-exam-B-601' })),
-  { chave: 'veiculo',                    valor: '', descricao: 'Marca, modelo ou tipo do veículo periciado',       categoria_id: 'cat-exam-I-801' },
-  { chave: 'placa',                      valor: '', descricao: 'Placa de identificação do veículo',                 categoria_id: 'cat-exam-I-801' },
-  { chave: 'fabricacao_modelo',          valor: '', descricao: 'Ano de fabricação e modelo do veículo',             categoria_id: 'cat-exam-I-801' },
-  { chave: 'cor',                        valor: '', descricao: 'Cor do veículo',                                     categoria_id: 'cat-exam-I-801' },
-  { chave: 'conservacao',                valor: '', descricao: 'Estado de conservação do veículo',                   categoria_id: 'cat-exam-I-801' },
-  { chave: 'chassi',                     valor: '', descricao: 'Nº do chassi (até 17 caracteres alfanuméricos)',    categoria_id: 'cat-exam-I-801' },
-  { chave: 'chassi_revelado',            valor: '', descricao: 'Chassi após revelação química',                      categoria_id: 'cat-exam-I-801' },
-  { chave: 'motor',                      valor: '', descricao: 'Nº do motor (até 12 caracteres alfanuméricos)',     categoria_id: 'cat-exam-I-801' },
-  { chave: 'motor_revelado',             valor: '', descricao: 'Motor após revelação química',                       categoria_id: 'cat-exam-I-801' },
+  { chave: 'i801_tabela_pecas', valor: '', descricao: 'Tabela HTML de todos os itens examinados (I-801)', categoria_id: 'cat-exam-I-801' },
+  ...['tipo', 'identificacao', 'quantidade', 'medida', 'data_entrada', 'placa', 'chassi_aparente', 'chassi_revelado', 'marca', 'modelo', 'numero_serie', 'cor', 'ano_fabricacao', 'resultado_psa'].map(campo => ({ chave: `i801_item_N_${campo}`, valor: '', descricao: `Valor do item I-801 indicado por N`, categoria_id: 'cat-exam-I-801' })),
   { chave: 'b602_envolvidos',           valor: '', descricao: 'Lista de nomes dos envolvidos (B-602)',                categoria_id: 'cat-exam-B-602' },
   { chave: 'b602_data_ocorrencia',      valor: '', descricao: 'Data da ocorrência (B-602)',                           categoria_id: 'cat-exam-B-602' },
   { chave: 'b602_local',                valor: '', descricao: 'Local completo (bairro / cidade / UF) (B-602)',       categoria_id: 'cat-exam-B-602' },

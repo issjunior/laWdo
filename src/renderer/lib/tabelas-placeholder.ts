@@ -62,6 +62,14 @@ export function buildNumberedTable(titulo: string, headers: string[], rows: stri
   return `<table data-tabela-laudo="balistica" width="100%" style="${style(TABLE_STYLES.table)}"><thead>${titleRow}${theadRow}</thead><tbody>${tbodyRows}</tbody></table>`;
 }
 
+export function buildTabelaPecasI801(pecas: Array<{ tipoPeca?: unknown; comuns?: unknown; personalizados?: unknown }>): string {
+  return buildNumberedTable('TABELA – ITENS EXAMINADOS', ['Tipo', 'Identificação', 'Quantidade', 'Medida', 'Placa', 'Chassi'], pecas.map(peca => {
+    const comuns = typeof peca.comuns === 'object' && peca.comuns ? peca.comuns as Record<string, unknown> : {}
+    const personalizados = typeof peca.personalizados === 'object' && peca.personalizados ? peca.personalizados as Record<string, unknown> : {}
+    return [String(peca.tipoPeca || ''), String(comuns.identificacao || ''), String(comuns.quantidade || ''), String(comuns.unidadeMedida || ''), String(personalizados.placa || ''), String(personalizados.chassi_aparente || '')]
+  }))
+}
+
 export function buildDadosInvestigacaoTable(b602: Record<string, unknown>, solicitanteNome?: string, cidadeSolicitante?: string): string {
   const envolvidos = (b602.envolvidos as string[] | undefined)?.filter(Boolean) ?? [];
   const dataOcorrencia = formatarDataBrasileira(b602.data_ocorrencia);

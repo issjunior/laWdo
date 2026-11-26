@@ -12,8 +12,23 @@ import { laudoPadraoB601V1 } from '../../main/templates/integrados/b601/laudo-pa
 import { laudoPadraoB601V2 } from '../../main/templates/integrados/b601/laudo-padrao-b601.v2';
 import { calcularChecksumTemplateIntegrado } from '../../main/templates/integrados/serializar-template-integrado';
 import { validarTemplateIntegrado } from '../../main/templates/integrados/validar-template-integrado';
+import { laudoPadraoI801V1 } from '../../main/templates/integrados/i801/laudo-padrao-i801.v1';
 
 describe('catálogo de templates integrados', () => {
+  it('versiona o I-801 com a estrutura, placeholders e figuras provisórias do modelo indicado', () => {
+    expect(() => validarTemplateIntegrado(laudoPadraoI801V1)).not.toThrow();
+    expect(laudoPadraoI801V1).toMatchObject({ chave: 'laudo-padrao-i801', versao: 1, nome: 'Laudo Padrão I-801' });
+    expect(laudoPadraoI801V1.secoes.map(secao => secao.nome)).toEqual(['PREÂMBULO', 'MOTIVO DA PERÍCIA', 'DO VEÍCULO', 'DO EXAME', 'CONCLUSÃO', 'ENCERRAMENTO']);
+    expect(laudoPadraoI801V1.secoes[0]).toMatchObject({ ocultarTitulo: true, contarNaNumeracao: false });
+    const conteudo = laudoPadraoI801V1.secoes.map(secao => secao.conteudo).join('\n');
+    expect(conteudo).toContain('{{i801_item_1_tipo}}');
+    expect(conteudo).toContain('{{i801_item_1_placa}}');
+    expect(conteudo).toContain('{{i801_item_1_chassi_aparente}}');
+    expect(conteudo.match(/data-dummy="true"/g)).toHaveLength(6);
+    expect(conteudo.match(/<table[^>]*border="0"/g)).toHaveLength(2);
+    expect(conteudo.match(/<table[^>]*border-width:0px/g)).toHaveLength(2);
+    expect(conteudo.match(/<td[^>]*border-width:0px/g)).toHaveLength(4);
+  });
   it.each([
     { anterior: laudoPadraoB601V1, atual: laudoPadraoB601V2, versao: 2 },
   ])('publica $atual.chave v$versao corrigindo apenas as abreviações de número', ({ anterior, atual, versao }) => {
