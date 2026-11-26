@@ -127,12 +127,15 @@ type CampoRep = Path<REPFormData>;
 const esquemaTiposExameResumo = z.array(z.object({ id: z.string(), nome: z.string(), codigo: z.string() }));
 const esquemaTemplatesResumo = z.array(z.object({ id: z.string(), nome: z.string(), chave_integrada: z.string().nullish() }));
 
-function obterTemplatePadraoBalistica(codigoExame: string | undefined, templates: TemplateResumo[]): TemplateResumo | undefined {
+function obterTemplatePadraoIntegrado(codigoExame: string | undefined, templates: TemplateResumo[]): TemplateResumo | undefined {
   const codigo = normalizarCodigoExame(codigoExame ?? '');
   if (codigo === 'B601') return templates.find(template => template.nome === 'Laudo Padrão B-601');
-  if (codigo !== 'B602') return undefined;
-  return templates.find(template => template.chave_integrada === 'laudo-padrao-b602')
-    ?? templates.find(template => template.nome === 'Laudo Padrão B-602');
+  const chaveIntegrada = codigo === 'B602' ? 'laudo-padrao-b602'
+    : codigo === 'I801' ? 'laudo-padrao-i801'
+      : undefined;
+  if (!chaveIntegrada) return undefined;
+  return templates.find(template => template.chave_integrada === chaveIntegrada)
+    ?? templates.find(template => template.nome === (codigo === 'I801' ? 'Laudo Padrão I-801' : 'Laudo Padrão B-602'));
 }
 
 function ehRegistro(valor: unknown): valor is Record<string, unknown> {
@@ -223,7 +226,7 @@ function buildRepHtml(rep: RegistroRep, solicitanteNome: string, tipoExameNome: 
         html += `<table style="${REP_TABLE_STYLES.table}">`;
         html += buildRepTableTitle('DADOS DO VEÍCULO', 4);
         html += buildRepTwoCol('Veículo', s(veic.veiculo), 'Placa', s(veic.placa));
-        html += buildRepTwoCol('Fabricação/Modelo', s(veic.fabricacao_modelo), 'Cor', s(veic.cor));
+        html += buildRepTwoCol('Fabricação/Modelo', s(veic.fabricacao_modelo || veic.fabricacao), 'Cor', s(veic.cor));
         html += buildRepTwoCol('Conservação', s(veic.conservacao), '', '');
         html += buildRepTwoCol('Chassi', s(veic.chassi), 'Chassi Revelado', s(veic.chassi_revelado));
         html += buildRepTwoCol('Motor', s(veic.motor), 'Motor Revelado', s(veic.motor_revelado));
@@ -425,7 +428,7 @@ function prepareForApi(
   data: REPFormData,
   codigo: string | undefined,
   pecasB602: PecaB602[],
-  contextoI801: { dados: DadosI801; raiz: Record<string, unknown> },
+  contextoI801: { dados: DadosI801; raiz: Record<string, unknown>; metadadosIntegracaoGdl: MetadadosIntegracaoGdl | null },
   metadadosIntegracaoGdl: MetadadosIntegracaoGdl | null,
   contextoB601?: { dados: DadosB601; raiz: Record<string, unknown> },
 ) {
@@ -889,7 +892,7 @@ export const REPsPage: React.FC = () => {
           form.setValue('template_id', '', { shouldValidate: false });
         }
         const codigoExame = tiposExame.find(tipo => tipo.id === tipoExameId)?.codigo;
-        const templatePadrao = obterTemplatePadraoBalistica(codigoExame, ordenados);
+        const templatePadrao = obterTemplatePadraoIntegrado(codigoExame, ordenados);
         if (templatePadrao && !form.getValues('template_id')) form.setValue('template_id', templatePadrao.id, { shouldValidate: false });
       } else {
         setTemplatesVinculados([]);
@@ -1141,7 +1144,7 @@ export const REPsPage: React.FC = () => {
       }
     }
     setPecasB602(tipo?.codigo === 'B-602' ? extrairPecasB602(rep.campos_especificos) : []);
-    const metadadosGdl = ['B-601', 'B-602'].includes(tipo?.codigo ?? '') ? extrairMetadadosIntegracaoGdl(rep.campos_especificos) : null;
+    const metadadosGdl = ['B-601', 'B-602', 'I-801'].includes(tipo?.codigo ?? '') ? extrairMetadadosIntegracaoGdl(rep.campos_especificos) : null;
     setMetadadosIntegracaoGdl(metadadosGdl);
     setOrigensSolicitacaoGdl(metadadosGdl?.dadosSolicitacao?.origensDisponiveis ?? []);
 
@@ -1289,7 +1292,7 @@ export const REPsPage: React.FC = () => {
           const ordenados = [...(r.data as TemplateResumo[])].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
           setCriarLaudoTemplates(ordenados);
           const codigoExame = tiposExame.find(tipo => tipo.id === rep.tipo_exame_id)?.codigo;
-          const templatePadrao = obterTemplatePadraoBalistica(codigoExame, ordenados);
+          const templatePadrao = obterTemplatePadraoIntegrado(codigoExame, ordenados);
           if (templatePadrao) setCriarLaudoTemplateId(templatePadrao.id);
         }
       })();
@@ -1343,7 +1346,7 @@ export const REPsPage: React.FC = () => {
       const ordenados = [...(r.data as TemplateResumo[])].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
       setCriarLaudoTemplates(ordenados);
       const codigoExame = tiposExame.find(tipo => tipo.id === tipoExameId)?.codigo;
-      const templatePadrao = obterTemplatePadraoBalistica(codigoExame, ordenados);
+      const templatePadrao = obterTemplatePadraoIntegrado(codigoExame, ordenados);
       if (templatePadrao) setCriarLaudoTemplateId(templatePadrao.id);
     } else {
       setCriarLaudoTemplates([]);
@@ -1425,7 +1428,11 @@ export const REPsPage: React.FC = () => {
       if (codigo === 'I-801' && dadosI801.pecas.length === 0) {
         throw new Error('Adicione ao menos uma peça I-801 antes de salvar.');
       }
-      const apiData = prepareForApi(data, codigo, pecasB602, { dados: dadosI801, raiz: raizI801Ref.current }, metadadosIntegracaoGdl, { dados: dadosB601, raiz: raizB601Ref.current });
+      const apiData = prepareForApi(data, codigo, pecasB602, {
+        dados: dadosI801,
+        raiz: raizI801Ref.current,
+        metadadosIntegracaoGdl,
+      }, metadadosIntegracaoGdl, { dados: dadosB601, raiz: raizB601Ref.current });
 
       if (editingRep) {
         const r = await window.ipcAPI.rep.update(editingRep.id, apiData);
@@ -1608,13 +1615,13 @@ export const REPsPage: React.FC = () => {
       }
     }
 
-    if (['B-601', 'B-602'].includes(resultado.codigoExame) && !form.getValues('template_id')) {
+    if (['B-601', 'B-602', 'I-801'].includes(resultado.codigoExame) && !form.getValues('template_id')) {
       const respostaTemplates = await window.ipcAPI.template.findByTipoExame(tipoExameGdl.id);
       if (respostaTemplates.success && respostaTemplates.data) {
         const validacaoTemplates = esquemaTemplatesResumo.safeParse(respostaTemplates.data);
         const templates = [...(validacaoTemplates.success ? validacaoTemplates.data : [])]
           .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
-        const templatePadrao = obterTemplatePadraoBalistica(codigoExameGdl, templates);
+        const templatePadrao = obterTemplatePadraoIntegrado(codigoExameGdl, templates);
         if (templatePadrao) {
           setTemplatesVinculados(templates);
           form.setValue('template_id', templatePadrao.id, { shouldValidate: false });
@@ -2643,8 +2650,8 @@ export const REPsPage: React.FC = () => {
         open={gdlPecasModalOpen}
         onOpenChange={setGdlPecasModalOpen}
         numeroRepCompleto={valoresFormulario.numero}
-        codigoExame={tipoExameSelecionado?.codigo === 'B-601' ? 'B-601' : 'B-602'}
-        pecasAtuais={tipoExameSelecionado?.codigo === 'B-601' ? dadosB601.pecas : pecasB602}
+        codigoExame={tipoExameSelecionado?.codigo === 'B-601' ? 'B-601' : tipoExameSelecionado?.codigo === 'I-801' ? 'I-801' : 'B-602'}
+        pecasAtuais={tipoExameSelecionado?.codigo === 'B-601' ? dadosB601.pecas : tipoExameSelecionado?.codigo === 'I-801' ? dadosI801.pecas : pecasB602}
         onAplicar={handleAplicarPecasGdl}
       />
       <AlertDialog open={repDuplicadaNumero !== null} onOpenChange={(open) => {

@@ -10,14 +10,14 @@ Escrita atual:
 
 Leitura atual:
 
-`SQLite → IPC → deserializeCamposEspecificos() + extratores B-602 → formulário, peças e metadados`
+`SQLite → IPC → deserializeCamposEspecificos() + leitores B-602/I-801 → formulário, peças e metadados`
 
 ## Formato por exame
 
 | Código | Escrita | Leitura |
 |---|---|---|
 | `LOC` | colunas nativas | colunas nativas |
-| `I-801` | `numeracaoService` | `numeracaoService` |
+| `I-801` | `i801Service` com contexto de peças/metadados | `lerDadosI801()` valida a raiz e normaliza `i801.pecas[]` |
 | `B-602` | `b602Service` com contexto de peças/metadados | `b602Service`, `extrairPecasB602()` e `extrairMetadadosIntegracaoGdl()` |
 
 ## Formato final atual do B-602
@@ -112,3 +112,11 @@ O main não revalida `campos_especificos`; chamadas IPC externas ao fluxo normal
 `b602.service.test.ts` cobre o round-trip canônico de peças, metadados e solicitante. `integracao-gdl-b602.utils.test.ts` cobre reidratação, compatibilidade do nome legado e rejeição de payload inválido.
 
 `rep-b602-persistencia.integration.test.ts` registra handlers reais em um SQLite temporário e atravessa serialização, `rep:create`, `rep:update`, `rep:findById`, Mesclar, Substituir e reabertura. O serviço de laudo é isolado por mock, portanto o teste não garante o consumo de `b602.pecas` pelo laudo nem cobre a API GDL real.
+
+## Formato canônico atual do I-801
+
+A coleção é mantida em `DadosI801` fora de `REPFormData`, pois cada peça combina campos comuns tipados, campos específicos e dados externos preservados. `prepareForApi()` fornece os dados e a raiz JSON existente no contexto; `i801Service.serialize()` grava `{ i801: { pecas: [...] }, integracaoGdl? }`, preservando outras propriedades da raiz e incluindo metadados somente quando disponíveis.
+
+Cada peça armazena `idLocal`, origem e sinalização de edição local, `tipoCodigo`, `tipoPeca`, campos comuns, `personalizados` e `extrasGdl`. `lerDadosI801()` rejeita JSON malformado ou raiz inválida, filtra entradas que não atendem ao formato mínimo e normaliza os campos conhecidos antes de reidratar o editor. A integração é mesclada localmente; campos do GDL sem mapeamento confirmado permanecem em `extrasGdl` e não são promovidos automaticamente a campos do laudo.
+
+O formato legado de `numeracao` permanece legível pelos resolvedores de placeholders existentes; novos salvamentos da coleção usam `i801.pecas`. Os consumidores e a compatibilidade de placeholders estão em `spec/05 placeholder/ciclo_placeholder.md`.

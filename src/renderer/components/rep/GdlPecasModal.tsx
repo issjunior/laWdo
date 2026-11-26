@@ -1,4 +1,5 @@
 import { DadosAdicionaisPecaGdl } from './DadosAdicionaisPecaGdl'
+import { DadosAdicionaisPecaI801Gdl } from './DadosAdicionaisPecaI801Gdl'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { AlertTriangle, Loader2, PackageSearch, RefreshCw } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -11,11 +12,12 @@ import type { ResultadoImportacaoGdl } from '@shared/types/gdl-importacao.types'
 import type { PecaBalistica } from '@shared/types/pecas-balistica.types'
 import { TIPOS_PECA_B601_POR_CODIGO } from '@shared/catalogos/b601.catalogo'
 import { TIPOS_PECA_B602_POR_CODIGO } from '@shared/catalogos/b602-gdl.catalogo'
+import { CATALOGO_TIPOS_PECA_I801 } from '@shared/catalogos/i801.catalogo'
 import { montarItensReconciliacaoPecasBalistica } from '@/components/rep/exam-fields/pecas-balistica-gdl.utils'
 import { obterPreferenciasAmbienteGdl } from '@/lib/gdl-ambiente'
 
 interface GdlPecasModalProps {
-  codigoExame?: 'B-601' | 'B-602'
+  codigoExame?: 'B-601' | 'B-602' | 'I-801'
   open: boolean
   onOpenChange: (open: boolean) => void
   numeroRepCompleto: string
@@ -37,6 +39,16 @@ function formatarValor(valor: unknown): string {
   if (typeof valor === 'string' || typeof valor === 'number' || typeof valor === 'boolean') return String(valor)
   if (valor === null || valor === undefined) return 'Não informado'
   return JSON.stringify(valor)
+}
+
+function obterRotuloCampoPersonalizado(codigoExame: GdlPecasModalProps['codigoExame'], tipoCodigo: string, campo: string): string {
+  if (codigoExame === 'I-801') {
+    const tipo = CATALOGO_TIPOS_PECA_I801.find(item => item.codigo === tipoCodigo)
+    return tipo?.campos.find(item => item.id === campo)?.label ?? campo
+  }
+
+  const catalogo = codigoExame === 'B-601' ? TIPOS_PECA_B601_POR_CODIGO : TIPOS_PECA_B602_POR_CODIGO
+  return catalogo.get(tipoCodigo)?.campos.find(item => item.id === campo)?.label ?? campo
 }
 
 export const GdlPecasModal: React.FC<GdlPecasModalProps> = ({
@@ -220,12 +232,13 @@ export const GdlPecasModal: React.FC<GdlPecasModalProps> = ({
                         {!!Object.keys(peca.personalizados).length && (
                           <dl className="grid grid-cols-1 gap-x-3 gap-y-1 text-sm sm:grid-cols-2">
                             {Object.entries(peca.personalizados).map(([id, valor]) => {
-                              const label = (codigoExame === 'B-601' ? TIPOS_PECA_B601_POR_CODIGO : TIPOS_PECA_B602_POR_CODIGO).get(peca.tipoCodigo)?.campos.find(campo => campo.id === id)?.label ?? id
+                              const label = obterRotuloCampoPersonalizado(codigoExame, peca.tipoCodigo, id)
                               return <div key={id} className="flex gap-1"><dt className="font-medium">{label}:</dt><dd>{formatarValor(valor)}</dd></div>
                             })}
                           </dl>
                         )}
                         {codigoExame === 'B-601' && <DadosAdicionaisPecaGdl dados={peca.extrasGdl} tipoCodigo={peca.tipoCodigo} personalizados={peca.personalizados} />}
+                        {codigoExame === 'I-801' && <DadosAdicionaisPecaI801Gdl dados={peca.extrasGdl} tipoCodigo={peca.tipoCodigo} personalizados={peca.personalizados} />}
                       </div>
                     </div>
                   </label>

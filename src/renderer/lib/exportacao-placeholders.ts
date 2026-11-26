@@ -270,6 +270,24 @@ export function buildPlaceholderMapping(ctx: ExportacaoContext): Record<string, 
         }
       }
 
+      const numeracao = isRecord(especificos) && isRecord(especificos.numeracao)
+        ? especificos.numeracao
+        : undefined;
+      if (numeracao) {
+        const textoNumeracao = (chave: string): string => (
+          typeof numeracao[chave] === 'string' ? numeracao[chave] : ''
+        );
+        mapping.veiculo = textoNumeracao('veiculo');
+        mapping.placa = textoNumeracao('placa');
+        mapping.fabricacao_modelo = textoNumeracao('fabricacao_modelo') || textoNumeracao('fabricacao');
+        mapping.cor = textoNumeracao('cor');
+        mapping.conservacao = textoNumeracao('conservacao');
+        mapping.chassi = textoNumeracao('chassi');
+        mapping.chassi_revelado = textoNumeracao('chassi_revelado');
+        mapping.motor = textoNumeracao('motor');
+        mapping.motor_revelado = textoNumeracao('motor_revelado');
+      }
+
       if (especificos.b601) {
         const { dados, pecas } = projetarB601ParaLaudo(especificos.b601);
         const escapar = (texto: string): string => texto.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');

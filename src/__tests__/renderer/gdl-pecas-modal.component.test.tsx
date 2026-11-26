@@ -2,6 +2,8 @@ import { render, screen, waitFor } from '@testing-library/react'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { GdlPecasModal } from '@/components/rep/GdlPecasModal'
 import type { DadosImportacaoB602, PecaB602, ResultadoImportacaoExame } from '@shared/types/b602-gdl.types'
+import type { PecaI801 } from '@shared/types/i801.types'
+import type { DadosImportacaoI801, ResultadoImportacaoI801 } from '@shared/types/gdl-importacao.types'
 
 function criarPeca(): PecaB602 {
   return {
@@ -24,6 +26,28 @@ const resultadoConsulta: ResultadoImportacaoExame<DadosImportacaoB602> = {
     dadosSolicitacao: { orgao: '', responsavel: '', autoridade: '', origensDisponiveis: [] },
     dadosInvestigacao: { envolvidos: [], boletinsOcorrencia: [], inqueritosPoliciais: [] },
   },
+  avisos: [],
+}
+
+const pecaI801: PecaI801 = {
+  idLocal: 'peca-i801-1001', origem: 'gdl', alteradaLocalmente: false, codPecaGdl: 1001,
+  tipoCodigo: 'caminhonete', tipoPeca: 'CAMINHONETE(S)',
+  comuns: {
+    identificacao: 'ABC-1D23', quantidade: 1, unidadeMedida: 'UNIDADES', quantidadeDescricao: '',
+    numeroAnalises: 1, examinadoInLoco: false, dataEntrada: '21/10/2026', lacreEntrada: '', lacreSaida: '',
+    dataLiberacao: '', codigoVestigio: '', consumida: 'N', observacao: '',
+  },
+  personalizados: { placa: 'ABC-1D23' }, extrasGdl: { placaAplicada: 'XYZ-9Z99' },
+}
+
+const resultadoConsultaI801: ResultadoImportacaoI801 = {
+  codigoExame: 'I-801',
+  camposGerais: { numero: '135458-2026' },
+  camposEspecificos: {
+    pecas: [pecaI801],
+    dadosSolicitacao: { orgao: '', responsavel: '', autoridade: '', origensDisponiveis: [] },
+    dadosInvestigacao: { envolvidos: [], boletinsOcorrencia: [], inqueritosPoliciais: [] },
+  } satisfies DadosImportacaoI801,
   avisos: [],
 }
 
@@ -106,5 +130,26 @@ describe('GdlPecasModal', () => {
 
     expect(await screen.findByText('Produção')).toBeInTheDocument()
     await waitFor(() => expect(consultarRep).toHaveBeenCalledWith('109026', '2026'))
+  })
+
+  it('revisa peças I-801 e mostra os rótulos específicos do catálogo', async () => {
+    consultarRep.mockResolvedValue({ success: true, data: resultadoConsultaI801 })
+
+    render(
+      <GdlPecasModal
+        open
+        codigoExame="I-801"
+        onOpenChange={vi.fn()}
+        numeroRepCompleto="135.458-2026"
+        pecasAtuais={[]}
+        onAplicar={vi.fn()}
+      />,
+    )
+
+    expect(await screen.findByText('CAMINHONETE(S)')).toBeInTheDocument()
+    expect(screen.getByText('Placa:')).toBeInTheDocument()
+    expect(screen.getAllByText('ABC-1D23')).toHaveLength(2)
+    expect(screen.getByText('Dados adicionais do GDL que exigem revisão')).toBeInTheDocument()
+    expect(screen.getByText('Placa Aplicada')).toBeInTheDocument()
   })
 })

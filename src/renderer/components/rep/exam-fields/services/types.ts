@@ -9,7 +9,11 @@ export interface ContextoSerializacaoCamposEspecificos {
     pecas: PecaB602[];
     metadadosIntegracaoGdl: MetadadosIntegracaoGdl | null;
   };
-  i801?: { dados: DadosI801; raiz: Record<string, unknown> };
+  i801?: {
+    dados: DadosI801;
+    raiz: Record<string, unknown>;
+    metadadosIntegracaoGdl: MetadadosIntegracaoGdl | null;
+  };
 }
 
 export interface ExamService {

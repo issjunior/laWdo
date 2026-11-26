@@ -79,3 +79,9 @@ As versões anteriores são dependências-fonte dos modelos atuais, não alterna
 O texto e a estrutura-base versionados ficam no catálogo; quadros B-601 são produzidos por `b601-descricao-agrupada.ts` com campos de `b601-tabelas.catalogo.ts`. Padrão e Local com Necropsia compartilham os campos versionados, enquanto agrupamento por origem, fotos e prosa específica permanecem na variação. Mudanças nesses geradores atingem novas montagens/recriações, sem autorizar a troca silenciosa de descrições já preenchidas.
 
 Laudos existentes não são migrados pela atualização do catálogo. Ao abrir um laudo na página Laudos, o renderer pode reparar somente a moldura vazia legada reconhecida e centralizar uma figura isolada em linha fotográfica elegível; isso ocorre na preparação inicial, sem gravar o banco automaticamente. A fonte e os limites desses reparos estão em [Ilustrações](fluxo_ilustracao.md#figuras-isoladas-e-moldura-legada). Regras de edição direta, seletores, correção ortográfica e PDF são políticas dos consumidores, não HTML a duplicar nas versões hardcoded.
+
+## Modelo I-801
+
+`i801/laudo-padrao-i801.v2.ts` é a versão ativa de “Laudo de Exame de Veículo a Motor”, vinculada ao tipo de exame `I-801` e registrada no catálogo embarcado. A v2 deriva da definição v1 e aplica a padronização compartilhada das figuras. O template consome dados da coleção de peças por meio de `i801_item_N_*` e `i801_tabela_pecas`; a REP pode conter vários itens, mesmo quando o texto padrão destaca os dados do primeiro.
+
+A seleção e a sincronização seguem as regras comuns do catálogo: templates integrados são protegidos contra edição direta e podem ser clonados para personalização; uma atualização de versão não reescreve laudos existentes nem clones. `templates-integrados.test.ts` cobre o registro do I-801 junto aos modelos ativos. Os campos e placeholders da REP estão em `spec/02 rep/criar_input_personalizados_exame.md` e `spec/05 placeholder/ciclo_placeholder.md`.

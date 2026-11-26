@@ -1,15 +1,11 @@
 import { randomUUID } from 'node:crypto'
-import { obterTipoPecaI801PorLabel } from '../../shared/catalogos/i801.catalogo.js'
+import { obterCampoPersonalizadoI801PorChaveGdl, obterTipoPecaI801PorLabel } from '../../shared/catalogos/i801.catalogo.js'
+import { converterValorPersonalizadoI801 } from '../../shared/gdl/i801-campos-adicionais.js'
 import type { PecaI801 } from '../../shared/types/i801.types.js'
 import type { MetadadosIntegracaoGdl } from '../../shared/types/b602-gdl.types.js'
 import type { ResultadoImportacaoI801 } from '../../shared/types/gdl-importacao.types.js'
 import type { GdlRepValidada } from './gdl.schema.js'
 import { criarCamposComuns, montarImportacaoBalistica, normalizarNomeCampo } from './gdl-balistica-normalizador.service.js'
-
-const CAMPOS_CONDICIONAIS_I801 = new Set([
-  'placa', 'placaoriginal', 'placaaplicada', 'chassiaparente', 'chassirevelado',
-  'marca', 'modelo', 'prefixovtr', 'cor', 'anofabricacao', 'numeroserie', 'resultadopsa',
-])
 
 export function converterRepI801(rep: GdlRepValidada, metadados?: MetadadosIntegracaoGdl): ResultadoImportacaoI801 {
   let recebeuCampoCondicional = false
@@ -22,8 +18,16 @@ export function converterRepI801(rep: GdlRepValidada, metadados?: MetadadosInteg
     for (const [chave, valor] of Object.entries(entrada)) {
       const campo = normalizarNomeCampo(chave)
       if (['codpeca', 'tipopeca', 'identificacao', 'quantidade', 'unidademedida', 'numeroanalises', 'examinadoinloco', 'dataentrada', 'lacreentrada', 'lacresaida', 'consumida', 'quantidadedescricao', 'dataliberacao', 'codigovestigio', 'observacao'].includes(campo)) continue
+      const campoPersonalizado = obterCampoPersonalizadoI801PorChaveGdl(tipo, chave)
+      const convertido = campoPersonalizado?.mapeamentoApiConfirmado
+        ? converterValorPersonalizadoI801(campoPersonalizado, valor)
+        : undefined
+      if (campoPersonalizado?.mapeamentoApiConfirmado && convertido !== undefined) {
+        personalizados[campoPersonalizado.id] = convertido
+        continue
+      }
       extrasGdl[chave] = valor
-      if (CAMPOS_CONDICIONAIS_I801.has(campo)) recebeuCampoCondicional = true
+      if (campoPersonalizado) recebeuCampoCondicional = true
     }
     return { idLocal: randomUUID(), origem: 'gdl', alteradaLocalmente: false, codPecaGdl: entrada.codPeca,
       tipoCodigo: tipo?.codigo ?? '', tipoPeca: entrada.tipoPeca, comuns, personalizados, extrasGdl }

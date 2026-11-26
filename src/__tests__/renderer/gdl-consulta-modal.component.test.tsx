@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { GdlConsultaModal } from '@/components/rep/GdlConsultaModal'
 import type { DadosImportacaoB602, PecaB602, ResultadoImportacaoExame } from '@shared/types/b602-gdl.types'
+import type { ResultadoImportacaoGdl } from '@shared/types/gdl-importacao.types'
 
 function criarPeca(codigo: number, identificacao: string): PecaB602 {
   return {
@@ -537,6 +538,37 @@ describe('GdlConsultaModal', () => {
     expect(aplicar).not.toHaveBeenCalled();
     expect(definirTipo).not.toHaveBeenCalled();
   });
+
+  it('mantém os campos de investigação I-801 no prefixo da própria natureza ao aplicar', async () => {
+    const resultadoI801: ResultadoImportacaoGdl = {
+      ...resultadoConsulta,
+      codigoExame: 'I-801',
+      naturezaExameGdl: 'I801 - EXAME NAS NUMERAÇÕES IDENTIFICADORAS',
+      camposGerais: Object.fromEntries(Object.entries(resultadoConsulta.camposGerais).map(([chave, valor]) => [
+        chave.replace('b602_', 'i801_'), valor,
+      ])),
+    } as ResultadoImportacaoGdl
+    consultarRep.mockResolvedValueOnce({ success: true, data: resultadoI801 })
+    identificarRep.mockResolvedValueOnce({ success: true, data: {
+      consultaId: '11111111-1111-4111-8111-111111111111',
+      identificacao: identificarNaturezaExame('I801 - EXAME NAS NUMERAÇÕES IDENTIFICADORAS'),
+      tiposLocais: [{ id: 'tipo-i801', codigo: 'I-801', nome: 'Numerações identificadoras' }],
+      codigosImportacaoDisponiveis: ['I-801'], avisos: [],
+    } })
+    const aplicar = vi.fn()
+    render(<GdlConsultaModal open onOpenChange={vi.fn()} onAplicar={aplicar} temDadosExistentes={false}
+      pecasB602={[]} pecasI801={[]} onDefinirTipo={vi.fn()} onConfigurarCredenciais={vi.fn()} />)
+
+    await buscarRep()
+    fireEvent.click(screen.getByRole('button', { name: 'Preencher formulário' }))
+
+    await waitFor(() => expect(aplicar).toHaveBeenCalled())
+    expect(aplicar.mock.calls[0][0].camposGerais).toMatchObject({
+      i801_envolvidos_0: 'PESSOA TESTE',
+      i801_envolvidos_qualificacao_0: 'VÍTIMA:',
+    })
+    expect(aplicar.mock.calls[0][0].camposGerais).not.toHaveProperty('b602_envolvidos_0')
+  })
 
   it.each(['ambigua', 'duplicada', 'ausente', 'divergente', 'detalhes_divergentes', 'sem_adaptador', 'sem_capacidades'])('mantém confirmação quando identificação é %s', async cenario => {
     const codigo = 'B-602';
