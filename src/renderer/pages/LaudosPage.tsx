@@ -81,6 +81,7 @@ import { AtalhosLaudoDialog } from '@/components/laudo/AtalhosLaudoDialog';
 import { CHAVES_PLACEHOLDERS_REP, extrairIndicePlaceholders, type ItemIndicePlaceholder } from '@/lib/indice-placeholders';
 import { obterContextoCampoLaudo, type ContextoCampoLaudo } from '@/lib/contexto-campo-laudo';
 import { removerFormatacaoPlaceholders, cn, converterPlaceholdersTextuais } from '@/lib/utils';
+import { obterClasseAbaStatusLocal, obterClasseIndicadorStatusLocal } from '@/lib/status-visual';
 import { normalizarHtmlCampo, obterHtmlCampo, preencherCampoReservado, restaurarCampoReservado } from '@/lib/campos-reservados';
 import { EditorCampoLaudo } from '@/components/laudo/EditorCampoLaudo';
 import { medirOperacaoEditorLaudo } from '@/lib/desempenho-editor-laudo';
@@ -775,25 +776,24 @@ export const LaudosPage: React.FC = () => {
       // Neutraliza o data-[state=active] do Radix/shadcn que daria bg-background num frame ínfimo
       'data-[state=active]:bg-transparent data-[state=active]:border-border/60 data-[state=active]:text-muted-foreground data-[state=active]:shadow-none'
     );
-    const colors: Record<string, string> = {
-      todos: 'bg-primary text-primary-foreground border-primary data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:border-primary',
-      em_andamento: 'bg-amber-500 text-white border-amber-500 data-[state=active]:bg-amber-500 data-[state=active]:text-white data-[state=active]:border-amber-500',
-      concluidos: 'bg-emerald-500 text-white border-emerald-500 data-[state=active]:bg-emerald-500 data-[state=active]:text-white data-[state=active]:border-emerald-500',
-      entregues: 'bg-blue-500 text-white border-blue-500 data-[state=active]:bg-blue-500 data-[state=active]:text-white data-[state=active]:border-blue-500',
+    const statusPorAba: Record<string, string> = {
+      em_andamento: 'Em andamento',
+      concluidos: 'Concluído',
+      entregues: 'Entregue',
     };
-    return cn(base, colors[value], 'shadow-sm data-[state=active]:shadow-sm');
+    return cn(base, obterClasseAbaStatusLocal(statusPorAba[value] ?? ''), 'shadow-sm data-[state=active]:shadow-sm');
   };
 
   const dotClasses = (value: string) => {
     const isActive = tabFiltro === value;
     const size = 'w-2.5 h-2.5 rounded-full shrink-0';
     if (isActive) return cn(size, 'bg-white/90');
-    const colors: Record<string, string> = {
-      em_andamento: 'bg-amber-500',
-      concluidos: 'bg-emerald-500',
-      entregues: 'bg-blue-500',
+    const statusPorAba: Record<string, string> = {
+      em_andamento: 'Em andamento',
+      concluidos: 'Concluído',
+      entregues: 'Entregue',
     };
-    return cn(size, colors[value] || 'bg-muted-foreground/40');
+    return cn(size, obterClasseIndicadorStatusLocal(statusPorAba[value] ?? ''));
   };
 
   const badgePill = (value: string) => {
