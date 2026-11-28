@@ -100,6 +100,9 @@ async function criarESalvarLaudo(pagina) {
   await pagina.getByLabel('Template', { exact: true }).click();
   await pagina.getByRole('option', { name: 'Template Smoke E2E', exact: true }).click();
   await pagina.getByRole('button', { name: 'Criar Laudo', exact: true }).click();
+  await pagina.getByText('Laudo criado com sucesso!', { exact: true }).waitFor({ timeout: 60_000 });
+  await pagina.evaluate(() => { globalThis.location.hash = '/laudos'; });
+  await pagina.getByRole('button', { name: 'Editar laudo da REP 123456/2026', exact: true }).click();
 
   const corpo = await aguardarEditor(pagina);
   await corpo.click();
