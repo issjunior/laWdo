@@ -133,12 +133,10 @@ jobs:
             --title "Atualizar versão para v$VERSAO" \
             --body "Atualização automática de package.json e package-lock.json iniciada pelo workflow Preparar release.")"
           gh pr merge "$url_pr" --repo "$GITHUB_REPOSITORY" --merge
-          if ! git push origin --delete "$ramo"; then
-            echo "::warning::A branch temporária $ramo foi integrada, mas não pôde ser removida automaticamente."
-          fi
           git fetch origin main
           commit="$(git rev-parse origin/main)"
           echo "commit=$commit" >> "$GITHUB_OUTPUT"
+          echo "ramo=$ramo" >> "$GITHUB_OUTPUT"
 
       - name: Definir commit imutável da release
         id: estado
@@ -205,6 +203,15 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --json headSha,conclusion,url \
             --jq '"CI confirmada: \(.url) | commit=\(.headSha) | conclusão=\(.conclusion)"'
+
+      - name: Remover branch temporária após a CI canônica
+        if: ${{ always() && steps.integrar.outputs.ramo != '' }}
+        env:
+          RAMO: ${{ steps.integrar.outputs.ramo }}
+        run: |
+          if ! git push origin --delete "$RAMO"; then
+            echo "::warning::A branch temporária $RAMO foi integrada, mas não pôde ser removida automaticamente após a CI canônica."
+          fi
 
   cobertura-release:
     name: Cobertura de pré-release
@@ -525,11 +532,13 @@ jobs:
     name: Assinar e criar rascunho
     needs:
       - validar
+      - cobertura-release
+      - smoke-e2e
       - build-windows
       - build-linux
       - build-macos-x64
       - build-macos-arm64
-    if: ${{ always() && needs.validar.result == 'success' && (needs.build-windows.result == 'success' || needs.build-windows.result == 'skipped') && (needs.build-linux.result == 'success' || needs.build-linux.result == 'skipped') && (needs.build-macos-x64.result == 'success' || needs.build-macos-x64.result == 'skipped') && (needs.build-macos-arm64.result == 'success' || needs.build-macos-arm64.result == 'skipped') }}
+    if: ${{ always() && needs.validar.result == 'success' && needs.cobertura-release.result == 'success' && needs.smoke-e2e.result == 'success' && (needs.build-windows.result == 'success' || needs.build-windows.result == 'skipped') && (needs.build-linux.result == 'success' || needs.build-linux.result == 'skipped') && (needs.build-macos-x64.result == 'success' || needs.build-macos-x64.result == 'skipped') && (needs.build-macos-arm64.result == 'success' || needs.build-macos-arm64.result == 'skipped') }}
     runs-on: ubuntu-latest
     environment: release
     permissions:
@@ -549,14 +558,26 @@ jobs:
       - name: Instalar dependências
         run: npm ci --strict-allow-scripts
 
-      - name: Confirmar rascunho vazio para retomada
+      - name: Confirmar estado retomável
+        id: retomada
         if: ${{ inputs.modo == 'retomar' }}
         env:
           GH_TOKEN: ${{ github.token }}
           VERSAO: ${{ needs.validar.outputs.versao }}
         run: |
-          test "$(gh release view "v$VERSAO" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)" = true
-          test "$(gh release view "v$VERSAO" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets | length')" = 0
+          git fetch --tags --force origin "refs/tags/v$VERSAO:refs/tags/v$VERSAO"
+          test "$(git rev-list -n 1 "v$VERSAO")" = "${{ needs.validar.outputs.commit }}"
+
+          if resposta="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/v$VERSAO" 2>&1)"; then
+            test "$(jq -r '.draft' <<<"$resposta")" = true
+            test "$(jq '.assets | length' <<<"$resposta")" = 0
+            echo "release_existe=true" >> "$GITHUB_OUTPUT"
+          elif [[ "$resposta" == *'HTTP 404'* ]]; then
+            echo "release_existe=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "$resposta" >&2
+            exit 1
+          fi
 
       - name: Baixar artefatos temporários
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -577,19 +598,6 @@ jobs:
             fi
           done < <(find artefatos -type f -print0)
 
-      - name: Criar ou confirmar tag imutável
-        env:
-          VERSAO: ${{ needs.validar.outputs.versao }}
-          MODO: ${{ inputs.modo }}
-        run: |
-          if [ "$MODO" = criar ]; then
-            git tag "v$VERSAO" "${{ needs.validar.outputs.commit }}"
-            git push origin "v$VERSAO"
-          else
-            git fetch --tags --force origin "refs/tags/v$VERSAO:refs/tags/v$VERSAO"
-            test "$(git rev-list -n 1 "v$VERSAO")" = "${{ needs.validar.outputs.commit }}"
-          fi
-
       - name: Gerar manifesto assinado
         env:
           CHAVE_PRIVADA_ASSINATURA: ${{ secrets.CHAVE_PRIVADA_ASSINATURA }}
@@ -607,6 +615,19 @@ jobs:
             --assinatura publicacao/manifesto.json.sig
 
           node scripts/release/validar-schema-release.mjs --manifesto publicacao/manifesto.json
+
+      - name: Criar ou confirmar tag imutável
+        env:
+          VERSAO: ${{ needs.validar.outputs.versao }}
+          MODO: ${{ inputs.modo }}
+        run: |
+          if [ "$MODO" = criar ]; then
+            git tag "v$VERSAO" "${{ needs.validar.outputs.commit }}"
+            git push origin "v$VERSAO"
+          else
+            git fetch --tags --force origin "refs/tags/v$VERSAO:refs/tags/v$VERSAO"
+            test "$(git rev-list -n 1 "v$VERSAO")" = "${{ needs.validar.outputs.commit }}"
+          fi
 
       - name: Gerar rascunho das notas da release
         env:
@@ -630,9 +651,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSAO: ${{ needs.validar.outputs.versao }}
           MODO: ${{ inputs.modo }}
+          RELEASE_EXISTE: ${{ steps.retomada.outputs.release_existe }}
         run: |
           mapfile -t assets < <(find artefatos -type f \( -name '*.exe' -o -name '*.AppImage' -o -name '*.deb' -o -name '*.dmg' \))
-          if [ "$MODO" = criar ]; then
+          if [ "$MODO" = criar ] || [ "$RELEASE_EXISTE" != true ]; then
             gh release create "v$VERSAO" --repo "$GITHUB_REPOSITORY" --draft --title "laWdo v$VERSAO" --notes-file publicacao/notas-release.md "${assets[@]}"
           else
             gh release edit "v$VERSAO" --repo "$GITHUB_REPOSITORY" --title "laWdo v$VERSAO" --notes-file publicacao/notas-release.md

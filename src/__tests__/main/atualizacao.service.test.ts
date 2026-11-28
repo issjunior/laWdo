@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { app, shell } from 'electron';
 import { AtualizacaoService } from '../../main/services/atualizacao.service';
-import type { AtualizacaoDisponivel, EstadoAtualizacao, ManifestoAtualizacao } from '../../shared/atualizacao/atualizacao.types';
+import type { ArtefatoAtualizacao, AtualizacaoDisponivel, EstadoAtualizacao, ManifestoAtualizacao, PlataformaAtualizacao } from '../../shared/atualizacao/atualizacao.types';
 
 const mocks = vi.hoisted(() => ({ verificarAssinatura: vi.fn(() => true) }));
 
@@ -31,6 +31,27 @@ function criarManifestoAssinado(atualizacao: AtualizacaoDisponivel): { manifesto
       artefatos: [atualizacao.artefato],
     },
     assinatura: assinaturaValidaTeste,
+  };
+}
+
+function obterPlataformaAtualizacaoTeste(): PlataformaAtualizacao {
+  if (process.platform === 'win32') return 'windows';
+  if (process.platform === 'darwin') return 'macos';
+  return 'linux';
+}
+
+function criarArtefatoCompativelComRunner(nome: string, tamanho: number, hashSha256: string): ArtefatoAtualizacao {
+  const plataforma = obterPlataformaAtualizacaoTeste();
+
+  return {
+    plataforma,
+    arquitetura: process.arch === 'arm64' ? 'arm64' : 'x64',
+    formato: plataforma === 'windows' ? 'nsis' : plataforma === 'macos' ? 'dmg' : 'AppImage',
+    canal: 'stable',
+    nome,
+    tamanho,
+    hashSha256,
+    url: 'https://example.invalid/arquivo',
   };
 }
 
@@ -123,7 +144,8 @@ describe('AtualizacaoService', () => {
   it('deve restaurar o pacote validado após reiniciar o aplicativo', () => {
     const diretorio = fs.mkdtempSync(path.join(os.tmpdir(), 'lawdo-pacote-pronto-'));
     vi.mocked(app.getPath).mockReturnValue(diretorio);
-    const nome = 'laWdo-0.1.2-setup.exe';
+    const plataforma = obterPlataformaAtualizacaoTeste();
+    const nome = plataforma === 'windows' ? 'laWdo-0.1.2-setup.exe' : plataforma === 'macos' ? 'laWdo-0.1.2.dmg' : 'laWdo-0.1.2.AppImage';
     const conteudo = Buffer.from('instalador validado');
     const hashSha256 = createHash('sha256').update(conteudo).digest('hex');
     const diretorioAtualizacoes = path.join(diretorio, 'atualizacoes');
@@ -132,7 +154,7 @@ describe('AtualizacaoService', () => {
     const atualizacao: AtualizacaoDisponivel = {
       versao: '0.1.2', dataPublicacao: '2026-07-24T00:00:00.000Z', notas: 'Teste', versaoSchema: 1,
       requerBackupCompletoImagens: false,
-      artefato: { plataforma: 'windows', arquitetura: 'x64', formato: 'nsis', canal: 'stable', nome, tamanho: conteudo.length, hashSha256, url: 'https://example.invalid/arquivo' },
+      artefato: criarArtefatoCompativelComRunner(nome, conteudo.length, hashSha256),
     };
     fs.writeFileSync(path.join(diretorio, 'atualizacao-pacote-pronto.json'), JSON.stringify(criarManifestoAssinado(atualizacao)));
 
@@ -146,7 +168,8 @@ describe('AtualizacaoService', () => {
   it('descarta o pacote alterado depois do reinício', () => {
     const diretorio = fs.mkdtempSync(path.join(os.tmpdir(), 'lawdo-pacote-modificado-'));
     vi.mocked(app.getPath).mockReturnValue(diretorio);
-    const nome = 'laWdo-0.1.2-setup.exe';
+    const plataforma = obterPlataformaAtualizacaoTeste();
+    const nome = plataforma === 'windows' ? 'laWdo-0.1.2-setup.exe' : plataforma === 'macos' ? 'laWdo-0.1.2.dmg' : 'laWdo-0.1.2.AppImage';
     const conteudoOriginal = Buffer.from('instalador validado');
     const diretorioAtualizacoes = path.join(diretorio, 'atualizacoes');
     fs.mkdirSync(diretorioAtualizacoes, { recursive: true });
@@ -154,7 +177,7 @@ describe('AtualizacaoService', () => {
     const atualizacao: AtualizacaoDisponivel = {
       versao: '0.1.2', dataPublicacao: '2026-07-24T00:00:00.000Z', notas: 'Teste', versaoSchema: 1,
       requerBackupCompletoImagens: false,
-      artefato: { plataforma: 'windows', arquitetura: 'x64', formato: 'nsis', canal: 'stable', nome, tamanho: conteudoOriginal.length, hashSha256: createHash('sha256').update(conteudoOriginal).digest('hex'), url: 'https://example.invalid/arquivo' },
+      artefato: criarArtefatoCompativelComRunner(nome, conteudoOriginal.length, createHash('sha256').update(conteudoOriginal).digest('hex')),
     };
     fs.writeFileSync(path.join(diretorio, 'atualizacao-pacote-pronto.json'), JSON.stringify(criarManifestoAssinado(atualizacao)));
 
