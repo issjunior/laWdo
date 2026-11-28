@@ -163,8 +163,8 @@ export const CabecalhoPage: React.FC = () => {
         <div className="flex justify-end"><Button onClick={() => { void salvar('fechamento'); }} disabled={!carregado || salvando}><Save className="mr-2 h-4 w-4" />{salvando ? 'Salvando...' : 'Salvar fechamento'}</Button></div>
       </TabsContent>
     </Tabs>
-    <Dialog open={previaAberta} onOpenChange={setPreviaAberta}><DialogContent className="h-[90vh] max-w-5xl"><DialogHeader><DialogTitle>Pré-visualização do cabeçalho e fechamento</DialogTitle></DialogHeader>
-      {gerandoPdf ? <p className="text-center text-muted-foreground">Gerando PDF...</p> : <iframe src={urlPrevia} title="Prévia do laudo" className="h-full min-h-0 w-full rounded border" />}
+    <Dialog open={previaAberta} onOpenChange={setPreviaAberta}><DialogContent className="flex h-[90vh] max-w-5xl flex-col"><DialogHeader><DialogTitle>Pré-visualização do cabeçalho e fechamento</DialogTitle></DialogHeader>
+      {gerandoPdf ? <p className="text-center text-muted-foreground">Gerando PDF...</p> : <iframe src={urlPrevia} title="Prévia do laudo" className="min-h-0 w-full flex-1 rounded border" />}
     </DialogContent></Dialog>
   </div></TooltipProvider>;
 };
