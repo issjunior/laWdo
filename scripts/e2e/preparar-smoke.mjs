@@ -26,7 +26,7 @@ async function preparar() {
     );
     await executeNonQuery(
       'INSERT INTO tipos_exame (id, nome, codigo) VALUES (?, ?, ?)',
-      ['e2e-exame', 'Exame Smoke', 'E2E'],
+      ['e2e-exame', 'SMOKE', 'E2E'],
     );
     await executeNonQuery(
       "INSERT INTO templates (id, tipo_exame_id, nome, origem, disponivel_novos_laudos) VALUES (?, ?, ?, 'usuario', 1)",
