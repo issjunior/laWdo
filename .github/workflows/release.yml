@@ -54,6 +54,7 @@ jobs:
     outputs:
       versao: ${{ steps.planejamento.outputs.versao }}
       commit: ${{ steps.estado.outputs.commit }}
+      commit_validacao: ${{ steps.estado.outputs.commit_validacao }}
     steps:
       - name: Obter código
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6.0.2
@@ -147,14 +148,18 @@ jobs:
         run: |
           if [ "$MODO" = retomar ]; then
             commit="$(git rev-list -n 1 "v$VERSAO")"
+            commit_validacao="$GITHUB_SHA"
           elif [ -n "$COMMIT_INTEGRADO" ]; then
             commit="$COMMIT_INTEGRADO"
+            commit_validacao="$commit"
           else
             commit="$GITHUB_SHA"
+            commit_validacao="$commit"
           fi
           git checkout --detach "$commit"
           VERSAO_ESPERADA="$VERSAO" node --input-type=module -e "import { lerVersaoProjeto } from './scripts/release/versao-projeto.mjs'; const atual = await lerVersaoProjeto(); if (atual !== process.env.VERSAO_ESPERADA) throw new Error(\`Versão do commit (\${atual}) difere da release (\${process.env.VERSAO_ESPERADA}).\`);"
           echo "commit=$commit" >> "$GITHUB_OUTPUT"
+          echo "commit_validacao=$commit_validacao" >> "$GITHUB_OUTPUT"
 
       - name: Executar CI do commit imutável
         env:
@@ -224,7 +229,7 @@ jobs:
       - name: Obter código
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6.0.2
         with:
-          ref: ${{ needs.validar.outputs.commit }}
+          ref: ${{ needs.validar.outputs.commit_validacao }}
 
       - name: Configurar Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
