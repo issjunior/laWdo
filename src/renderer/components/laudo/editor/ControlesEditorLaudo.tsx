@@ -31,28 +31,11 @@ import {
 } from '@/components/ui/dropdown-menu';
 import type { EstadoSalvamentoLaudo } from '@/hooks/useGerenciadorAlteracoesLaudo';
 import { cn } from '@/lib/utils';
+export { obterClasseBadgeStatusLocal as obterClasseBadgeStatusLaudo } from '@/lib/status-visual';
 
 type FormatoExportacaoLaudo = 'pdf' | 'docx' | 'odt' | 'bkp';
 type ModoConteudoLaudo = 'dados' | 'chaves';
 type ModoOrganizacaoLaudo = 'single' | 'multi';
-
-export function obterClasseBadgeStatusLaudo(status: string): string {
-  const statusNormalizado = status.trim().toLocaleLowerCase('pt-BR');
-
-  if (statusNormalizado === 'concluído' || statusNormalizado === 'concluido') {
-    return 'border-emerald-300 bg-emerald-100 text-emerald-800 dark:border-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300';
-  }
-
-  if (statusNormalizado === 'entregue') {
-    return 'border-blue-300 bg-blue-100 text-blue-800 dark:border-blue-700 dark:bg-blue-950/50 dark:text-blue-300';
-  }
-
-  if (statusNormalizado === 'em andamento' || statusNormalizado === 'pendente') {
-    return 'border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-300';
-  }
-
-  return 'border-border bg-muted text-muted-foreground';
-}
 
 interface OpcaoSegmentada<T extends string> {
   valor: T;

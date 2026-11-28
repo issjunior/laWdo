@@ -38,6 +38,7 @@ import { DataTable } from '@/components/data-table/data-table';
 import { DataTableColumnHeader } from '@/components/data-table/data-table-column-header';
 import { filtrarRepsPorAba, obterAbaInicialReps, type AbaReps } from '@/lib/filtros-listas-laudos-reps';
 import { cn } from '@/lib/utils';
+import { obterClasseAbaStatusLocal, obterClasseBadgeStatusLocal, obterClasseIndicadorStatusLocal } from '@/lib/status-visual';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Dialog,
@@ -621,24 +622,20 @@ export const REPsPage: React.FC = () => {
       'bg-transparent border-border/60 text-muted-foreground hover:bg-muted hover:text-foreground',
       'data-[state=active]:bg-transparent data-[state=active]:border-border/60 data-[state=active]:text-muted-foreground data-[state=active]:shadow-none',
     );
-    const cores: Record<AbaReps, string> = {
-      ativas: 'bg-primary text-primary-foreground border-primary data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:border-primary',
-      pendentes: 'bg-slate-500 text-white border-slate-500 data-[state=active]:bg-slate-500 data-[state=active]:text-white data-[state=active]:border-slate-500',
-      em_andamento: 'bg-amber-500 text-white border-amber-500 data-[state=active]:bg-amber-500 data-[state=active]:text-white data-[state=active]:border-amber-500',
-      concluidas: 'bg-emerald-500 text-white border-emerald-500 data-[state=active]:bg-emerald-500 data-[state=active]:text-white data-[state=active]:border-emerald-500',
-      todas: 'bg-primary text-primary-foreground border-primary data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:border-primary',
+    const statusPorAba: Partial<Record<AbaReps, string>> = {
+      pendentes: 'Pendente',
+      em_andamento: 'Em Andamento',
+      concluidas: 'Concluído',
     };
-    return cn(base, cores[valor], 'shadow-sm data-[state=active]:shadow-sm');
+    return cn(base, obterClasseAbaStatusLocal(statusPorAba[valor] ?? ''), 'shadow-sm data-[state=active]:shadow-sm');
   };
   const estiloPontoAba = (valor: AbaReps) => cn(
     'h-2.5 w-2.5 shrink-0 rounded-full',
-    tabFiltro === valor ? 'bg-white/90' : {
-      ativas: 'bg-muted-foreground/40',
-      pendentes: 'bg-slate-500',
-      em_andamento: 'bg-amber-500',
-      concluidas: 'bg-emerald-500',
-      todas: 'bg-muted-foreground/40',
-    }[valor],
+    tabFiltro === valor ? 'bg-white/90' : obterClasseIndicadorStatusLocal(({
+      pendentes: 'Pendente',
+      em_andamento: 'Em Andamento',
+      concluidas: 'Concluído',
+    } as Partial<Record<AbaReps, string>>)[valor] ?? ''),
   );
   const estiloContagemAba = (valor: AbaReps) => cn(
     'rounded-full px-1.5 py-0.5 text-xs font-semibold leading-tight tabular-nums',
@@ -1753,12 +1750,7 @@ export const REPsPage: React.FC = () => {
       ),
       cell: ({ row }) => {
         const status = (row.getValue('status') as string) || 'Pendente';
-        const variantMap: Record<string, 'default' | 'secondary' | 'outline' | 'destructive'> = {
-          'Pendente': 'secondary',
-          'Em Andamento': 'default',
-          'Concluído': 'outline',
-        };
-        return <Badge variant={variantMap[status] || 'secondary'}>{status}</Badge>;
+        return <Badge variant="outline" className={obterClasseBadgeStatusLocal(status)}>{status}</Badge>;
       },
     },
     {
