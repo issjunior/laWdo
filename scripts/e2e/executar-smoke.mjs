@@ -96,7 +96,7 @@ async function criarESalvarLaudo(pagina) {
   await pagina.evaluate(() => { globalThis.location.hash = '/reps'; });
   await pagina.getByLabel('Criar laudo para REP 123456/2026', { exact: true }).click();
   await pagina.getByLabel('Tipo de Exame', { exact: true }).click();
-  await pagina.getByRole('option', { name: 'E2E - Exame Smoke', exact: true }).click();
+  await pagina.getByRole('option', { name: 'E2E - SMOKE', exact: true }).click();
   await pagina.getByLabel('Template', { exact: true }).click();
   await pagina.getByRole('option', { name: 'Template Smoke E2E', exact: true }).click();
   await pagina.getByRole('button', { name: 'Criar Laudo', exact: true }).click();
