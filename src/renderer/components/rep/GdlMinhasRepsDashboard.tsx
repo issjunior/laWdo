@@ -6,7 +6,7 @@ import { apresentarNaturezaExame } from '@shared/gdl/natureza-exame';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { z } from 'zod';
-import { RefreshCw, Search } from 'lucide-react';
+import { Clock3, RefreshCw, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -187,7 +187,13 @@ export function GdlMinhasRepsDashboard() {
             <Badge variant="secondary" className="text-sm">
               {snapshotExibido.reps.length} {snapshotExibido.reps.length === 1 ? 'REP' : 'REPs'}
             </Badge>
-            <span>Atualizado em {new Date(snapshotExibido.atualizadoEm).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+            <span className="inline-flex items-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 px-2 py-1 text-xs font-medium text-primary">
+              <Clock3 className="h-3.5 w-3.5" />
+              <span>Última atualização:</span>
+              <time className="font-semibold tabular-nums" dateTime={snapshotExibido.atualizadoEm}>
+                {new Date(snapshotExibido.atualizadoEm).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+              </time>
+            </span>
           </> : <span>Nenhuma lista recente</span>}
           {carregando && <GdlConsultaEmAndamento />}
         </div>

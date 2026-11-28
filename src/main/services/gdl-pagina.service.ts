@@ -11,6 +11,7 @@ import type { PaginaMinhasRepsGdl } from '../../shared/types/gdl-minhas-reps.typ
 import { getLogger } from '../utils/logger.js';
 
 const log = getLogger('gdl');
+const BLOQUEIO_NOVA_TENTATIVA_MS = 30_000;
 
 interface CredenciaisPaginaGdl {
   baseUrl: string;
@@ -159,7 +160,7 @@ async function obterSessaoAutenticadaGdl(credenciais: CredenciaisPaginaGdl, prep
             etapa, duracaoMs: Math.round(performance.now() - inicio), codigo: falha.codigo,
             codigoSistema: falha.codigoSistema, statusHttp: falha.statusHttp,
           });
-          atual.tentarApos = Date.now() + 60000;
+          atual.tentarApos = Date.now() + BLOQUEIO_NOVA_TENTATIVA_MS;
           atual.ultimaFalha = falhaOriginal;
           throw falhaOriginal;
         } finally {

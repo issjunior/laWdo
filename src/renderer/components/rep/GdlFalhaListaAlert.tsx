@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { z } from 'zod';
 import { acessoInstitucionalIndisponivel, MENSAGEM_ACESSO_REDE_GDL } from '@shared/gdl/acesso-institucional';
 import { AlertTriangle, Info } from 'lucide-react';
@@ -81,16 +81,51 @@ interface GdlFalhaListaAlertProps {
 
 export function GdlFalhaListaAlert({ falha, listaSalva, onTentarNovamente, onConfigurarCredenciais }: GdlFalhaListaAlertProps) {
   const [detalhesAbertos, setDetalhesAbertos] = useState(false);
+  const [segundosRestantes, setSegundosRestantes] = useState<number | null>(null);
+  const onTentarNovamenteAtual = useRef(onTentarNovamente);
+  const tentativaAutomaticaRealizada = useRef<string | null>(null);
   const esperada = falha.condicaoEsperada === 'acesso_rede_institucional';
   const Icone = esperada ? Info : AlertTriangle;
   const configurarCredenciais = falha.codigo === 'credenciais' || falha.codigo === 'autenticacao' || falha.codigo === 'desativada';
+
+  useEffect(() => {
+    onTentarNovamenteAtual.current = onTentarNovamente;
+  }, [onTentarNovamente]);
+
+  useEffect(() => {
+    const segundosIniciais = falha.bloqueioTemporario ? falha.tentarNovamenteEmSegundos ?? null : null;
+    setSegundosRestantes(segundosIniciais);
+    if (segundosIniciais === null) return;
+
+    const inicio = Date.now();
+    const chaveTentativa = falha.referencia ?? `${falha.codigo}:${segundosIniciais}`;
+    const temporizador = window.setInterval(() => {
+      const decorridos = Math.floor((Date.now() - inicio) / 1000);
+      const proximo = Math.max(0, segundosIniciais - decorridos);
+      setSegundosRestantes(proximo);
+      if (proximo === 0) {
+        window.clearInterval(temporizador);
+        if (tentativaAutomaticaRealizada.current !== chaveTentativa) {
+          tentativaAutomaticaRealizada.current = chaveTentativa;
+          onTentarNovamenteAtual.current();
+        }
+      }
+    }, 250);
+
+    return () => window.clearInterval(temporizador);
+  }, [falha.bloqueioTemporario, falha.codigo, falha.referencia, falha.tentarNovamenteEmSegundos]);
 
   return (
     <Alert role={esperada ? "status" : "alert"} className={esperada ? "shrink-0 bg-muted/40" : "shrink-0 border-amber-400/50 bg-amber-50 dark:bg-amber-950/30"}>
       <AlertDescription className="space-y-2">
         <div className="flex flex-wrap items-center gap-2">
           <Icone className="h-4 w-4 shrink-0" />
-          <p className="min-w-0 flex-[1_1_20rem]">{esperada ? MENSAGEM_ACESSO_REDE_GDL : mensagens[falha.codigo]} {listaSalva ? 'Exibindo a última lista salva.' : 'Nenhuma lista salva disponível.'}{falha.bloqueioTemporario && falha.tentarNovamenteEmSegundos ? ` Nova tentativa disponível em até ${falha.tentarNovamenteEmSegundos} s.` : ''}</p>
+          <p className="min-w-0 flex-[1_1_20rem]">
+            {esperada ? MENSAGEM_ACESSO_REDE_GDL : mensagens[falha.codigo]} {listaSalva ? 'Exibindo a última lista salva.' : 'Nenhuma lista salva disponível.'}
+            {segundosRestantes !== null && <span className="ml-2 inline-flex items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2 py-0.5 font-semibold text-primary">
+              {segundosRestantes > 0 ? <>Nova tentativa em <span className="tabular-nums">{segundosRestantes} s</span></> : 'Nova tentativa disponível'}
+            </span>}
+          </p>
           <div className="flex shrink-0 flex-wrap gap-2">
             {falha.codigo !== 'desativada' && <Button variant="outline" size="sm" onClick={onTentarNovamente}>Tentar novamente</Button>}
             {configurarCredenciais && <Button variant="outline" size="sm" onClick={onConfigurarCredenciais}>{falha.codigo === 'desativada' ? 'Abrir API GDL' : 'Configurar GDL'}</Button>}

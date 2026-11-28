@@ -182,8 +182,8 @@ describe('REPs do GDL no dashboard', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Atualizar' }));
     expect(await screen.findByText('Consultando GDL: 00:00')).toBeInTheDocument();
     expect(screen.queryByText(/O GDL pode levar alguns minutos/)).not.toBeInTheDocument();
-    expect(screen.getByText(/Atualizado em/).textContent).toMatch(/\d{2}:\d{2}$/);
-    expect(screen.getByText('Aberta e Distribuída')).toHaveClass('bg-blue-100');
+    expect(screen.getByText(/Última atualização/).parentElement?.textContent).toMatch(/\d{2}:\d{2}$/);
+    expect(screen.getByText('Aberta e Distribuída')).toHaveClass('bg-red-100');
     expect(screen.getByRole('button', { name: /123\/2026/ })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Colunas' }).parentElement).toBe(
       screen.getByRole('button', { name: 'Atualizar' }).parentElement
